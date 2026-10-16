@@ -1,0 +1,59 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Carts\CartPaymentMethodSelectedTest
+  ✓ appointment-first before confirmed appointment does not emit payme… 80.21s  
+  ✓ appointment-first after confirmed appointment records one payment_m… 0.12s  
+  ✓ second sync with same payment method does not duplicate payment_met… 0.17s  
+  ✓ changing payment method from paypal to token creates a new payment_… 0.17s  
+  ✓ standard flow still records payment_method_selected on payment step… 0.12s  
+  ✓ partial checkout polling does not emit payment_method_selected       0.23s  
+  ✓ checkout get without draft sync does not emit payment_method_select… 0.12s  
+
+   PASS  Tests\Feature\Laboratory\PromoCodeCheckoutTest
+  ✓ valida código compartido y devuelve token de checkout                0.08s  
+  ✓ normaliza código con espacios y minúsculas                           0.07s  
+  ✓ rechaza código inválido                                              0.06s  
+  ✓ rechaza código inactivo                                              0.09s  
+  ✓ rechaza promo cuando cupón maestro está pendiente de autorización    0.07s  
+  ✓ rechaza código expirado                                              0.08s  
+  ✓ rechaza código agotado                                               0.06s  
+  ✓ bloquea segundo uso del mismo usuario                                0.06s  
+  ✓ no permite código promocional con crédito asignado en draft          0.07s  
+  ✓ persiste promo_validation_token en draft al validar                  0.07s  
+  ✓ delete libera validación y limpia draft                              0.09s  
+  ✓ confirmación post-pago crea cupón hijo y redención confirmada        0.07s  
+  ✓ confirmación es idempotente para el mismo pedido                     0.06s  
+  ✓ respeta límite total bajo concurrencia                               0.10s  
+  ✓ no crea códigos promocionales duplicados                             0.03s  
+  ✓ rechaza maestro tipo balance para promo compartido                   0.03s  
+
+   PASS  Tests\Feature\Laboratory\GdaWebhookGabineteIsolatedTest
+  ✓ crea notificacion de gabinete sin guardar etiqueta en gda consecuti… 1.58s  
+  ✓ encuentra compra de gabinete por gda order id                        1.28s  
+  ✓ encuentra compra por gda consecutivo cuando solo existe consecutivo… 1.23s  
+  ✓ webhook de gabinete responde 201 por http                            1.32s  
+  ✓ webhook de laboratorio normal realista mantiene consecutivo por ser… 1.57s  
+  ✓ encuentra compra de laboratorio normal por gda order id numerico     1.29s  
+  ✓ webhook de laboratorio normal con id numerico sigue funcionando      1.23s  
+  ✓ controlador webhook esta registrado                                  1.27s  
+
+   PASS  Tests\Unit\GDA\GdaWebhookPayloadResolverTest
+  ✓ prioriza service request id numerico sobre infogda_orden en laborat… 0.03s  
+  ✓ normaliza payload de laboratorio con id numerico                     0.03s  
+  ✓ normaliza payload de gabinete con etiqueta alfanumerica              0.02s  
+  ✓ no asigna etiqueta alfanumerica como gda_consecutivo                 0.03s  
+  ✓ detecta gabinete por contenedor GAB                                  0.02s  
+  ✓ gabinete hibrido: prioriza etiqueta sobre ServiceRequest.id numeric… 0.03s  
+  ✓ laboratorio normal no usa etiqueta con sufijo como gda_order_id      0.02s  
+  ✓ isNumericConsecutivo valida solo digitos                             0.02s  
+
+   PASS  Tests\Feature\PayPal\PayPalCreateOrderRouteTest
+  ✓ paypal create order requires authentication                          0.03s  
+
+   PASS  Tests\Feature\PayPal\MedicalAttentionPayPalRouteTest
+  ✓ medical attention paypal create order requires authentication        0.03s  
+  ✓ medical attention paypal capture order requires authentication       0.02s  
+
+  Tests:    42 passed (137 assertions)
+  Duration: 93.34s
+

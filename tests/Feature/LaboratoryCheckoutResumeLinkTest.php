@@ -14,6 +14,8 @@ use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryTest;
 use App\Models\User;
 use App\Services\Monitoring\SyncMonitoringCartService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 function resumeLinkUser(): User
 {
@@ -207,6 +209,96 @@ it('allows the same valid link to be opened more than once while the cart is pen
 
     expect(Cart::query()->where('user_id', $user->id)->where('status', MonitoringCartStatus::Active)->count())->toBe(1)
         ->and(LaboratoryCheckoutResumeLink::query()->where('cart_id', $cart->id)->count())->toBe(1);
+});
+
+it('resumes a pending cart instead of redirecting to an unrelated historical purchase', function () {
+    $user = resumeLinkUser();
+    $cart = resumeLinkActiveCart($user);
+    resumeLinkDraft($user, step: 'payment');
+    $historicalPurchase = resumeLinkPurchase($user, $cart);
+    $historicalPurchase->update(['cart_id' => null]);
+    $url = app(GenerateLaboratoryCheckoutResumeLinkAction::class)->forCart($cart);
+    $token = basename((string) parse_url($url, PHP_URL_PATH));
+    $purchaseCount = DB::table('laboratory_purchases')->count();
+    $transactionCount = DB::table('transactions')->count();
+    $appointmentCount = DB::table('laboratory_appointments')->count();
+    Log::spy();
+
+    $this->actingAs($user)
+        ->get($url)
+        ->assertRedirect(route('laboratory.checkout', [
+            'laboratory_brand' => LaboratoryBrand::OLAB,
+            'step' => 'payment',
+        ]));
+
+    expect(DB::table('laboratory_purchases')->count())->toBe($purchaseCount)
+        ->and(DB::table('transactions')->count())->toBe($transactionCount)
+        ->and(DB::table('laboratory_appointments')->count())->toBe($appointmentCount);
+
+    Log::shouldHaveReceived('info')->once()->withArgs(function (string $message, array $context) use ($token): bool {
+        return $message === 'Laboratory checkout resume link resolved'
+            && ($context['destination'] ?? null) === 'checkout'
+            && ! str_contains(json_encode($context), $token);
+    });
+});
+
+it('resumes a pending cart at the saved confirmation step', function () {
+    $user = resumeLinkUser();
+    $cart = resumeLinkActiveCart($user);
+    resumeLinkDraft($user, step: 'confirmation');
+    $url = app(GenerateLaboratoryCheckoutResumeLinkAction::class)->forCart($cart);
+
+    $this->actingAs($user)
+        ->get($url)
+        ->assertRedirect(route('laboratory.checkout', [
+            'laboratory_brand' => LaboratoryBrand::OLAB,
+            'step' => 'confirmation',
+        ]));
+});
+
+it('sends a completed cart without an explicit purchase to the purchase list', function () {
+    $user = resumeLinkUser();
+    $cart = resumeLinkActiveCart($user);
+    $cart->update([
+        'status' => MonitoringCartStatus::Completed,
+        'completed_at' => now(),
+    ]);
+    $url = app(GenerateLaboratoryCheckoutResumeLinkAction::class)->forCart($cart);
+
+    $this->actingAs($user)
+        ->get($url)
+        ->assertRedirect(route('user.purchases.index'));
+});
+
+it('rejects revoked tokens without marking them as used', function () {
+    $user = resumeLinkUser();
+    $cart = resumeLinkActiveCart($user);
+    $url = app(GenerateLaboratoryCheckoutResumeLinkAction::class)->forCart($cart);
+    $link = LaboratoryCheckoutResumeLink::query()->where('cart_id', $cart->id)->firstOrFail();
+    $link->forceFill(['revoked_at' => now()])->save();
+
+    $this->actingAs($user)
+        ->get($url)
+        ->assertRedirect(route('laboratory-brand-selection'));
+
+    expect($link->fresh()->last_used_at)->toBeNull();
+});
+
+it('prefers the explicitly associated purchase over a newer unrelated purchase', function () {
+    $user = resumeLinkUser();
+    $cart = resumeLinkActiveCart($user);
+    $linkedPurchase = resumeLinkPurchase($user, $cart);
+    $unrelatedPurchase = resumeLinkPurchase($user, $cart);
+    $unrelatedPurchase->update(['cart_id' => null]);
+    $cart->update([
+        'status' => MonitoringCartStatus::Completed,
+        'completed_at' => now(),
+    ]);
+    $url = app(GenerateLaboratoryCheckoutResumeLinkAction::class)->forCart($cart);
+
+    $this->actingAs($user)
+        ->get($url)
+        ->assertRedirect(route('laboratory-purchases.show', ['laboratory_purchase' => $linkedPurchase->id]));
 });
 
 it('does not reopen checkout when the cart already has a purchase', function () {

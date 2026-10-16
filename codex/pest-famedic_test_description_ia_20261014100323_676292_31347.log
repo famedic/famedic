@@ -1,0 +1,18 @@
+
+   PASS  Tests\Feature\Coupons\CouponBeneficiaryReportIsolatedTest
+  ✓ usuario con dos creditos aparece una sola vez                        3.54s  
+  ✓ assigned coupons count cuenta correctamente                          3.52s  
+  ✓ available balance suma solo cupones vigentes no usados               3.57s  
+  ✓ used balance suma transacciones no revertidas                        3.47s  
+  ✓ reversed balance suma transacciones revertidas                       3.58s  
+  ✓ beneficiario pendiente sin usuario aparece como pendiente            4.01s  
+  ✓ mismo email pendiente en dos campanas se agrupa                      3.63s  
+  ✓ pendiente vinculado no aparece como fila pendiente duplicada         3.59s  
+  ✓ filtro busqueda por email funciona                                   3.58s  
+  ✓ filtro estado registrado y pendiente funciona                        3.77s  
+  ✓ filtro con saldo disponible funciona                                 4.37s  
+  ✓ consulta requiere permiso cupones view                               6.29s  
+
+  Tests:    12 passed (32 assertions)
+  Duration: 47.00s
+

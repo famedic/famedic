@@ -1,0 +1,23 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Laboratory\PromoCodeCheckoutTest
+  ✓ valida código compartido y devuelve token de checkout               80.73s  
+  ✓ normaliza código con espacios y minúsculas                           0.10s  
+  ✓ rechaza código inválido                                              0.07s  
+  ✓ rechaza código inactivo                                              0.08s  
+  ✓ rechaza promo cuando cupón maestro está pendiente de autorización    0.09s  
+  ✓ rechaza código expirado                                              0.08s  
+  ✓ rechaza código agotado                                               0.07s  
+  ✓ bloquea segundo uso del mismo usuario                                0.07s  
+  ✓ no permite código promocional con crédito asignado en draft          0.07s  
+  ✓ persiste promo_validation_token en draft al validar                  0.08s  
+  ✓ delete libera validación y limpia draft                              0.09s  
+  ✓ confirmación post-pago crea cupón hijo y redención confirmada        0.08s  
+  ✓ confirmación es idempotente para el mismo pedido                     0.08s  
+  ✓ respeta límite total bajo concurrencia                               0.11s  
+  ✓ no crea códigos promocionales duplicados                             0.03s  
+  ✓ rechaza maestro tipo balance para promo compartido                   0.03s  
+
+  Tests:    16 passed (61 assertions)
+  Duration: 81.93s
+

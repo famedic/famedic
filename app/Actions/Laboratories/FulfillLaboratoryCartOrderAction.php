@@ -21,6 +21,7 @@ use App\Notifications\LaboratoryPurchaseCreated;
 use App\Services\Carts\CartAbandonmentService;
 use App\Services\Carts\CartEventRecorder;
 use App\Services\CouponApplicationService;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationEligibility;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\Orders\OrderAutomationService;
@@ -45,6 +46,7 @@ class FulfillLaboratoryCartOrderAction
         private CartAbandonmentService $cartAbandonmentService,
         private RecordMarketingCampaignConversionAction $recordMarketingCampaignConversionAction,
         private LaboratoryPreparationSummaryService $laboratoryPreparationSummaryService,
+        private LaboratoryPreparationEligibility $laboratoryPreparationEligibility,
     ) {}
 
     /**
@@ -234,18 +236,27 @@ class FulfillLaboratoryCartOrderAction
     private function dispatchLaboratoryPreparationSummaryGeneration(LaboratoryPurchase $laboratoryPurchase): void
     {
         try {
-            $laboratoryPurchase->refresh();
-            $laboratoryPurchase->loadMissing('laboratoryPurchaseItems');
+            $v3Enabled = $this->laboratoryPreparationSummaryService->deterministicV3Enabled();
+            $shadowEnabled = $this->laboratoryPreparationSummaryService->deterministicV3ShadowEnabled();
 
-            if ($laboratoryPurchase->laboratoryPurchaseItems->isEmpty()) {
-                Log::warning('[Laboratory Preparation AI] Skipped queueing because purchase has no items', [
-                    'purchase_id' => $laboratoryPurchase->id,
-                ]);
-
+            if (! $v3Enabled && ! $shadowEnabled) {
                 return;
             }
 
-            if ($this->laboratoryPreparationSummaryService->deterministicV3Enabled()) {
+            $laboratoryPurchase->refresh();
+            $laboratoryPurchase->loadMissing('laboratoryPurchaseItems');
+
+            $eligibility = $this->laboratoryPreparationEligibility->evaluate($laboratoryPurchase);
+            if (! $eligibility->eligible) {
+                Log::info('[Laboratory Preparation AI] Skipped queueing for ineligible purchase', [
+                    'purchase_id' => $laboratoryPurchase->id,
+                    'reason' => $eligibility->reason,
+                    'payment_method' => $eligibility->paymentMethod,
+                ]);
+                return;
+            }
+
+            if ($v3Enabled) {
                 if (! $this->laboratoryPreparationSummaryService->shouldQueueGeneration($laboratoryPurchase)) {
                     return;
                 }
@@ -254,20 +265,17 @@ class FulfillLaboratoryCartOrderAction
                     $laboratoryPurchase->id,
                     null,
                     $this->laboratoryPreparationSummaryService->expectedSourceHash($laboratoryPurchase),
+                    GenerateLaboratoryPurchasePreparationSummaryJob::MODE_GENERATE,
                 )->afterCommit();
 
                 return;
             }
 
-            $execution = $this->laboratoryPreparationSummaryService->queueExecution($laboratoryPurchase);
-
-            if (! $execution) {
-                return;
-            }
-
             GenerateLaboratoryPurchasePreparationSummaryJob::dispatch(
                 $laboratoryPurchase->id,
-                $execution->id,
+                null,
+                $this->laboratoryPreparationSummaryService->deterministicV3SourceHash($laboratoryPurchase),
+                GenerateLaboratoryPurchasePreparationSummaryJob::MODE_SHADOW_ONLY,
             )->afterCommit();
         } catch (Throwable $e) {
             Log::warning('[Laboratory Preparation AI] Failed to queue summary generation', [

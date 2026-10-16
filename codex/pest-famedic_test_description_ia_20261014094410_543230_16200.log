@@ -1,0 +1,40 @@
+
+   FAIL  Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest
+  ⨯ endpoint cancelar pendiente requiere permiso edit                    5.31s  
+  ⨯ endpoint revocar requiere permiso edit                               5.23s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest > endpoin…   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+  at tests/Feature/Coupons/CouponRevocationAdminIsolatedTest.php:257
+    253▕             ->post(route('admin.coupons.beneficiaries.cancel', [
+    254▕                 'coupon' => $parent->id,
+    255▕                 'beneficiary' => $beneficiary->id,
+    256▕             ]))
+  ➜ 257▕             ->assertRedirect();
+    258▕ 
+    259▕         $this->assertSame(CouponBeneficiaryStatus::PendingUser, $beneficiary->fresh()->status);
+    260▕         $this->assertNull($beneficiary->fresh()->cancelled_at);
+    261▕     }
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest > endpoin…   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+  at tests/Feature/Coupons/CouponRevocationAdminIsolatedTest.php:275
+    271▕             ->delete(route('admin.coupons.assignments.destroy', [
+    272▕                 'coupon' => $child->id,
+    273▕                 'couponUser' => $assignment->id,
+    274▕             ]))
+  ➜ 275▕             ->assertRedirect();
+    276▕ 
+    277▕         $this->assertTrue($child->fresh()->is_active);
+    278▕         $this->assertGreaterThan(0, $child->fresh()->remaining_cents);
+    279▕     }
+
+
+  Tests:    2 failed (2 assertions)
+  Duration: 10.61s
+

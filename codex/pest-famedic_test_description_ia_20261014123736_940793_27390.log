@@ -1,0 +1,87 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\LaboratoryPreparationGenerationDispatchTest
+  ✓ it dispatches preparation summary generation after a confirmed lab… 81.23s  
+  ✓ it does not call OpenAI during the purchase fulfillment request      0.10s  
+  ✓ it dispatches deterministic v3 generation without creating a legacy… 0.11s  
+  ✓ it keeps the legacy job flow and runs deterministic v3 shadow when…  0.11s  
+  ✓ it does not run shadow twice when the same legacy job is handled ag… 0.07s  
+  ✓ it gives active deterministic v3 precedence over shadow when both f… 0.05s  
+  ✓ it does not break purchase fulfillment when queueing the preparatio… 0.13s  
+  ✓ it the preparation job supports bounded retries and records failed…  0.05s  
+  ✓ it the preparation job does not retry fidelity validation failures   0.10s  
+  ✓ it the preparation job keeps retry behavior for transient provider…  0.04s  
+  ✓ it the preparation job reuses an unchanged source hash without dupl… 0.07s  
+  ✓ it skips stale deterministic v3 jobs when indications changed befor… 0.03s  
+  ✓ it skips queued deterministic v3 jobs after rollback to flag off     0.04s  
+  ✓ it a missing purchase does not create a generation execution         0.02s  
+  ✓ it a changed source hash can be queued for regeneration              0.04s  
+
+   FAIL  Tests\Feature\User\PendingPurchasesTest
+  ✓ ownership starts from authenticated customer only                    0.24s  
+  ✓ single laboratory brand with payment draft is checkout in progress   0.16s  
+  ✓ shared pending purchases summary is exposed for account menu badge   0.18s  
+  ✓ laboratory brands are independent pending purchases                  0.13s  
+  ⨯ checkout steps use four steps without appointment and five with app… 0.16s  
+  ✓ orphan draft without operational items is not shown                  0.10s  
+  ✓ cart items without draft are shown as saved cart                     0.11s  
+  ✓ buying one laboratory brand preserves other brand items and draft    0.25s  
+  ⨯ continue urls point to cart for saved carts and checkout for drafts  0.15s  
+  ✓ completed laboratory purchase without operational items is not show… 0.11s  
+
+   PASS  Tests\Feature\Laboratory\LaboratoryCheckoutFlowEligibilityTest
+  ✓ uses appointment first flow with zero valid purchases and cart requ… 0.05s  
+  ✓ does not use appointment first flow with one valid purchase and car… 0.06s  
+  ✓ does not use appointment first flow with two valid purchases and ca… 0.05s  
+  ✓ does not use appointment first flow with three or more valid purcha… 0.05s  
+  ✓ does not use appointment first flow when cart does not require appo… 0.05s  
+  ✓ does not count soft-deleted purchases                                0.06s  
+  ✓ does not count cancelled purchases                                   0.05s  
+  ✓ does not count incomplete purchases without checkout transaction     0.04s  
+  ✓ does not count purchases with failed or pending transactions         0.05s  
+  ✓ counts zero total purchases completed with coupon balance            0.06s  
+  ✓ counts refunded purchases because checkout was completed             0.05s  
+  ✓ does not count simulated checkout transactions                       0.05s  
+  ✓ counts purchases globally across olab and swisslab brands            0.06s  
+  ✓ checkout exposes usesAppointmentFirstFlow for first-time customers…  0.18s  
+  ✓ checkout exposes usesAppointmentFirstFlow as false when cart does n… 0.16s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\User\PendingPurchasesTest > checkout ste…  TypeError   
+  P\Tests\Feature\User\PendingPurchasesTest::{closure}(): Argument #1 ($rows) must be of type array, Illuminate\Support\Collection given, called in /var/www/html/vendor/laravel/framework/src/Illuminate/Testing/Fluent/Concerns/Matching.php on line 29
+
+  at tests/Feature/User/PendingPurchasesTest.php:151
+    147▕     $this->actingAs($user)
+    148▕         ->get(route('user.purchases.index'))
+    149▕         ->assertOk()
+    150▕         ->assertInertia(fn (Assert $page) => $page
+  ➜ 151▕             ->where('pendingPurchases', fn (array $rows) => collect($rows)
+    152▕                 ->pluck('checkout.total_steps')
+    153▕                 ->sort()
+    154▕                 ->values()
+    155▕                 ->all() === [4, 5])
+
+      [2m+2 vendor frames [22m
+  3   tests/Feature/User/PendingPurchasesTest.php:150
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\User\PendingPurchasesTest > continue url…  TypeError   
+  P\Tests\Feature\User\PendingPurchasesTest::{closure}(): Argument #1 ($rows) must be of type array, Illuminate\Support\Collection given, called in /var/www/html/vendor/laravel/framework/src/Illuminate/Testing/Fluent/Concerns/Matching.php on line 29
+
+  at tests/Feature/User/PendingPurchasesTest.php:251
+    247▕     $this->actingAs($user)
+    248▕         ->get(route('user.purchases.index'))
+    249▕         ->assertOk()
+    250▕         ->assertInertia(fn (Assert $page) => $page
+  ➜ 251▕             ->where('pendingPurchases', fn (array $rows) => collect($rows)
+    252▕                 ->contains(fn (array $row) => $row['key'] === 'laboratory:olab'
+    253▕                     && $row['urls']['continue'] === route('laboratory.checkout', [
+    254▕                         'laboratory_brand' => LaboratoryBrand::OLAB,
+    255▕                         'step' => 'payment',
+
+      [2m+2 vendor frames [22m
+  3   tests/Feature/User/PendingPurchasesTest.php:250
+
+
+  Tests:    2 failed, 38 passed (248 assertions)
+  Duration: 84.89s
+

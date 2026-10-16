@@ -144,7 +144,7 @@ class ResolveLaboratoryPurchasePdfPath
                 'indications' => $item->indications,
                 'feature_list' => LaboratoryPurchaseConfirmationViewData::normalizePackageFeatureList($item->feature_list),
             ])->toArray(),
-            'preparation' => app(LaboratoryPreparationPresenter::class)->present($laboratoryPurchase),
+            'preparation' => $this->preparationContentHashPayload($laboratoryPurchase),
             'appointment' => $laboratoryPurchase->laboratoryAppointment ? [
                 'appointment_date' => $laboratoryPurchase->laboratoryAppointment->appointment_date?->format('Y-m-d H:i:s'),
                 'store_name' => $laboratoryPurchase->laboratoryAppointment->laboratoryStore?->name,
@@ -156,5 +156,28 @@ class ResolveLaboratoryPurchasePdfPath
         ];
 
         return substr(md5(serialize($contentData)), 0, 12);
+    }
+
+    /**
+     * Only include fields rendered by the purchase PDF. Operational metadata such as
+     * generated_at, prompt_version, source_hash or execution status ids must not rotate
+     * the cached PDF when the visible preparation content is unchanged.
+     *
+     * @return array<string, mixed>
+     */
+    protected function preparationContentHashPayload(LaboratoryPurchase $laboratoryPurchase): array
+    {
+        $preparation = app(LaboratoryPreparationPresenter::class)->present($laboratoryPurchase);
+        $summary = is_array($preparation['summary'] ?? null) ? $preparation['summary'] : [];
+
+        return [
+            'ai_status' => $preparation['ai_status'] ?? null,
+            'summary' => [
+                'sections' => array_values($summary['sections'] ?? []),
+                'special_instructions' => array_values($summary['special_instructions'] ?? []),
+                'individual_instructions' => array_values($summary['individual_instructions'] ?? []),
+            ],
+            'studies' => array_values($preparation['studies'] ?? []),
+        ];
     }
 }

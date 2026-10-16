@@ -14,7 +14,6 @@ use App\Enums\CouponPurchaseType;
 use App\Enums\CouponType;
 use App\Models\Administrator;
 use App\Models\Coupon;
-use App\Models\CouponAuditLog;
 use App\Models\CouponBeneficiary;
 use App\Models\CouponTransaction;
 use App\Models\CouponUser;
@@ -254,7 +253,7 @@ class CouponRevocationAdminIsolatedTest extends TestCase
                 'coupon' => $parent->id,
                 'beneficiary' => $beneficiary->id,
             ]))
-            ->assertRedirect();
+            ->assertForbidden();
 
         $this->assertSame(CouponBeneficiaryStatus::PendingUser, $beneficiary->fresh()->status);
         $this->assertNull($beneficiary->fresh()->cancelled_at);
@@ -272,7 +271,7 @@ class CouponRevocationAdminIsolatedTest extends TestCase
                 'coupon' => $child->id,
                 'couponUser' => $assignment->id,
             ]))
-            ->assertRedirect();
+            ->assertForbidden();
 
         $this->assertTrue($child->fresh()->is_active);
         $this->assertGreaterThan(0, $child->fresh()->remaining_cents);

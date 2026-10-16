@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\AiExecution;
 use App\Models\LaboratoryPurchase;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationFidelityValidationException;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationEligibility;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryNotificationService;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryService;
 use Illuminate\Bus\Queueable;
@@ -25,10 +26,15 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
      */
     public array $backoff = [60, 300, 900];
 
+    public const MODE_GENERATE = 'generate';
+
+    public const MODE_SHADOW_ONLY = 'shadow_only';
+
     public function __construct(
         public int $laboratoryPurchaseId,
         public ?int $aiExecutionId = null,
         public ?string $sourceHash = null,
+        public string $mode = self::MODE_GENERATE,
     ) {
         $this->afterCommit();
     }
@@ -36,6 +42,7 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
     public function handle(
         LaboratoryPreparationSummaryService $service,
         LaboratoryPreparationSummaryNotificationService $notificationService,
+        LaboratoryPreparationEligibility $eligibilityService,
     ): void {
         Log::info('laboratory_preparation_summary_job_started', [
             'purchase_id' => $this->laboratoryPurchaseId,
@@ -56,18 +63,52 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
             return;
         }
 
-        if ($this->sourceHash && ! $service->deterministicV3Enabled()) {
-            Log::info('laboratory_preparation_summary_job_skipped_v3_disabled', [
+        $v3Enabled = $service->deterministicV3Enabled();
+        $shadowEnabled = $service->deterministicV3ShadowEnabled();
+
+        if ($this->mode === self::MODE_SHADOW_ONLY) {
+            if ($v3Enabled || ! $shadowEnabled) {
+                Log::info('laboratory_preparation_shadow_job_skipped_flags_changed', [
+                    'purchase_id' => $purchase->id,
+                    'v3_enabled' => $v3Enabled,
+                    'shadow_enabled' => $shadowEnabled,
+                ]);
+
+                return;
+            }
+
+            $eligibility = $eligibilityService->evaluate($purchase);
+            if (! $eligibility->eligible) {
+                $this->logIneligiblePurchase($purchase, $eligibility->reason, $eligibility->paymentMethod);
+
+                return;
+            }
+
+            $expectedHash = $this->sourceHash ?? $service->deterministicV3SourceHash($purchase);
+            $service->runDeterministicV3Shadow($purchase, $expectedHash);
+
+            return;
+        }
+
+        if (! $v3Enabled) {
+            Log::info('laboratory_preparation_job_skipped_v3_disabled', [
                 'purchase_id' => $purchase->id,
-                'source_hash' => $this->sourceHash,
+                'shadow_enabled' => $shadowEnabled,
             ]);
+
+            return;
+        }
+
+        $eligibility = $eligibilityService->evaluate($purchase);
+        if (! $eligibility->eligible) {
+            $this->logIneligiblePurchase($purchase, $eligibility->reason, $eligibility->paymentMethod);
 
             return;
         }
 
         $execution = $this->aiExecutionId
             ? AiExecution::query()->find($this->aiExecutionId)
-            : $service->queueExecution($purchase);
+            : null;
 
         $expectedSourceHash = $execution?->input_hash ?? $this->sourceHash;
         if ($expectedSourceHash && $service->expectedSourceHash($purchase) !== $expectedSourceHash) {
@@ -143,5 +184,14 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
 
             throw $exception;
         }
+    }
+
+    private function logIneligiblePurchase(LaboratoryPurchase $purchase, string $reason, ?string $paymentMethod): void
+    {
+        Log::info('laboratory_preparation_job_skipped_ineligible_purchase', [
+            'purchase_id' => $purchase->id,
+            'reason' => $reason,
+            'payment_method' => $paymentMethod,
+        ]);
     }
 }

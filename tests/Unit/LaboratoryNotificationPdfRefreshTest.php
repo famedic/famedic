@@ -1,15 +1,66 @@
 <?php
 
+use App\Enums\Gender;
+use App\Enums\LaboratoryBrand;
 use App\Models\LaboratoryNotification;
+use App\Models\LaboratoryPurchase;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+uses(RefreshDatabase::class);
+
+function makeNotificationPurchase(array $overrides = []): LaboratoryPurchase
+{
+    $user = User::factory()
+        ->withRegularCustomer()
+        ->withCompleteProfile()
+        ->create([
+            'documentation_accepted_at' => now(),
+        ])
+        ->fresh(['customer']);
+
+    return LaboratoryPurchase::query()->create(array_merge([
+        'customer_id' => $user->customer->id,
+        'brand' => LaboratoryBrand::OLAB->value,
+        'gda_order_id' => 'GDA-ORDER-1',
+        'gda_consecutivo' => 1,
+        'name' => 'Paciente',
+        'paternal_lastname' => 'Resultados',
+        'maternal_lastname' => 'Pdf',
+        'phone' => '8111111111',
+        'phone_country' => 'MX',
+        'birth_date' => '1990-01-01',
+        'gender' => Gender::FEMALE->value,
+        'street' => 'Calle Test',
+        'number' => '123',
+        'neighborhood' => 'Centro',
+        'state' => 'Nuevo Leon',
+        'city' => 'Monterrey',
+        'zipcode' => '64000',
+        'additional_references' => 'Prueba',
+        'total_cents' => 100000,
+    ], $overrides));
+}
 
 function makeResultsNotification(array $overrides = []): LaboratoryNotification
 {
+    $gdaOrderId = $overrides['gda_order_id'] ?? 'GDA-ORDER-1';
+    $gdaConsecutivo = $overrides['gda_consecutivo'] ?? 1;
+    $purchaseId = $overrides['laboratory_purchase_id']
+        ?? LaboratoryPurchase::query()
+            ->where('gda_order_id', $gdaOrderId)
+            ->value('id')
+        ?? makeNotificationPurchase([
+            'gda_order_id' => $gdaOrderId,
+            'gda_consecutivo' => $gdaConsecutivo,
+        ])->id;
+
     return LaboratoryNotification::query()->create(array_merge([
         'notification_type' => LaboratoryNotification::TYPE_RESULTS,
         'lineanegocio' => LaboratoryNotification::LINEA_NEGOCIO_RESULTS,
-        'gda_order_id' => 'GDA-ORDER-1',
-        'gda_consecutivo' => 1,
-        'laboratory_purchase_id' => 100,
+        'gda_order_id' => $gdaOrderId,
+        'gda_consecutivo' => $gdaConsecutivo,
+        'laboratory_purchase_id' => $purchaseId,
         'status' => LaboratoryNotification::STATUS_PROCESSED,
         'gda_status' => LaboratoryNotification::GDA_STATUS_COMPLETED,
         'results_received_at' => now()->subDays(3),
@@ -41,7 +92,7 @@ it('refreshes cached pdf when a newer results notification exists for the same o
 });
 
 it('does not refresh when results are stored on purchase', function () {
-    $purchase = \App\Models\LaboratoryPurchase::factory()->create([
+    $purchase = makeNotificationPurchase([
         'results' => 'results/gda-1-abc.pdf',
     ]);
 
@@ -106,5 +157,21 @@ it('hides updated results badge after patient accessed the latest notification',
     ]);
 
     expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess(100, 'GDA-ORDER-1', 1))
+        ->toBeFalse();
+});
+
+it('does not mark results updated when only the purchase pdf hash changes', function () {
+    $notification = makeResultsNotification([
+        'read_at' => now(),
+        'results_received_at' => now()->subMinute(),
+    ]);
+
+    $purchase = LaboratoryPurchase::query()->find($notification->laboratory_purchase_id);
+
+    if ($purchase) {
+        $purchase->updateQuietly(['pdf_hash' => 'abc123def456']);
+    }
+
+    expect(LaboratoryNotification::hasUpdatedResultsSinceLastPatientAccess($notification->laboratory_purchase_id, 'GDA-ORDER-1', 1))
         ->toBeFalse();
 });

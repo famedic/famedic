@@ -120,6 +120,187 @@ class LaboratoryPreparationMonitorTest extends TestCase
     }
 
     #[Test]
+    public function metricas_usan_ids_de_summary_y_el_mismo_universo_filtrado_que_la_tabla(): void
+    {
+        $admin = $this->seedAdminUser(withAdministratorRole: true);
+        $todayInMexicoCity = '2026-01-15';
+        $insideTodayFilter = \Carbon\Carbon::parse('2026-01-15 12:00:00', 'UTC');
+        $outsideTodayFilter = \Carbon\Carbon::parse('2026-01-14 12:00:00', 'UTC');
+
+        for ($i = 0; $i < 10; $i++) {
+            $this->seedPurchase(['gda_order_id' => 'OUT-OF-UNIVERSE-'.$i]);
+        }
+
+        for ($i = 0; $i < 3; $i++) {
+            $auto = $this->seedPurchase([
+                'brand' => $i === 0 ? LaboratoryBrand::JENNER : LaboratoryBrand::OLAB,
+                'gda_order_id' => 'AUTO-'.$i,
+                'created_at' => $outsideTodayFilter,
+            ]);
+
+            $this->seedSummary($auto, [
+                'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_AUTO_CONSOLIDATED,
+                'rules_applied' => ['R01'],
+                'ai_execution_id' => $this->seedExecution($auto, AiExecution::STATUS_SUCCEEDED)->id,
+                'summary_text' => 'Ayuno '.$i,
+            ]);
+        }
+
+        $clinical = $this->seedPurchase([
+            'brand' => LaboratoryBrand::JENNER,
+            'gda_order_id' => 'FALLBACK-CLINICAL',
+            'created_at' => $insideTodayFilter,
+        ]);
+        $this->seedSummary($clinical, [
+            'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_FALLBACK_ORIGINAL,
+            'rules_applied' => ['R04'],
+            'fallback_reason' => 'incompatible_urine_simple_protocols',
+            'fallback_category' => LaboratoryPurchasePreparationSummary::FALLBACK_CLINICAL_CONFLICT,
+            'needs_provider_review' => true,
+        ]);
+
+        $sourceQuality = $this->seedPurchase([
+            'gda_order_id' => 'FALLBACK-SOURCE',
+            'created_at' => $insideTodayFilter,
+        ]);
+        $this->seedSummary($sourceQuality, [
+            'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_FALLBACK_ORIGINAL,
+            'rules_applied' => ['R01'],
+            'fallback_reason' => 'uninterpreted_instruction_fragment',
+            'fallback_category' => LaboratoryPurchasePreparationSummary::FALLBACK_SOURCE_QUALITY,
+            'needs_provider_review' => true,
+        ]);
+
+        $technical = $this->seedPurchase([
+            'gda_order_id' => 'FALLBACK-TECHNICAL',
+            'created_at' => $insideTodayFilter,
+        ]);
+        $this->seedSummary($technical, [
+            'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_FALLBACK_ORIGINAL,
+            'rules_applied' => [],
+            'fallback_reason' => 'openai_failed',
+            'fallback_category' => LaboratoryPurchasePreparationSummary::FALLBACK_TECHNICAL_AI_FAILURE,
+            'ai_execution_id' => $this->seedExecution($technical, AiExecution::STATUS_FAILED)->id,
+        ]);
+
+        $legacy = $this->seedPurchase([
+            'gda_order_id' => 'LEGACY-SUMMARY',
+            'created_at' => $insideTodayFilter,
+        ]);
+        $this->seedSummary($legacy, [
+            'decision_status' => null,
+            'rules_version' => 'legacy-v2',
+            'rules_applied' => [],
+            'summary_text' => 'Resumen legacy',
+        ]);
+
+        $pending = $this->seedPurchase([
+            'gda_order_id' => 'PENDING-AI',
+            'created_at' => $insideTodayFilter,
+        ]);
+        $this->seedExecution($pending, AiExecution::STATUS_QUEUED);
+
+        $this->seedPurchase(['gda_order_id' => 'NO-SUMMARY-NO-AI']);
+
+        $this->actingAs($admin)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->get(route('admin.laboratory-preparation.monitor.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('metrics.0.value', 8)
+                ->where('metrics.1.value', 3)
+                ->where('metrics.2.value', 3)
+                ->where('metrics.3.value', 1)
+                ->where('metrics.4.value', 1)
+                ->where('metrics.5.value', 1)
+                ->where('metrics.6.value', 1)
+                ->where('metrics.7.value', 2)
+                ->where('metrics.8.value', 3)
+                ->where('metrics.9.value', 1)
+                ->has('purchases.data', 8)
+            );
+
+        $this->actingAs($admin)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->get(route('admin.laboratory-preparation.monitor.index', [
+                'mode' => 'v3',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('metrics.0.value', 6)
+                ->where('metrics.1.value', 3)
+                ->where('metrics.2.value', 3)
+                ->has('purchases.data', 6)
+            );
+
+        $this->actingAs($admin)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->get(route('admin.laboratory-preparation.monitor.index', [
+                'mode' => 'legacy',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('metrics.0.value', 1)
+                ->where('metrics.1.value', 0)
+                ->where('metrics.2.value', 0)
+                ->where('purchases.data.0.id', $legacy->id)
+            );
+
+        $this->actingAs($admin)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->get(route('admin.laboratory-preparation.monitor.index', [
+                'mode' => 'pending',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('metrics.0.value', 1)
+                ->where('metrics.6.value', 1)
+                ->where('purchases.data.0.id', $pending->id)
+            );
+
+        $this->actingAs($admin)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->get(route('admin.laboratory-preparation.monitor.index', [
+                'brand' => LaboratoryBrand::JENNER->value,
+                'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_AUTO_CONSOLIDATED,
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('metrics.0.value', 1)
+                ->where('metrics.1.value', 1)
+                ->where('metrics.2.value', 0)
+                ->where('purchases.data.0.decision_status', LaboratoryPurchasePreparationSummary::DECISION_AUTO_CONSOLIDATED)
+            );
+
+        $this->actingAs($admin)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->get(route('admin.laboratory-preparation.monitor.index', [
+                'openai_status' => AiExecution::STATUS_FAILED,
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('metrics.0.value', 1)
+                ->where('metrics.5.value', 1)
+                ->where('metrics.9.value', 1)
+                ->where('purchases.data.0.id', $technical->id)
+            );
+
+        $this->actingAs($admin)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->get(route('admin.laboratory-preparation.monitor.index', [
+                'date_from' => $todayInMexicoCity,
+                'date_to' => $todayInMexicoCity,
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('metrics.0.value', 5)
+                ->where('metrics.1.value', 0)
+                ->where('metrics.2.value', 3)
+                ->has('purchases.data', 5)
+            );
+    }
+
+    #[Test]
     public function acceso_requiere_rol_administrador_exclusivo(): void
     {
         $adminWithoutRole = $this->seedAdminUser(withAdministratorRole: false);
@@ -599,6 +780,16 @@ class LaboratoryPreparationMonitorTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('notifications', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->nullable();
+            $table->string('type')->nullable();
+            $table->string('title')->nullable();
+            $table->text('message')->nullable();
+            $table->boolean('is_read')->default(false);
+            $table->timestamp('created_at')->nullable();
+        });
+
         Role::query()->create(['name' => 'dummy', 'guard_name' => 'web']);
         Role::query()->create(['name' => 'Administrador', 'guard_name' => 'web']);
     }
@@ -638,6 +829,7 @@ class LaboratoryPreparationMonitorTest extends TestCase
 
         foreach ([
             'in_app_notifications',
+            'notifications',
             'laboratory_notifications',
             'laboratory_purchase_preparation_summaries',
             'ai_executions',

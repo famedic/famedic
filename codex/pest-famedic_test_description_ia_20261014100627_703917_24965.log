@@ -1,0 +1,21 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Admin\CouponAssignOtpTest
+  ✓ el servicio OTP de cupones está habilitado por configuración        82.84s  
+  ✓ crear cupón nuevo exige token OTP cuando está habilitado             0.08s  
+  ✓ flujo OTP completo permite crear cupón y notifica autorizadores      0.09s  
+  ✓ OTP inválido rechaza verificación                                    0.09s  
+  ✓ OTP verificado no puede reutilizarse para crear otro cupón           0.08s  
+  ✓ hash OTP coincide con beneficiarios y tipos mixtos del request       0.02s  
+  ✓ OTP de laboratorio no permite verificar asignación de cupón          0.03s  
+  ✓ OTP de otro usuario no permite crear cupón                           0.04s  
+  ✓ reenvío OTP respeta rate limit                                       0.06s  
+  ✓ demasiados intentos fallidos bloquean validación OTP                 0.05s  
+  ✓ no se notifica a autorizadores si el cupón no se creó                0.05s  
+  ✓ cupón existente no exige OTP al asignar                              0.06s  
+  ✓ endpoint HTTP de envío OTP responde JSON                             0.04s  
+  ✓ notificador envía correo a autorizadores tras crear cupón            0.04s  
+
+  Tests:    14 passed (32 assertions)
+  Duration: 83.64s
+

@@ -1,0 +1,24 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\LaboratoryCheckoutResumeLinkTest
+  ✓ it generates an opaque resume url without customer cart contact or… 78.97s  
+  ✓ it redirects the owner to protected checkout with the saved step an… 0.12s  
+  ✓ it keeps the laboratory brand from the cart when resuming checkout   0.12s  
+  ✓ it preserves the intended resume destination when the user is not a… 0.07s  
+  ✓ it rejects expired tokens safely                                     0.18s  
+  ✓ it rejects random tokens safely                                      0.06s  
+  ✓ it rejects manipulated tokens safely                                 0.14s  
+  ✓ it prevents another customer from using a valid resume token         0.12s  
+  ✓ it allows the same valid link to be opened more than once while the… 0.12s  
+  ✓ it resumes a pending cart instead of redirecting to an unrelated hi… 0.11s  
+  ✓ it resumes a pending cart at the saved confirmation step             0.10s  
+  ✓ it sends a completed cart without an explicit purchase to the purch… 0.09s  
+  ✓ it rejects revoked tokens without marking them as used               0.09s  
+  ✓ it prefers the explicitly associated purchase over a newer unrelate… 0.10s  
+  ✓ it does not reopen checkout when the cart already has a purchase     0.10s  
+  ✓ it reuses the same database row for repeated generations of the sam… 0.11s  
+  ✓ it uses the secure resume url when preparing pending checkout links… 0.10s  
+
+  Tests:    17 passed (58 assertions)
+  Duration: 80.74s
+

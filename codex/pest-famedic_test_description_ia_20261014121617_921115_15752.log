@@ -1,0 +1,18 @@
+
+   PASS  Tests\Feature\Laboratory\GdaResultsNotAvailableTest
+  ✓ get gda results action throws not available exception on 400 no con… 2.13s  
+  ✓ get gda results action throws generic exception on other 400 messag… 2.05s  
+  ✓ get gda results action rejects successful response without pdf       2.08s  
+  ✓ get gda results action reports server error without real request     1.98s  
+  ✓ get gda results action propagates timeout without notification       2.06s  
+  ✓ resolve gda results pdf action propagates not available exception    2.20s  
+  ✓ resolve gda results pdf action records last not available in gda me… 2.01s  
+  ✓ unavailable results do not send a premature notification or replace… 1.69s  
+  ✓ sync job retries on gda results not available                        1.80s  
+  ✓ get gda results action sends order id as payload id for gabinete     1.71s  
+  ✓ gda results stored in storage when pdf valid                         1.81s  
+  ✓ no base64 stored in database notification                            1.82s  
+
+  Tests:    12 passed (23 assertions)
+  Duration: 23.48s
+

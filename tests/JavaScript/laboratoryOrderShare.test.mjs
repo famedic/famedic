@@ -72,7 +72,7 @@ test("public order page keeps study indications behind an accessible accordion",
 	assert.match(source, /Mismo paciente/);
 	assert.match(
 		source,
-		/Para acudir a otra sucursal, confirma primero el cambio de cita/,
+		/Para acudir a otra sucursal, confirma primero el cambio\s+de cita/,
 	);
 	assert.match(source, /Tu cita está programada en esta sucursal/);
 	assert.match(source, /Paciente y titular/);
@@ -102,7 +102,7 @@ test("public order page keeps study indications behind an accessible accordion",
 	assert.match(source, /border-l-\[#5944b5\]/);
 	assert.match(
 		source,
-		/¿Necesitas ayuda\? Tenemos estos canales de soporte\./,
+		/¿Necesitas ayuda\? Tenemos estos canales de\s+soporte\./,
 	);
 	assert.match(source, /href="tel:8128601893"/);
 	assert.match(source, /81 2860 1893/);
@@ -176,7 +176,7 @@ test("shared order preparation keeps original instructions available through dis
 	assert.match(source, /preparation\.studies/);
 	assert.match(
 		source,
-		/SharedOriginalInstructionsDisclosure studies=\{preparationStudies\}/,
+		/<SharedOriginalInstructionsDisclosure\s+studies=\{preparationStudies\}\s+\/>/,
 	);
 	assert.match(source, /aria-expanded=\{open\}/);
 	assert.match(source, /aria-controls=\{contentId\}/);
@@ -195,7 +195,7 @@ test("shared order preparation handles pending failed and fallback states safely
 	assert.match(source, /FALLBACK/);
 	assert.match(
 		source,
-		/Estamos preparando un resumen más sencillo de estas indicaciones/,
+		/Estamos preparando un resumen más sencillo de estas\s+indicaciones/,
 	);
 	assert.match(
 		source,

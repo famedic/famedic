@@ -416,6 +416,7 @@ class LaboratoryResultsCenterTest extends TestCase
 
     private function bootstrapAdminSchema(): void
     {
+        Schema::dropIfExists('notifications');
         Schema::dropIfExists('model_has_permissions');
         Schema::dropIfExists('model_has_roles');
         Schema::dropIfExists('role_has_permissions');
@@ -428,6 +429,17 @@ class LaboratoryResultsCenterTest extends TestCase
             $table->foreignId('user_id')->constrained();
             $table->timestamps();
             $table->softDeletes();
+        });
+
+        Schema::create('notifications', function ($table) {
+            $table->id();
+            $table->foreignId('user_id')->nullable();
+            $table->string('type')->nullable();
+            $table->string('title')->nullable();
+            $table->text('message')->nullable();
+            $table->string('action_url')->nullable();
+            $table->boolean('is_read')->default(false);
+            $table->timestamp('created_at')->nullable();
         });
 
         Schema::create('permissions', function ($table) {
@@ -471,7 +483,9 @@ class LaboratoryResultsCenterTest extends TestCase
 
         Schema::create('laboratory_result_ai_explanations', function ($table) {
             $table->id();
-            $table->foreignId('laboratory_result_observation_id')->constrained('laboratory_result_observations')->cascadeOnDelete();
+            $table->unsignedBigInteger('laboratory_result_observation_id');
+            $table->foreign('laboratory_result_observation_id', 'lab_ai_expl_observation_fk')
+                ->references('id')->on('laboratory_result_observations')->cascadeOnDelete();
             $table->string('status', 30);
             $table->text('explanation')->nullable();
             $table->text('limitations')->nullable();

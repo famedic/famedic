@@ -273,7 +273,7 @@ final class SampleCompatibilityEvaluator
             return ['fallback' => false, 'reason' => null, 'category' => null, 'block' => null];
         }
 
-        if (count($studyBlocks) > 1 && ! $this->semenAbstinenceRangesCompatible($studyBlocks)) {
+        if (count($studyBlocks) > 1 && ! $this->semenAbstinenceRangesIdentical($studyBlocks)) {
             return [
                 'fallback' => true,
                 'reason' => 'incompatible_semen_abstinence_intervals',
@@ -515,7 +515,7 @@ final class SampleCompatibilityEvaluator
     private function extractSemenAbstinenceDays(array $requirements): ?array
     {
         foreach ($requirements as $requirement) {
-            if ($requirement->requirementType !== 'sexual_abstinence_days') {
+            if (($requirement->normalizedValue['kind'] ?? null) !== 'sexual_abstinence_days') {
                 continue;
             }
 
@@ -531,7 +531,7 @@ final class SampleCompatibilityEvaluator
     /**
      * @param  list<array<string, mixed>>  $studyBlocks
      */
-    private function semenAbstinenceRangesCompatible(array $studyBlocks): bool
+    private function semenAbstinenceRangesIdentical(array $studyBlocks): bool
     {
         $ranges = array_values(array_filter(array_map(
             fn (array $block) => $block['abstinence_days'] ?? null,
@@ -542,10 +542,19 @@ final class SampleCompatibilityEvaluator
             return true;
         }
 
-        $min = max(array_map(fn (array $range) => $range['min'] ?? 0, $ranges));
-        $max = min(array_map(fn (array $range) => $range['max'] ?? PHP_INT_MAX, $ranges));
+        $first = $ranges[0];
 
-        return $min <= $max;
+        foreach (array_slice($ranges, 1) as $range) {
+            if (($range['min'] ?? null) !== ($first['min'] ?? null)) {
+                return false;
+            }
+
+            if (($range['max'] ?? null) !== ($first['max'] ?? null)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function studyNameImpliesMultipleSamplesWithoutSchedule(LaboratoryInstructionParseStudyResult $study): bool

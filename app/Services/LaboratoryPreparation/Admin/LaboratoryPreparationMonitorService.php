@@ -184,10 +184,11 @@ final class LaboratoryPreparationMonitorService
                 if ($filters['mode'] === 'v3') {
                     $query->where('prep.rules_version', LaboratoryPreparationRuleEngine::RULES_VERSION);
                 } elseif ($filters['mode'] === 'legacy') {
-                    $query->where(function (Builder $query) {
-                        $query->whereNull('prep.rules_version')
-                            ->orWhere('prep.rules_version', '!=', LaboratoryPreparationRuleEngine::RULES_VERSION);
-                    });
+                    $query->whereNotNull('prep.id')
+                        ->where(function (Builder $query) {
+                            $query->whereNull('prep.rules_version')
+                                ->orWhere('prep.rules_version', '!=', LaboratoryPreparationRuleEngine::RULES_VERSION);
+                        });
                 } elseif ($filters['mode'] === 'pending') {
                     $query->whereNull('prep.id');
                 }
@@ -235,6 +236,7 @@ final class LaboratoryPreparationMonitorService
     {
         $summaryIds = (clone $base)
             ->whereNotNull('prep.id')
+            ->select('prep.id')
             ->distinct()
             ->pluck('prep.id');
 

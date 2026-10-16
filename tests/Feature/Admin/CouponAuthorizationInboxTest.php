@@ -266,7 +266,9 @@ it('bloquea promo codes cuyo maestro está pendiente en checkout', function () {
     ]);
 
     $customerUser = User::factory()->create();
-    $customer = \App\Models\Customer::factory()->create(['user_id' => $customerUser->id]);
+    $customer = \App\Models\Customer::factory()
+        ->withRegularAccount()
+        ->create(['user_id' => $customerUser->id]);
 
     $service = app(\App\Services\PromoCodeService::class);
 

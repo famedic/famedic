@@ -70,10 +70,19 @@ final class GeneralPreparationCompatibilityEvaluator
             $rules[] = 'R17';
         }
 
-        $containers = $this->collectCategoryBlock($studies, LaboratoryInstructionCategory::CONTAINER_PRESERVATIVE);
-        if ($containers !== null) {
+        $containers = $this->evaluateContainers($studies);
+        if ($containers['fallback']) {
+            return [
+                'fallback' => true,
+                'reason' => $containers['reason'],
+                'category' => $containers['category'],
+                'rules' => array_values(array_unique([...$rules, 'R18'])),
+                'blocks' => [],
+            ];
+        }
+        if ($containers['block'] !== null) {
             $rules[] = 'R18';
-            $blocks['container_preservative'] = $containers;
+            $blocks['container_preservative'] = $containers['block'];
         }
 
         return [
@@ -214,6 +223,94 @@ final class GeneralPreparationCompatibilityEvaluator
         }
 
         return $blocks === [] ? null : ['blocks' => $blocks];
+    }
+
+    /**
+     * @param  list<LaboratoryInstructionParseStudyResult>  $studies
+     * @return array{fallback: bool, reason: string|null, category: string|null, block: array<string, mixed>|null}
+     */
+    private function evaluateContainers(array $studies): array
+    {
+        $blocks = [];
+
+        foreach ($studies as $study) {
+            $entries = [];
+
+            foreach ($study->requirements as $requirement) {
+                if (
+                    $requirement->category !== LaboratoryInstructionCategory::CONTAINER_PRESERVATIVE
+                    || $requirement->requirementType === 'unrecognized_fragment'
+                ) {
+                    continue;
+                }
+
+                $entries[] = $this->sourceEntry($requirement);
+            }
+
+            if ($entries === []) {
+                continue;
+            }
+
+            $deduped = $this->dedupeSources($entries);
+            if ($this->hasIncompatibleContainerRequirementsForSameStudy($deduped)) {
+                return [
+                    'fallback' => true,
+                    'reason' => 'incompatible_container_preservative_requirements',
+                    'category' => 'clinical_conflict',
+                    'block' => null,
+                ];
+            }
+
+            $blocks[] = [
+                'study_ids' => [$study->studyId],
+                'study_names' => [$study->studyName],
+                'sources' => $deduped,
+            ];
+        }
+
+        return [
+            'fallback' => false,
+            'reason' => null,
+            'category' => null,
+            'block' => $blocks === [] ? null : ['blocks' => $blocks],
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $entries
+     */
+    private function hasIncompatibleContainerRequirementsForSameStudy(array $entries): bool
+    {
+        $hardRequirements = array_values(array_filter(
+            $entries,
+            fn (array $entry) => $this->isHardContainerRequirement($entry),
+        ));
+
+        if (count($hardRequirements) <= 1) {
+            return false;
+        }
+
+        $fingerprints = array_map(
+            fn (array $entry) => json_encode([
+                'requirement_type' => $entry['requirement_type'] ?? null,
+                'normalized_value' => $entry['normalized_value'] ?? null,
+            ]),
+            $hardRequirements,
+        );
+
+        return count(array_unique($fingerprints)) > 1;
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     */
+    private function isHardContainerRequirement(array $entry): bool
+    {
+        return in_array((string) ($entry['requirement_type'] ?? ''), [
+            'semen_requested_container',
+            'sterile_container',
+            'preservative',
+        ], true);
     }
 
     /**

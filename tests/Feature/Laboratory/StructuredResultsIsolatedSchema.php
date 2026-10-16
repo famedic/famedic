@@ -9,6 +9,7 @@ trait StructuredResultsIsolatedSchema
 {
     protected function bootstrapStructuredResultsSchema(): void
     {
+        Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('laboratory_result_observations');
         Schema::dropIfExists('laboratory_result_reports');
         Schema::dropIfExists('laboratory_analyte_aliases');
@@ -16,6 +17,7 @@ trait StructuredResultsIsolatedSchema
         Schema::dropIfExists('laboratory_result_extraction_qa_metrics');
         Schema::dropIfExists('ai_executions');
         Schema::dropIfExists('ai_prompts');
+        Schema::enableForeignKeyConstraints();
 
         Schema::create('laboratory_analytes', function (Blueprint $table) {
             $table->id();
@@ -41,8 +43,8 @@ trait StructuredResultsIsolatedSchema
 
         Schema::create('laboratory_result_reports', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('laboratory_purchase_id')->constrained('laboratory_purchases')->cascadeOnDelete();
-            $table->foreignId('laboratory_result_version_id')->nullable()->constrained('laboratory_result_versions')->nullOnDelete();
+            $table->unsignedBigInteger('laboratory_purchase_id');
+            $table->unsignedBigInteger('laboratory_result_version_id')->nullable();
             $table->string('source', 30);
             $table->string('extraction_method', 30);
             $table->string('extraction_status', 30);
@@ -65,6 +67,14 @@ trait StructuredResultsIsolatedSchema
 
             $table->unique(['laboratory_result_version_id', 'input_hash'], 'lab_result_report_version_input_hash_unique');
             $table->unique('published_version_slot', 'lab_result_report_published_slot_unique');
+            $table->foreign('laboratory_purchase_id', 'lab_res_report_purchase_fk')
+                ->references('id')
+                ->on('laboratory_purchases')
+                ->cascadeOnDelete();
+            $table->foreign('laboratory_result_version_id', 'lab_res_report_version_fk')
+                ->references('id')
+                ->on('laboratory_result_versions')
+                ->nullOnDelete();
         });
 
         Schema::create('ai_prompts', function (Blueprint $table) {
@@ -105,7 +115,7 @@ trait StructuredResultsIsolatedSchema
 
         Schema::create('laboratory_result_extraction_qa_metrics', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('laboratory_result_version_id')->constrained('laboratory_result_versions')->cascadeOnDelete();
+            $table->unsignedBigInteger('laboratory_result_version_id');
             $table->unsignedBigInteger('text_report_id')->nullable();
             $table->unsignedBigInteger('vision_report_id')->nullable();
             $table->string('comparison_outcome', 40);
@@ -132,12 +142,17 @@ trait StructuredResultsIsolatedSchema
             $table->boolean('shadow_mode')->default(true);
             $table->json('summary')->nullable();
             $table->timestamps();
+
+            $table->foreign('laboratory_result_version_id', 'lab_res_qa_metrics_version_fk')
+                ->references('id')
+                ->on('laboratory_result_versions')
+                ->cascadeOnDelete();
         });
 
         Schema::create('laboratory_result_observations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('laboratory_result_report_id')->constrained('laboratory_result_reports')->cascadeOnDelete();
-            $table->foreignId('laboratory_analyte_id')->nullable()->constrained('laboratory_analytes')->nullOnDelete();
+            $table->unsignedBigInteger('laboratory_result_report_id');
+            $table->unsignedBigInteger('laboratory_analyte_id')->nullable();
             $table->string('analyte_code', 120)->nullable();
             $table->string('analyte_name_raw');
             $table->string('analyte_name_display')->nullable();
@@ -152,7 +167,7 @@ trait StructuredResultsIsolatedSchema
             $table->string('reference_status', 30);
             $table->boolean('abnormal_flag')->nullable();
             $table->string('abnormal_source', 20)->nullable();
-            $table->foreignId('laboratory_purchase_item_id')->nullable()->constrained('laboratory_purchase_items')->nullOnDelete();
+            $table->unsignedBigInteger('laboratory_purchase_item_id')->nullable();
             $table->string('panel_name_raw')->nullable();
             $table->timestamp('reported_at')->nullable();
             $table->string('extraction_method', 30);
@@ -161,11 +176,25 @@ trait StructuredResultsIsolatedSchema
             $table->json('source_bbox')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
+
+            $table->foreign('laboratory_result_report_id', 'lab_res_obs_report_fk')
+                ->references('id')
+                ->on('laboratory_result_reports')
+                ->cascadeOnDelete();
+            $table->foreign('laboratory_analyte_id', 'lab_res_obs_analyte_fk')
+                ->references('id')
+                ->on('laboratory_analytes')
+                ->nullOnDelete();
+            $table->foreign('laboratory_purchase_item_id', 'lab_res_obs_purchase_item_fk')
+                ->references('id')
+                ->on('laboratory_purchase_items')
+                ->nullOnDelete();
         });
     }
 
     protected function tearDownStructuredResultsSchema(): void
     {
+        Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('laboratory_result_observations');
         Schema::dropIfExists('laboratory_result_reports');
         Schema::dropIfExists('laboratory_analyte_aliases');
@@ -173,5 +202,6 @@ trait StructuredResultsIsolatedSchema
         Schema::dropIfExists('laboratory_result_extraction_qa_metrics');
         Schema::dropIfExists('ai_executions');
         Schema::dropIfExists('ai_prompts');
+        Schema::enableForeignKeyConstraints();
     }
 }

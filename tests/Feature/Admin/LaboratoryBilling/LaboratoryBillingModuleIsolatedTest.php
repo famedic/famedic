@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Admin\LaboratoryBilling;
 
+use App\Jobs\LaboratoryBilling\GenerateLaboratoryBillingReportJob;
 use App\Models\Administrator;
 use App\Models\Customer;
 use App\Models\InvoiceRequest;
@@ -14,7 +15,6 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\TaxProfile;
 use App\Models\User;
-use App\Jobs\LaboratoryBilling\GenerateLaboratoryBillingReportJob;
 use App\Notifications\LaboratoryBillingAutomaticReportNotification;
 use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
 use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
@@ -2078,6 +2078,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'laboratory_billing_report_schedules',
             'laboratory_appointments',
             'laboratory_stores',
+            'laboratory_notifications',
             'tax_profiles',
             'laboratory_purchases',
             'laboratory_concierges',
@@ -2238,10 +2239,31 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             $table->softDeletes();
         });
 
+        Schema::create('laboratory_notifications', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('laboratory_quote_id')->nullable();
+            $table->unsignedBigInteger('laboratory_purchase_id')->nullable();
+            $table->string('gda_order_id')->nullable();
+            $table->string('gda_external_id')->nullable();
+            $table->string('gda_acuse')->nullable();
+            $table->string('notification_type');
+            $table->string('status')->nullable();
+            $table->string('gda_status')->nullable();
+            $table->string('resource_type')->nullable();
+            $table->json('payload')->nullable();
+            $table->json('gda_message')->nullable();
+            $table->longText('results_pdf_base64')->nullable();
+            $table->timestamp('results_received_at')->nullable();
+            $table->timestamp('read_at')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
         Schema::create('invoice_requests', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tax_profile_id')->nullable();
-            $table->morphs('invoice_requestable');
+            $table->morphs('invoice_requestable', 'invoice_requestable_index');
             $table->string('name')->nullable();
             $table->string('rfc')->nullable();
             $table->string('zipcode')->nullable();
@@ -2359,6 +2381,7 @@ class LaboratoryBillingModuleIsolatedTest extends TestCase
             'laboratory_billing_report_schedules',
             'laboratory_appointments',
             'laboratory_stores',
+            'laboratory_notifications',
             'tax_profiles',
             'laboratory_purchases',
             'laboratory_concierges',

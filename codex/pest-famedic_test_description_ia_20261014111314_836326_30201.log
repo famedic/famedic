@@ -1,0 +1,44 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Admin\PromoCodeAdminTest
+  ✓ admin puede ver listado de promo codes                              80.17s  
+  ✓ admin puede crear código compartido                                  0.07s  
+  ✓ el código se normaliza al crear                                      0.06s  
+  ✓ no permite código duplicado                                          0.06s  
+  ✓ no permite monto inválido                                            0.05s  
+  ✓ no permite max_redemptions inválido                                  0.05s  
+  ✓ no permite expiración anterior a inicio                              0.06s  
+  ✓ admin puede ver detalle con historial de redenciones                 0.11s  
+  ✓ admin puede desactivar código                                        0.05s  
+  ✓ usuario sin cuenta admin no puede acceder a crear promo codes        0.03s  
+  ✓ usuario sin cuenta admin no puede desactivar promo codes             0.04s  
+  ✓ administrador sin permiso cupones.create no puede crear promo codes  0.06s  
+  ✓ administrador sin permiso cupones.edit no puede desactivar promo co… 0.05s  
+  ✓ creación exige OTP cuando está habilitado                            0.06s  
+  ✓ creación consume OTP verificado cuando está habilitado               0.07s  
+  ✓ correo a autorizadores incluye código promocional y máx usos         0.04s  
+
+   PASS  Tests\Feature\Laboratory\PromoCodeCheckoutTest
+  ✓ valida código compartido y devuelve token de checkout                0.10s  
+  ✓ normaliza código con espacios y minúsculas                           0.07s  
+  ✓ rechaza código inválido                                              0.07s  
+  ✓ rechaza código inactivo                                              0.07s  
+  ✓ rechaza promo cuando cupón maestro está pendiente de autorización    0.07s  
+  ✓ rechaza código expirado                                              0.07s  
+  ✓ rechaza código agotado                                               0.09s  
+  ✓ bloquea segundo uso del mismo usuario                                0.08s  
+  ✓ no permite código promocional con crédito asignado en draft          0.08s  
+  ✓ persiste promo_validation_token en draft al validar                  0.09s  
+  ✓ delete libera validación y limpia draft                              0.10s  
+  ✓ confirmación post-pago crea cupón hijo y redención confirmada        0.09s  
+  ✓ confirmación es idempotente para el mismo pedido                     0.08s  
+  ✓ respeta límite total bajo concurrencia                               0.11s  
+  ✓ no crea códigos promocionales duplicados                             0.04s  
+  ✓ rechaza maestro tipo balance para promo compartido                   0.03s  
+
+   PASS  Tests\Unit\CouponServicesSmokeTest
+  ✓ servicios de cupones y notificaciones están registrados              0.04s  
+
+  Tests:    33 passed (125 assertions)
+  Duration: 82.38s
+

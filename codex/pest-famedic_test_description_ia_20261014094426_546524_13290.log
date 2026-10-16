@@ -1,0 +1,72 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase4Test
+  ⨯ appointment first payment link uses step payment                    81.46s  
+  ⨯ standard flow payment link uses step confirmation                    0.10s  
+  ✓ can send pending payment email only when appointment is payable      0.06s  
+  ✓ paid purchase suppresses pending payment email eligibility           0.07s  
+  ✓ appointment first notification uses confirmed subject                0.06s  
+  ✓ first confirmation transition is detected only once                  0.07s  
+  ✓ confirmed more than 24 hours ago but future appointment remains pay… 0.06s  
+  ✓ expired scheduled appointment blocks payment                         0.07s  
+  ✓ soft deleted appointment blocks payment link                         0.07s  
+  ✓ appointment from another cart does not unlock payment                0.08s  
+  ✓ legacy appointment without cart id remains payable when it is the o… 0.07s  
+  ✓ checkout deep link to payment redirects when appointment cancelled   0.21s  
+  ✓ confirmed appointment with future date allows checkout payment step  0.25s  
+  ✓ reprogramming confirmed appointment does not duplicate appointment_… 0.06s  
+  ✓ uses appointment first flow eligibility unchanged for phase four     0.05s  
+
+   PASS  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase5Test
+  ✓ confirmed appointment without scheduled date blocks payment          0.07s  
+  ✓ confirmed appointment with future date allows payment                0.06s  
+  ✓ paypal uses the same payment validity rule for missing schedule      0.10s  
+  ✓ checkout redirects to appointment when confirmed without scheduled…  0.11s  
+  ✓ appointment first email keeps confirmed copy                         0.07s  
+  ✓ standard flow email uses confirmed not pay to confirm copy           0.05s  
+  ✓ pending appointment excludes cart from abandonment detection         0.06s  
+  ✓ confirmed appointment resets abandonment reference to confirmed_at   0.07s  
+  ✓ confirmed unpaid appointment can be abandoned after threshold from…  0.09s  
+  ✓ cart resumed on checkout return after abandonment episode            0.18s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase4…   
+  Expected: http://localhost/laboratory/checkout/resume/39ae5dd90a8a1510e1e7810dc4daa34fa77c54f94f6dac0328746c48d4cbbc2a
+
+  To contain: step=payment
+
+  at tests/Feature/Laboratory/LaboratoryCheckoutAppointmentFirstPhase4Test.php:172
+    168▕     $appointment = phase4ConfirmedAppointment($user);
+    169▕ 
+    170▕     $url = app(PrepareLaboratoryCheckoutPaymentLinkAction::class)($appointment);
+    171▕ 
+  ➜ 172▕     expect($url)->toContain('step=payment')
+    173▕         ->and($url)->toContain('/laboratory/'.LaboratoryBrand::OLAB->value.'/checkout');
+    174▕ });
+    175▕ 
+    176▕ test('standard flow payment link uses step confirmation', function () {
+
+  1   tests/Feature/Laboratory/LaboratoryCheckoutAppointmentFirstPhase4Test.php:172
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase4…   
+  Expected: http://localhost/laboratory/checkout/resume/f9824bea18493383b154bef83f443f06cb5385955694844c93a21b4dda24c940
+
+  To contain: step=confirmation
+
+  at tests/Feature/Laboratory/LaboratoryCheckoutAppointmentFirstPhase4Test.php:187
+    183▕     $appointment = phase4ConfirmedAppointment($user);
+    184▕ 
+    185▕     $url = app(PrepareLaboratoryCheckoutPaymentLinkAction::class)($appointment);
+    186▕ 
+  ➜ 187▕     expect($url)->toContain('step=confirmation');
+    188▕ });
+    189▕ 
+    190▕ test('can send pending payment email only when appointment is payable', function () {
+    191▕     $user = laboratoryCheckoutPhase4User();
+
+  1   tests/Feature/Laboratory/LaboratoryCheckoutAppointmentFirstPhase4Test.php:187
+
+
+  Tests:    2 failed, 23 passed (52 assertions)
+  Duration: 83.70s
+

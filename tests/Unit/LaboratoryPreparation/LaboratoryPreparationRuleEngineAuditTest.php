@@ -242,3 +242,251 @@ it('bloquea fragmentos relevantes desconocidos antes de AUTO', function () {
         ->and($decision->fallbackCategory)->toBe(LaboratoryPreparationDecision::FALLBACK_SOURCE_QUALITY)
         ->and($decision->consolidatedRequirements)->toBeNull();
 });
+
+it('consolida abstinencia R07 solo cuando el rango es idéntico', function () {
+    $parse = $this->parser->parseItems([
+        [
+            'id' => 'sem-1',
+            'name' => 'ESPERMATOBIOSCOPIA',
+            'gda_id' => 'sem-1',
+            'indications' => 'Abstinencia sexual de mínimo 3 días máximo 7.',
+        ],
+        [
+            'id' => 'sem-2',
+            'name' => 'ESPERMOGRAMA',
+            'gda_id' => 'sem-2',
+            'indications' => 'Abstinencia sexual de mínimo 3 días máximo 7.',
+        ],
+    ]);
+
+    $decision = $this->engine->evaluate(
+        orderId: 'ORD-R07-IDENTICAL',
+        parseResult: $parse,
+        patient: LaboratoryPreparationPatientContext::fromOfficialLabel('Adulto'),
+        restrictToPhase3aCategories: false,
+    );
+
+    expect($decision->status)->toBe(LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED)
+        ->and($decision->rulesApplied)->toContain('R07')
+        ->and($decision->consolidatedRequirements['semen']['blocks'])->toHaveCount(1)
+        ->and($decision->consolidatedRequirements['semen']['blocks'][0]['sources'][0]['source_span'])
+        ->toBe('Abstinencia sexual de mínimo 3 días máximo 7');
+});
+
+it('bloquea R07 cuando los rangos de abstinencia se solapan pero son diferentes', function (string $first, string $second) {
+    $parse = $this->parser->parseItems([
+        [
+            'id' => 'sem-1',
+            'name' => 'ESPERMATOBIOSCOPIA',
+            'gda_id' => 'sem-1',
+            'indications' => $first,
+        ],
+        [
+            'id' => 'sem-2',
+            'name' => 'ESPERMOGRAMA',
+            'gda_id' => 'sem-2',
+            'indications' => $second,
+        ],
+    ]);
+
+    $decision = $this->engine->evaluate(
+        orderId: 'ORD-R07-OVERLAP',
+        parseResult: $parse,
+        patient: LaboratoryPreparationPatientContext::fromOfficialLabel('Adulto'),
+        restrictToPhase3aCategories: false,
+    );
+
+    expect($decision->status)->toBe(LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL)
+        ->and($decision->fallbackReason)->toBe('incompatible_semen_abstinence_intervals')
+        ->and($decision->fallbackCategory)->toBe(LaboratoryPreparationDecision::FALLBACK_CLINICAL_CONFLICT)
+        ->and($decision->rulesApplied)->toContain('R07')
+        ->and($decision->consolidatedRequirements)->toBeNull();
+})->with([
+    '3-7 vs 5-7' => [
+        'Abstinencia sexual de mínimo 3 días máximo 7.',
+        'Abstinencia sexual de mínimo 5 días máximo 7.',
+    ],
+    '3-7 vs 3-5' => [
+        'Abstinencia sexual de mínimo 3 días máximo 7.',
+        'Abstinencia sexual de mínimo 3 días máximo 5.',
+    ],
+]);
+
+it('mantiene R18 en bloques separados para muestras diferentes con recipientes distintos', function () {
+    $parse = $this->parser->parseItems([
+        [
+            'id' => 'stool-1',
+            'name' => 'COPROPARASITOSCOPICO (UNICA MUESTRA)',
+            'gda_id' => 'stool-1',
+            'indications' => 'Acudir a la sucursal por los recipientes para la recolección de la muestra o podrá comprarlos en la farmacia. Recolectar muestra de materia fecal.',
+        ],
+        [
+            'id' => 'sem-1',
+            'name' => 'ESPERMATOBIOSCOPIA',
+            'gda_id' => 'sem-1',
+            'indications' => 'Abstinencia sexual de mínimo 3 días máximo 7. Recolectar el eyaculado en un frasco de plástico estéril proporcionado por el laboratorio o adquirido en una farmacia procure no tocar los bordes del recipiente estéril (no se recibirán frascos de vidrio u otro tipo de contenedor que no sea el solicitado).',
+        ],
+    ]);
+
+    $decision = $this->engine->evaluate(
+        orderId: 'ORD-R18-DISTINCT-SAMPLES',
+        parseResult: $parse,
+        patient: LaboratoryPreparationPatientContext::fromOfficialLabel('Adulto'),
+        restrictToPhase3aCategories: false,
+    );
+
+    expect($decision->status)->toBe(LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED)
+        ->and($decision->rulesApplied)->toContain('R18')
+        ->and($decision->consolidatedRequirements['container_preservative']['blocks'])->toHaveCount(2);
+});
+
+it('bloquea R18 cuando una misma muestra tiene recipiente y preservador incompatibles', function () {
+    $parse = $this->parser->parseItems([
+        [
+            'id' => 'urine-24h',
+            'name' => 'ORINA DE 24 HORAS',
+            'gda_id' => 'urine-24h',
+            'indications' => 'Recolectar orina de 24 horas en recipiente estéril con preservador.',
+        ],
+    ]);
+
+    $decision = $this->engine->evaluate(
+        orderId: 'ORD-R18-SAME-SAMPLE-CONFLICT',
+        parseResult: $parse,
+        patient: LaboratoryPreparationPatientContext::fromOfficialLabel('Adulto'),
+        restrictToPhase3aCategories: false,
+    );
+
+    expect($decision->status)->toBe(LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL)
+        ->and($decision->fallbackReason)->toBe('incompatible_container_preservative_requirements')
+        ->and($decision->fallbackCategory)->toBe(LaboratoryPreparationDecision::FALLBACK_CLINICAL_CONFLICT)
+        ->and($decision->rulesApplied)->toContain('R18')
+        ->and($decision->consolidatedRequirements)->toBeNull();
+});
+
+it('valida contenido estructurado crítico en hasta 15 casos oficiales', function (array $expectation) {
+    $case = collect(ruleEngineAuditOfficialCases())->firstWhere('case_id', $expectation['case_id']);
+    $decision = ruleEngineAuditEvaluateOfficialCase($this->parser, $this->engine, $case);
+
+    expect($decision->status)->toBe($expectation['status'])
+        ->and($decision->rulesApplied)->toEqualCanonicalizing($expectation['rules'])
+        ->and($decision->originalInstructions)->toHaveCount(count($case['studies']));
+
+    foreach ($case['studies'] as $index => $study) {
+        expect($decision->originalInstructions[$index]['source_instructions'])->toBe($study['indications']);
+    }
+
+    if ($expectation['status'] === LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL) {
+        expect($decision->fallbackReason)->toBe($expectation['fallback_reason'])
+            ->and($decision->needsProviderReview)->toBeTrue()
+            ->and($decision->consolidatedRequirements)->toBeNull();
+
+        return;
+    }
+
+    expect($decision->fallbackReason)->toBeNull()
+        ->and($decision->needsProviderReview)->toBeFalse()
+        ->and($decision->consolidatedRequirements)->toBeArray();
+
+    $content = ruleEngineAuditConsolidatedText($decision);
+
+    foreach ($expectation['contains'] as $fragment) {
+        expect($content)->toContain($fragment);
+    }
+
+    foreach ($expectation['absent_keys'] ?? [] as $key) {
+        expect($decision->consolidatedRequirements)->not->toHaveKey($key);
+    }
+})->with([
+    'QA02 ayuno 10-12' => [[
+        'case_id' => 'QA02',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R01'],
+        'contains' => ['"minimum_hours":10', '"maximum_hours":12', 'QUIMICA SANGUINEA 28 ELEMENTOS'],
+    ]],
+    'QA05 ayuno pediátrico' => [[
+        'case_id' => 'QA05',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R02', 'R01'],
+        'contains' => ['"minimum_hours":4', '"age_source":"official_label_pediatric"', 'ayuno de al menos 4 horas'],
+    ]],
+    'QA06 operación pediátrica' => [[
+        'case_id' => 'QA06',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R02', 'R01', 'R09', 'R10', 'R11', 'R12', 'R13'],
+        'contains' => ['"minimum_hours":4', '"maximum_hours":6', 'receta medica', 'creatinina', 'metformina', 'mayor de 18 años'],
+    ]],
+    'QA11 mixto ayuno orina ginecología' => [[
+        'case_id' => 'QA11',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R01', 'R04', 'R08', 'R16', 'R18'],
+        'contains' => ['"minimum_hours":10', '"maximum_hours":12', 'frasco de laboratorio estéril', 'Abstinencia sexual mínimo 48 horas'],
+    ]],
+    'QA15 orina simple y 24h separadas' => [[
+        'case_id' => 'QA15',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R04', 'R05', 'R08', 'R18'],
+        'contains' => ['"urine_simple"', '"urine_24h"', 'orina durante 24 horas', 'frasco de laboratorio estéril'],
+    ]],
+    'QA17 calendario ambiguo' => [[
+        'case_id' => 'QA17',
+        'status' => LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL,
+        'rules' => ['R06'],
+        'fallback_reason' => 'ambiguous_stool_sample_schedule',
+    ]],
+    'QA18 semen completo' => [[
+        'case_id' => 'QA18',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R07', 'R15', 'R16', 'R18'],
+        'contains' => ['Abstinencia sexual de mínimo 3 días máximo 7', 'bebidas alcohólicas, drogas y tabaco 3 días', 'No haber orinado mínimo 1h', 'frasco de plástico estéril', 'lunes a sabado'],
+    ]],
+    'QA21 ginecología y cita' => [[
+        'case_id' => 'QA21',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R08', 'R12', 'R16'],
+        'contains' => ['previa cita', 'Abstinencia sexual mínimo 48 horas', 'Sin haberse realizado ducha vaginal 48 horas', 'una semana antes'],
+    ]],
+    'QA26 ayunos incompatibles' => [[
+        'case_id' => 'QA26',
+        'status' => LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL,
+        'rules' => ['R01', 'R02'],
+        'fallback_reason' => 'incompatible_fasting_interval',
+    ]],
+    'QA27 ayuno exacto 10' => [[
+        'case_id' => 'QA27',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R01', 'R03', 'R11', 'R12'],
+        'contains' => ['"exact_hours":10', '"water_liters":1.5', '"hours_before_study":1', '"full_bladder_required":true', 'receta medica'],
+    ]],
+    'QA31 conflicto metformina' => [[
+        'case_id' => 'QA31',
+        'status' => LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL,
+        'rules' => ['R01', 'R02', 'R09', 'R10'],
+        'fallback_reason' => 'incompatible_medication_instructions',
+    ]],
+    'QA32 restricciones mama' => [[
+        'case_id' => 'QA32',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R01', 'R02', 'R09', 'R10', 'R11', 'R12', 'R13', 'R14', 'R15'],
+        'contains' => ['creatinina', 'marcapasos', 'mayor de 18 años', 'Presentarse con axilas depiladas, sin desodorante, crema, ni perfume.'],
+    ]],
+    'QA36 no preparación suprimida' => [[
+        'case_id' => 'QA36',
+        'status' => LaboratoryPreparationDecision::STATUS_AUTO_CONSOLIDATED,
+        'rules' => ['R17', 'R01'],
+        'contains' => ['"minimum_hours":8', 'INDICE HOMA'],
+        'absent_keys' => ['no_preparation'],
+    ]],
+    'QA39 hidratación orina fallback' => [[
+        'case_id' => 'QA39',
+        'status' => LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL,
+        'rules' => ['R01', 'R03', 'R04', 'R08', 'R11', 'R12', 'R16', 'R18'],
+        'fallback_reason' => 'hydration_bladder_conflicts_with_urine_collection',
+    ]],
+    'QA40 muestras ambiguas' => [[
+        'case_id' => 'QA40',
+        'status' => LaboratoryPreparationDecision::STATUS_FALLBACK_ORIGINAL,
+        'rules' => ['R04', 'R08'],
+        'fallback_reason' => 'ambiguous_gynecological_sample_with_urine_order',
+    ]],
+]);

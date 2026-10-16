@@ -1,0 +1,26 @@
+
+   PASS  Tests\Feature\Laboratory\GdaResultVersioningPhase1Test
+  ✓ crea estado por estudio y version por hash de pdf                    2.23s  
+  ✓ no duplica estados versiones ni eventos al reprocesar mismo pdf      1.96s  
+  ✓ registra nueva version cuando cambia el hash del pdf                 1.93s  
+  ✓ transiciona a revision manual si el pdf no tiene regla deterministi… 1.78s  
+  ✓ eventos no guardan texto extraido del pdf                            1.83s  
+  ✓ webhook con pdf mantiene email y active campaign existentes          1.78s  
+
+   PASS  Tests\Feature\Mail\MailSafetyPolicyTest
+  ✓ en production no bloquea correos aunque el destinatario no esté en…  0.05s  
+  ✓ en staging permite email exacto definido en MAIL_ALLOWED_RECIPIENTS  0.02s  
+  ✓ en staging permite email exacto con mayúsculas en MAIL_ALLOWED_RECI… 0.02s  
+  ✓ en staging permite dominio definido en MAIL_ALLOWED_DOMAINS          0.02s  
+  ✓ en staging bloquea destinatario externo no permitido                 0.02s  
+  ✓ en staging bloquea todo el correo si cc tiene destinatario no permi… 0.03s  
+  ✓ en staging bloquea todo el correo si bcc tiene destinatario no perm… 0.02s  
+  ✓ si MAIL_SAFE_MODE es false no bloquea en ambientes no productivos    0.02s  
+  ✓ registra log cuando se bloquea un correo si MAIL_LOG_BLOCKED es tru… 0.02s  
+  ✓ no registra log cuando MAIL_LOG_BLOCKED es false                     0.02s  
+  ✓ integración: el listener registrado bloquea el envío real con trans… 0.03s  
+  ✓ integración: el listener registrado permite el envío a destinatario… 0.02s  
+
+  Tests:    18 passed (38 assertions)
+  Duration: 11.89s
+
