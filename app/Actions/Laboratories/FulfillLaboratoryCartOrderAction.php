@@ -227,6 +227,10 @@ class FulfillLaboratoryCartOrderAction
             throw $th;
         }
 
+        // Register communication only after the outermost commit; it cannot fail the financial flow.
+        $coordinatedConfirmation = app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class)
+            ->enrollAfterCommit($laboratoryPurchase);
+
         // Post-commit only: purchase + transaction are durable. Never rollback checkout on automation failure.
         $this->dispatchLaboratoryPreparationSummaryGeneration($laboratoryPurchase);
         ($this->recordMarketingCampaignConversionAction)($laboratoryPurchase);
@@ -251,9 +255,11 @@ class FulfillLaboratoryCartOrderAction
             }
         }
 
-        $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
+        if (! $coordinatedConfirmation) {
+            $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
+        }
 
-        if ($laboratoryAppointment?->laboratory_purchase_id === $laboratoryPurchase->id) {
+        if (! $coordinatedConfirmation && $laboratoryAppointment?->laboratory_purchase_id === $laboratoryPurchase->id) {
             $laboratoryAppointment->refresh();
             $laboratoryAppointment->loadMissing([
                 'laboratoryStore',
@@ -301,12 +307,21 @@ class FulfillLaboratoryCartOrderAction
                     return;
                 }
 
-                GenerateLaboratoryPurchasePreparationSummaryJob::dispatch(
+                $confirmationCoordinator = app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class);
+                if ($confirmationCoordinator->appliesTo($laboratoryPurchase) && ! $confirmationCoordinator->asyncConfigurationValid()) {
+                    Log::warning('laboratory_confirmation_generation_queue_invalid', ['purchase_id' => $laboratoryPurchase->id]);
+                    return;
+                }
+                $preparationJob = GenerateLaboratoryPurchasePreparationSummaryJob::dispatch(
                     $laboratoryPurchase->id,
                     null,
                     $this->laboratoryPreparationSummaryService->expectedSourceHash($laboratoryPurchase),
                     GenerateLaboratoryPurchasePreparationSummaryJob::MODE_GENERATE,
                 )->afterCommit();
+                if (app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class)->appliesTo($laboratoryPurchase)) {
+                    $preparationJob->onConnection(config('laboratory-confirmation.connection', 'database'))
+                        ->onQueue(config('laboratory-confirmation.generation_queue', 'laboratory-preparation'));
+                }
 
                 return;
             }

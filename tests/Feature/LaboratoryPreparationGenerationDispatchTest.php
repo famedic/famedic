@@ -760,3 +760,89 @@ it('revalidates payment and GDA eligibility when a generation job starts', funct
         ->and($purchase->fresh()->gda_status)->toBe(GdaOrderStatus::Uncertain)
         ->and(LaboratoryPurchasePreparationSummary::query()->where('laboratory_purchase_id', $purchase->id)->exists())->toBeFalse();
 });
+
+
+it('enrolls a new confirmed purchase without sending legacy purchase or summary email inline', function () {
+    config(['laboratory-confirmation.enabled' => true, 'laboratory-confirmation.activated_at' => now()->subMinute()->toIso8601String()]);
+    Queue::fake(); Notification::fake();
+    $gda = Mockery::mock(CreateGDAQuotationAction::class);
+    $gda->shouldReceive('__invoke')->once()->andReturn(['id' => 'GDA-COORDINATED', 'infogda_consecutivo' => 765432]);
+    app()->instance(CreateGDAQuotationAction::class, $gda);
+    $purchase = fulfillPreparationDispatchPurchase(preparationDispatchFixture());
+    expect($purchase->fresh()->gda_status)->toBe(GdaOrderStatus::Confirmed)
+        ->and($purchase->transactions()->count())->toBe(1);
+    Notification::assertNotSentTo($purchase->customer->user, \App\Notifications\LaboratoryPurchaseCreated::class);
+    Queue::assertPushed(GenerateLaboratoryPurchasePreparationSummaryJob::class, fn ($job) => $job->queue === 'laboratory-preparation' && $job->connection === 'database');
+    Queue::assertPushed(\App\Jobs\CoordinateLaboratoryPurchaseConfirmationJob::class, fn ($job) => $job->queue === 'laboratory-confirmations');
+    expect(\App\Models\LaboratoryPurchaseConfirmation::where('laboratory_purchase_id', $purchase->id)->count())->toBe(1);
+});
+
+it('preserves the confirmed purchase when durable confirmation registration fails', function () {
+    config(['laboratory-confirmation.enabled' => true, 'laboratory-confirmation.activated_at' => now()->subMinute()->toIso8601String()]);
+    Queue::fake(); Notification::fake();
+    \Illuminate\Support\Facades\Schema::drop('laboratory_purchase_confirmations');
+    $gda = Mockery::mock(CreateGDAQuotationAction::class);
+    $gda->shouldReceive('__invoke')->once()->andReturn(['id' => 'GDA-LEDGER-FAILED', 'infogda_consecutivo' => 765433]);
+    app()->instance(CreateGDAQuotationAction::class, $gda);
+    $purchase = fulfillPreparationDispatchPurchase(preparationDispatchFixture());
+    expect($purchase->fresh()->gda_status)->toBe(GdaOrderStatus::Confirmed)
+        ->and($purchase->transactions()->count())->toBe(1);
+    Notification::assertNotSentTo($purchase->customer->user, \App\Notifications\LaboratoryPurchaseCreated::class);
+});
+
+
+it('suppresses only the concierge echo of a coordinated purchase and retains later appointment notifications', function () {
+    config(['laboratory-confirmation.enabled' => true, 'laboratory-confirmation.activated_at' => now()->subMinute()->toIso8601String()]);
+    Queue::fake(); Notification::fake();
+    [$user, $brand, $address, $contact, $transaction] = preparationDispatchFixture();
+    $items = $user->customer->laboratoryCartItems()->ofBrand($brand)->with('laboratoryTest')->get();
+    $items->first()->laboratoryTest->update(['requires_appointment' => true]);
+    $appointment = \App\Models\LaboratoryAppointment::factory()->create([
+        'customer_id' => $user->customer->id, 'brand' => $brand->value,
+        'appointment_date' => now()->addDay(), 'confirmed_at' => now(),
+    ]);
+    $gda = Mockery::mock(CreateGDAQuotationAction::class);
+    $gda->shouldReceive('__invoke')->once()->andReturn(['id' => 'GDA-COORDINATED-APPOINTMENT', 'infogda_consecutivo' => 765434]);
+    app()->instance(CreateGDAQuotationAction::class, $gda);
+    $purchase = app(FulfillLaboratoryCartOrderAction::class)($user->customer, $brand, $address, $contact, $transaction, $appointment, $items, $brand->value);
+    expect($appointment->fresh()->laboratory_purchase_id)->toBe($purchase->id);
+    Notification::assertNotSentTo($user, \App\Notifications\LaboratoryAppointmentUpdatedByConcierge::class);
+    $user->notify(new \App\Notifications\LaboratoryAppointmentUpdatedByConcierge($appointment->fresh()));
+    Notification::assertSentTo($user, \App\Notifications\LaboratoryAppointmentUpdatedByConcierge::class);
+});
+
+
+it('sanitizes primary and secondary job exceptions without changing retry policy', function (bool $secondary) {
+    $canary = 'AUDIT_CLINICAL_CANARY_SYNTHETIC_25ML';
+    $purchase = preparationDispatchPurchase();
+    preparationDispatchItem($purchase, ['indications' => 'Ayuno de 8 horas.']);
+    $service = Mockery::mock(LaboratoryPreparationSummaryService::class);
+    $service->shouldReceive('deterministicV3Enabled')->andReturnTrue();
+    $service->shouldReceive('deterministicV3ShadowEnabled')->andReturnFalse();
+    $service->shouldReceive('hasCurrentGeneratedSummary')->andReturnFalse();
+    $service->shouldReceive('deterministicV3ShadowEffectiveEnabled')->andReturnFalse();
+    $service->shouldReceive('generate')->andThrow($secondary
+        ? new LaboratoryPreparationFidelityValidationException($canary, ['provider' => $canary])
+        : new RuntimeException($canary));
+    if ($secondary) {
+        $service->shouldReceive('generateFallbackFromSource')->once()->andThrow(new RuntimeException($canary));
+    }
+    Log::spy();
+    $job = new GenerateLaboratoryPurchasePreparationSummaryJob($purchase->id);
+    $caught = null;
+    try {
+        $job->handle($service, app(LaboratoryPreparationSummaryNotificationService::class), app(LaboratoryPreparationEligibility::class));
+    } catch (\App\Services\LaboratoryPreparation\LaboratoryPreparationOperationalException $safe) {
+        $caught = $safe;
+    }
+    expect($caught)->not->toBeNull()
+        ->and((string) $caught)->not->toContain($canary)
+        ->and($caught->getPrevious())->toBeNull()
+        ->and($caught->context()['correlation_id'])->toMatch('/^[0-9a-f-]{36}$/')
+        ->and($job->tries)->toBe(3)
+        ->and($job->backoff)->toBe([60, 300, 900]);
+    Log::shouldHaveReceived('error')->with('laboratory_preparation_summary_job_failed', Mockery::on(
+        fn (array $context): bool => ! str_contains(json_encode($context), $canary)
+            && isset($context['stage'], $context['error_code'], $context['correlation_id'])
+    ))->once();
+})->with([false, true]);

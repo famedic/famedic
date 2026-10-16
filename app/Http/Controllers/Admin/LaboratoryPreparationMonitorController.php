@@ -33,7 +33,7 @@ class LaboratoryPreparationMonitorController extends Controller
 
         return Inertia::render(
             'Admin/LaboratoryPreparation/MonitorDetail',
-            $this->service->detailPayload($laboratoryPurchase),
+            $this->service->detailPayload($laboratoryPurchase, $request),
         );
     }
 }

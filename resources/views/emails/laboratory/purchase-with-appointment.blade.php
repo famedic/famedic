@@ -52,6 +52,12 @@ Gracias por confiar en FAMEDIC.<br>
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>
 
+@if ($unifiedConfirmation ?? false)
+<p style="margin:0 0 12px;color:#3d4852;font-size:16px;line-height:1.5;"><strong>Información de tu cita</strong></p>
+<p style="margin:0 0 8px;color:#3d4852;font-size:16px;line-height:1.5;">{{ $appointment_date ?? '—' }} · {{ $appointment_time ?? '—' }}</p>
+<p style="margin:0 0 20px;color:#3d4852;font-size:16px;line-height:1.5;">{{ $branch_name ?? '—' }}<br>{{ $branch_address ?? '—' }}</p>
+@include('emails.laboratory.components.preparation', ['preparation' => $preparation ?? null, 'studies' => $studies, 'showIntro' => true])
+@else
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border-collapse:separate;">
 <tr>
 <td style="padding:14px 16px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;">
@@ -66,6 +72,7 @@ Gracias por confiar en FAMEDIC.<br>
 </td>
 </tr>
 </table>
+@endif
 
 
 <p style="margin:16px 0;color:#a0aec0;letter-spacing:1px;font-size:12px;line-height:1;">────────────────────────────────</p>

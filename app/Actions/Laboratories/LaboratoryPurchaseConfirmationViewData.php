@@ -18,7 +18,7 @@ final class LaboratoryPurchaseConfirmationViewData
     /**
      * @return array<string, mixed>
      */
-    public static function build(LaboratoryPurchase $purchase, object $notifiable, bool $forPdf = false): array
+    public static function build(LaboratoryPurchase $purchase, object $notifiable, bool $forPdf = false, ?array $preparationOverride = null): array
     {
         $purchase->loadMissing([
             'laboratoryPurchaseItems',
@@ -31,7 +31,7 @@ final class LaboratoryPurchaseConfirmationViewData
         $appointment = $purchase->laboratoryAppointment;
         $transaction = $purchase->transactions->first();
 
-        $preparation = app(LaboratoryPreparationPresenter::class)->present($purchase);
+        $preparation = $preparationOverride ?? app(LaboratoryPreparationPresenter::class)->present($purchase);
         $studies = $preparation['studies'];
 
         $patientDetails = PatientEmailDetails::fromPurchase($purchase);

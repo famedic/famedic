@@ -151,6 +151,7 @@ class LaboratoryPreparationSummaryService
             ]);
         }
 
+        $failureCategory = 'provider';
         try {
             $result = $this->openAiClient->chatCompletionWithMetadata(
                 messages: $messages,
@@ -161,7 +162,9 @@ class LaboratoryPreparationSummaryService
             );
 
             $durationMs = $this->durationMs($startedAt);
+            $failureCategory = 'validation';
             $content = $this->validateResponse($result['content'], $input);
+            $failureCategory = 'persistence';
             $usage = $result['usage'];
             $execution = $this->recordExecution(
                 purchase: $purchase,
@@ -197,9 +200,7 @@ class LaboratoryPreparationSummaryService
                 );
             });
         } catch (Throwable $exception) {
-            $failedResponsePayload = $exception instanceof LaboratoryPreparationFidelityValidationException
-                ? $exception->responsePayload
-                : null;
+            $safe = new LaboratoryPreparationOperationalException('legacy_generation', $failureCategory);
 
             $this->recordExecution(
                 purchase: $purchase,
@@ -209,17 +210,20 @@ class LaboratoryPreparationSummaryService
                 input: $input,
                 status: AiExecution::STATUS_FAILED,
                 durationMs: $this->durationMs($startedAt),
-                responsePayload: $failedResponsePayload,
-                error: Str::limit($exception->getMessage(), 2000, ''),
+                responsePayload: null,
+                error: $safe->getMessage(),
                 execution: $execution,
             );
 
             if (! $throwOnFailure) {
-                report($exception);
+                report($safe);
             }
 
             if ($throwOnFailure) {
-                throw $exception;
+                if ($exception instanceof LaboratoryPreparationFidelityValidationException) {
+                    throw new LaboratoryPreparationFidelityValidationException($safe->getMessage(), [], $exception->itemId);
+                }
+                throw $safe;
             }
 
             return null;
@@ -424,7 +428,8 @@ class LaboratoryPreparationSummaryService
                 'order_id' => $this->orderId($purchase),
                 'source_hash' => $sourceHash,
                 'rules_version' => LaboratoryPreparationRuleEngine::RULES_VERSION,
-                'exception' => $exception::class,
+                'error_code' => 'laboratory_preparation_shadow_failed', 'stage' => 'shadow',
+                'exception' => $exception instanceof \RuntimeException ? \RuntimeException::class : \Throwable::class,
                 'duration_ms' => $this->durationMs($startedAt),
             ]);
 
@@ -483,19 +488,20 @@ class LaboratoryPreparationSummaryService
 
             return $summary;
         } catch (Throwable $exception) {
+            $safe = new LaboratoryPreparationOperationalException('deterministic_generation');
             Log::warning('laboratory_preparation_v3_failed', [
                 'purchase_id' => $purchase->id,
                 'order_id' => $this->orderId($purchase),
                 'rules_version' => LaboratoryPreparationRuleEngine::RULES_VERSION,
-                'exception' => $exception::class,
+                ...$safe->context(),
             ]);
 
             if (! $throwOnFailure) {
-                report($exception);
+                report($safe);
             }
 
             if ($throwOnFailure) {
-                throw $exception;
+                throw $safe;
             }
 
             return null;
