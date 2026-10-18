@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CouponPurchaseType;
 use App\Enums\Gender;
+use App\Enums\GdaOrderStatus;
 use App\Enums\LaboratoryBrand;
 use App\Support\Laboratory\GdaResultsPdfStatus;
 use Carbon\Carbon;
@@ -21,6 +22,10 @@ class LaboratoryPurchase extends Model
     use HasFactory, SoftDeletes;
 
     protected static $unguarded = true;
+
+    protected $attributes = [
+        'gda_status' => GdaOrderStatus::Pending->value,
+    ];
 
     protected $appends = [
         'formatted_created_at',
@@ -44,6 +49,8 @@ class LaboratoryPurchase extends Model
     {
         return [
             'brand' => LaboratoryBrand::class,
+            'gda_status' => GdaOrderStatus::class,
+            'gda_response' => 'array',
             'birth_date' => 'date',
             'gender' => Gender::class,
             'phone' => RawPhoneNumberCast::class.':country_field',

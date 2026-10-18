@@ -657,9 +657,9 @@ it('rejects a preparation instruction based only on feature_list content', funct
 
     expect($summary)->toBeNull()
         ->and($execution->status)->toBe(AiExecution::STATUS_FAILED)
-        ->and($execution->error)->toContain("Item [{$withoutIndications->id}]")
-        ->and($execution->error)->toContain('feature_hash')
-        ->and($execution->error)->toContain('sections.1.content');
+        ->and($execution->error)->toContain('laboratory_preparation_legacy_generation_failed correlation=')
+        ->and($execution->error)->toContain('category=validation')
+        ->and($execution->response_payload)->toBeNull();
 });
 
 it('rejects responses that invent preparation instructions from feature_list without indications', function () {
@@ -809,7 +809,7 @@ it('accepts valid mixed purchases synthesizing indicated items and omitting null
         ->and($sourcedIds)->not->toContain($withoutIndications->id);
 });
 
-it('stores the validated OpenAI response payload when fidelity validation fails', function () {
+it('discards rejected OpenAI payloads and persists safe diagnostics when fidelity validation fails', function () {
     $purchase = preparationValidationPurchase();
     $item = preparationValidationItem($purchase, [
         'indications' => 'Se deberá realizar entre las semanas 14 a 22 de gestación por ultrasonido.',
@@ -838,9 +838,9 @@ it('stores the validated OpenAI response payload when fidelity validation fails'
     expect($summary)->toBeNull()
         ->and($execution)->not->toBeNull()
         ->and($execution->status)->toBe(AiExecution::STATUS_FAILED)
-        ->and($execution->error)->toContain("[{$item->id}]")
-        ->and($execution->error)->toContain('Missing critical elements:')
-        ->and($execution->response_payload)->toBe($rejectedPayload)
+        ->and($execution->error)->toContain('laboratory_preparation_legacy_generation_failed correlation=')
+        ->and($execution->error)->toContain('category=validation')
+        ->and($execution->response_payload)->toBeNull()
         ->and(LaboratoryPurchasePreparationSummary::query()->where('laboratory_purchase_id', $purchase->id)->count())->toBe(0);
 });
 

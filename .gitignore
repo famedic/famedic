@@ -47,3 +47,6 @@ database/famedic_jun_23
 /storage/tmp/*
 !/storage/tmp/.gitignore
 /tmp/*
+# Local QA runtime artifacts and isolated test logs
+/codex/pest-*.log
+/storage/framework/local-qa-listen.lock

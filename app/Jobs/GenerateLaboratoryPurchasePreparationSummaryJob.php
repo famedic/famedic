@@ -4,8 +4,9 @@ namespace App\Jobs;
 
 use App\Models\AiExecution;
 use App\Models\LaboratoryPurchase;
-use App\Services\LaboratoryPreparation\LaboratoryPreparationFidelityValidationException;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationEligibility;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationFidelityValidationException;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationOperationalException;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryNotificationService;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryService;
 use Illuminate\Bus\Queueable;
@@ -40,6 +41,26 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
     }
 
     public function handle(
+        LaboratoryPreparationSummaryService $service,
+        LaboratoryPreparationSummaryNotificationService $notificationService,
+        LaboratoryPreparationEligibility $eligibilityService,
+    ): void {
+        try {
+            $this->process($service, $notificationService, $eligibilityService);
+        } catch (\Throwable $exception) {
+            // Do not chain the original exception: workers/reporters/failed_jobs stringify it.
+            $safe = $exception instanceof LaboratoryPreparationOperationalException
+                ? $exception : new LaboratoryPreparationOperationalException('job');
+            Log::error('laboratory_preparation_summary_job_failed', [
+                'purchase_id' => $this->laboratoryPurchaseId,
+                'ai_execution_id' => $this->aiExecutionId,
+                ...$safe->context(),
+            ]);
+            throw $safe;
+        }
+    }
+
+    private function process(
         LaboratoryPreparationSummaryService $service,
         LaboratoryPreparationSummaryNotificationService $notificationService,
         LaboratoryPreparationEligibility $eligibilityService,
@@ -151,7 +172,7 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
             Log::warning('laboratory_preparation_summary_job_fidelity_failed', [
                 'purchase_id' => $purchase->id,
                 'ai_execution_id' => $execution?->id,
-                'message' => $exception->getMessage(),
+                ...(new LaboratoryPreparationOperationalException('fidelity', 'validation'))->context(),
             ]);
 
             $summary = $service->generateFallbackFromSource($purchase, $execution);
@@ -175,14 +196,9 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
                 $notificationService->notifyIfNeeded($summary);
             }
         } catch (\Throwable $exception) {
-            Log::error('laboratory_preparation_summary_job_failed', [
-                'purchase_id' => $purchase->id,
-                'ai_execution_id' => $execution?->id,
-                'exception' => $exception::class,
-                'message' => $exception->getMessage(),
-            ]);
-
-            throw $exception;
+            app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class)->wake($purchase, failed: true);
+            throw $exception instanceof LaboratoryPreparationOperationalException
+                ? $exception : new LaboratoryPreparationOperationalException('generation');
         }
     }
 

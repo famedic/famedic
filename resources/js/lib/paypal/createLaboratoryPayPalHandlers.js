@@ -37,6 +37,10 @@ export function createLaboratoryPayPalHandlers({
     onCancelled,
     isMounted = () => true,
 }) {
+    let paymentReceived = false;
+    let reviewMessage = null;
+    const receivedMessage = "Tu pago ya fue recibido. Estamos validando tu orden de laboratorio.";
+
     const safeSetPhase = (phase) => {
         if (isMounted()) {
             onPaymentPhaseChange?.(phase);
@@ -54,7 +58,18 @@ export function createLaboratoryPayPalHandlers({
         safeSetPhase("idle");
     };
 
+    const showReceived = (data) => {
+        paymentReceived = true;
+        safeSetMessage(data.message || receivedMessage);
+        reviewMessage = data.message || receivedMessage;
+        safeSetPhase("idle");
+        if (data.laboratory_purchase_id) {
+            router.visit(route("laboratory-purchases.show", { laboratory_purchase: data.laboratory_purchase_id }));
+        }
+    };
+
     const createOrder = async () => {
+        if (paymentReceived) throw new Error(reviewMessage || receivedMessage);
         safeSetMessage(null);
 
         return mutex.runCreate(async () => {
@@ -80,9 +95,14 @@ export function createLaboratoryPayPalHandlers({
                     },
                 );
 
+                if (["gda_uncertain", "payment_uncertain"].includes(data.status)) {
+                    showReceived(data);
+                    throw new Error(reviewMessage || receivedMessage);
+                }
                 safeSetPhase("open");
                 return data.order_id;
             } catch (err) {
+                if (err.response?.data?.status === "payment_uncertain") showReceived(err.response.data);
                 mutex.releaseCheckoutSession();
                 safeSetPhase("idle");
                 const msg =
@@ -96,6 +116,7 @@ export function createLaboratoryPayPalHandlers({
     };
 
     const onApprove = async (data) => {
+        if (paymentReceived) return;
         safeSetMessage(null);
 
         return mutex.runCapture(async () => {
@@ -115,6 +136,10 @@ export function createLaboratoryPayPalHandlers({
                 );
 
                 const cap = res.data;
+                if (["gda_uncertain", "payment_uncertain"].includes(cap.status)) {
+                    showReceived(cap);
+                    return;
+                }
 
                 if (
                     cap.laboratory_purchase_id &&
@@ -145,6 +170,7 @@ export function createLaboratoryPayPalHandlers({
     };
 
     const onCancel = () => {
+        if (paymentReceived) return;
         releaseSession();
         safeSetMessage(
             "El pago fue cancelado. Puedes intentarlo nuevamente o elegir otro método.",
@@ -153,6 +179,7 @@ export function createLaboratoryPayPalHandlers({
     };
 
     const onError = (err) => {
+        if (paymentReceived) { safeSetMessage(reviewMessage || receivedMessage); return; }
         console.error(err);
         releaseSession();
         safeSetMessage(

@@ -2,306 +2,411 @@ import AdminLayout from "@/Layouts/AdminLayout";
 import { Heading } from "@/Components/Catalyst/heading";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
-import { Input } from "@/Components/Catalyst/input";
 import PaginatedTable from "@/Components/Admin/PaginatedTable";
-import SearchInput from "@/Components/Admin/SearchInput";
+import { Link, router } from "@inertiajs/react";
+import { useEffect, useState } from "react";
+import { StatusBadge } from "./MonitorComponents";
 import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/Components/Catalyst/table";
-import { Link, router, useForm } from "@inertiajs/react";
-import { useEffect, useMemo } from "react";
+	advancedFilterKeys,
+	filterValues,
+	filterQuery,
+	primaryMetricIds,
+	formatDate,
+} from "./monitorPresentation";
 
-const statusColors = {
-	AUTO_CONSOLIDATED: "emerald",
-	FALLBACK_ORIGINAL: "amber",
-	generated: "emerald",
-	stale: "zinc",
-	failed: "red",
-	succeeded: "emerald",
-	queued: "sky",
-	processing: "sky",
-	not_run: "zinc",
-	v3: "violet",
-	legacy: "zinc",
-	pending: "amber",
-};
-
-function formatDate(value) {
-	if (!value) return "—";
-	return new Date(value).toLocaleString("es-MX");
-}
-
-function Select({ value, onChange, options = [], placeholder }) {
-	return (
-		<select
-			className="h-10 rounded-md border border-zinc-950/10 bg-white px-3 text-sm text-zinc-900 shadow-sm dark:border-white/10 dark:bg-zinc-900 dark:text-white"
-			value={value || ""}
-			onChange={(event) => onChange(event.target.value)}
-		>
-			<option value="">{placeholder}</option>
-			{options.map((option) => (
-				<option key={option.value} value={option.value}>
-					{option.label}
-				</option>
-			))}
-		</select>
+const inputClass =
+	"block w-full min-w-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white";
+function Metrics({ metrics }) {
+	const byId = Object.fromEntries(
+		metrics.map((metric) => [metric.id, metric]),
 	);
-}
-
-function MetricGrid({ metrics = [] }) {
-	return (
-		<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-			{metrics.map((metric) => (
-				<div
-					key={metric.id}
-					className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-				>
-					<div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-						{metric.label}
-					</div>
-					<div className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-white">
-						{metric.value}
-					</div>
-				</div>
-			))}
+	const card = (metric) => (
+		<div
+			key={metric.id}
+			className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+		>
+			<dt className="text-xs font-medium text-zinc-500 [overflow-wrap:anywhere] dark:text-zinc-400">
+				{metric.label}
+			</dt>
+			<dd className="mt-2 text-2xl font-semibold">{metric.value}</dd>
 		</div>
 	);
-}
-
-function MonitorFilters({ filters, options }) {
-	const { data, setData } = useForm({
-		search: filters.search || "",
-		date_from: filters.date_from || "",
-		date_to: filters.date_to || "",
-		brand: filters.brand || "",
-		technical_status: filters.technical_status || "",
-		decision_status: filters.decision_status || "",
-		fallback_category: filters.fallback_category || "",
-		fallback_reason: filters.fallback_reason || "",
-		openai_status: filters.openai_status || "",
-		needs_provider_review: filters.needs_provider_review || "",
-		rule: filters.rule || "",
-		mode: filters.mode || "",
-	});
-
-	const query = useMemo(() => {
-		return Object.fromEntries(
-			Object.entries(data).filter(([, value]) => value !== "" && value != null),
-		);
-	}, [data]);
-
-	useEffect(() => {
-		const timeout = setTimeout(() => {
-			router.get(route("admin.laboratory-preparation.monitor.index"), query, {
-				preserveState: true,
-				replace: true,
-			});
-		}, 400);
-
-		return () => clearTimeout(timeout);
-	}, [query]);
-
-	const clear = () => {
-		router.get(route("admin.laboratory-preparation.monitor.index"), {}, {
-			preserveState: true,
-			replace: true,
-		});
-	};
-
 	return (
-		<div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-			<div className="grid gap-3 lg:grid-cols-4">
-				<SearchInput
-					value={data.search}
-					onChange={(value) => setData("search", value)}
-					placeholder="ID, folio o estudio"
-				/>
-				<Input
-					type="date"
-					value={data.date_from}
-					onChange={(event) => setData("date_from", event.target.value)}
-				/>
-				<Input
-					type="date"
-					value={data.date_to}
-					onChange={(event) => setData("date_to", event.target.value)}
-				/>
-				<Select
-					value={data.brand}
-					onChange={(value) => setData("brand", value)}
-					options={options.brands}
-					placeholder="Laboratorio"
-				/>
-				<Select
-					value={data.mode}
-					onChange={(value) => setData("mode", value)}
-					options={options.modes}
-					placeholder="Modo"
-				/>
-				<Select
-					value={data.technical_status}
-					onChange={(value) => setData("technical_status", value)}
-					options={options.technicalStatuses}
-					placeholder="Estado técnico"
-				/>
-				<Select
-					value={data.decision_status}
-					onChange={(value) => setData("decision_status", value)}
-					options={options.decisionStatuses}
-					placeholder="Decisión"
-				/>
-				<Select
-					value={data.fallback_category}
-					onChange={(value) => setData("fallback_category", value)}
-					options={options.fallbackCategories}
-					placeholder="Categoría fallback"
-				/>
-				<Input
-					value={data.fallback_reason}
-					onChange={(event) => setData("fallback_reason", event.target.value)}
-					placeholder="Motivo fallback"
-				/>
-				<Select
-					value={data.openai_status}
-					onChange={(value) => setData("openai_status", value)}
-					options={options.openAiStatuses}
-					placeholder="Estado OpenAI"
-				/>
-				<Select
-					value={data.needs_provider_review}
-					onChange={(value) => setData("needs_provider_review", value)}
-					options={[
+		<section aria-label="Indicadores del filtro actual">
+			<p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+				Resultados del filtro actual · Los indicadores pueden
+				superponerse.
+			</p>
+			<dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+				{primaryMetricIds.map((id) => byId[id] && card(byId[id]))}
+			</dl>
+			<details className="mt-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+				<summary className="cursor-pointer text-sm font-medium">
+					Más métricas
+				</summary>
+				<dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+					{metrics
+						.filter(
+							(metric) => !primaryMetricIds.includes(metric.id),
+						)
+						.map(card)}
+				</dl>
+			</details>
+		</section>
+	);
+}
+function MonitorFilters({ filters, options, errors = {} }) {
+	const [values, setValues] = useState(() => filterValues(filters));
+	useEffect(() => setValues(filterValues(filters)), [filters]);
+	const active = Object.entries(filterQuery(values));
+	const advancedCount = advancedFilterKeys.filter(
+		(key) => values[key] !== "",
+	).length;
+	const change = (key) => (event) =>
+		setValues((current) => ({ ...current, [key]: event.target.value }));
+	const navigate = (data) =>
+		router.get(
+			route("admin.laboratory-preparation.monitor.index"),
+			filterQuery(data),
+			{ preserveState: true, preserveScroll: true, replace: true },
+		);
+	const labels = {
+		search: "Compra, folio o estudio",
+		date_from: "Desde",
+		date_to: "Hasta",
+		decision_status: "Decisión",
+		brand: "Laboratorio",
+		technical_status: "Estado técnico",
+		fallback_category: "Categoría de fallback",
+		fallback_reason: "Motivo de fallback",
+		openai_status: "Estado OpenAI",
+		needs_provider_review: "Revisión",
+		rule: "Regla aplicada",
+		mode: "Modo",
+	};
+	const input = (key, type = "text") => (
+		<label className="block min-w-0 text-sm" key={key}>
+			<span className="mb-1 block text-zinc-600 dark:text-zinc-300">
+				{labels[key]}
+			</span>
+			<input
+				className={inputClass}
+				type={type}
+				value={values[key]}
+				onChange={change(key)}
+			/>
+		</label>
+	);
+	const select = (key, choices = []) => (
+		<label className="block min-w-0 text-sm" key={key}>
+			<span className="mb-1 block text-zinc-600 dark:text-zinc-300">
+				{labels[key]}
+			</span>
+			<select
+				className={inputClass}
+				value={values[key]}
+				onChange={change(key)}
+			>
+				<option value="">Todos</option>
+				{choices.map((option) => (
+					<option key={option.value} value={option.value}>
+						{option.label}
+					</option>
+				))}
+			</select>
+		</label>
+	);
+	return (
+		<form
+			onSubmit={(event) => {
+				event.preventDefault();
+				navigate(values);
+			}}
+			className="min-w-0 space-y-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+			aria-label="Filtros del monitor"
+		>
+			{Object.keys(errors).length > 0 && (
+				<ul
+					role="alert"
+					className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-950"
+				>
+					{Object.entries(errors).map(([key, message]) => (
+						<li key={key}>{message}</li>
+					))}
+				</ul>
+			)}
+			<div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+				{input("search")}
+				{input("date_from", "date")}
+				{input("date_to", "date")}
+				{select("decision_status", options.decisionStatuses)}
+				{select("brand", options.brands)}
+			</div>
+			<details
+				key={JSON.stringify(filters)}
+				open={
+					advancedCount > 0 ||
+					advancedFilterKeys.some((key) => errors[key]) ||
+					undefined
+				}
+			>
+				<summary className="cursor-pointer text-sm font-medium">
+					Filtros avanzados{" "}
+					{advancedCount > 0 && `(${advancedCount} activos)`}
+				</summary>
+				<div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+					{select("technical_status", options.technicalStatuses)}
+					{select("openai_status", options.openAiStatuses)}
+					{select("fallback_category", options.fallbackCategories)}
+					{input("fallback_reason")}
+					{select("needs_provider_review", [
 						{ value: "true", label: "Requiere revisión" },
 						{ value: "false", label: "Sin revisión" },
-					]}
-					placeholder="Revisión"
-				/>
-				<Select
-					value={data.rule}
-					onChange={(value) => setData("rule", value)}
-					options={(options.rules || []).map((rule) => ({ value: rule, label: rule }))}
-					placeholder="Regla aplicada"
-				/>
-			</div>
-			<div className="mt-3 flex justify-end">
-				<Button plain type="button" onClick={clear}>
+					])}
+					{select(
+						"rule",
+						(options.rules || []).map((value) => ({
+							value,
+							label: value,
+						})),
+					)}
+					{select("mode", options.modes)}
+				</div>
+			</details>
+			<div className="flex flex-wrap gap-2">
+				<Button type="submit">Aplicar filtros</Button>
+				<Button
+					plain
+					type="button"
+					onClick={() => {
+						const empty = filterValues();
+						setValues(empty);
+						navigate(empty);
+					}}
+				>
 					Limpiar filtros
 				</Button>
 			</div>
+			{active.length > 0 && (
+				<ul
+					aria-label="Filtros seleccionados"
+					className="flex flex-wrap gap-2"
+				>
+					{active.map(([key, value]) => (
+						<li key={key} className="min-w-0">
+							<button
+								type="button"
+								className="rounded-full border border-zinc-300 px-3 py-1 text-left text-xs [overflow-wrap:anywhere] hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 dark:hover:bg-zinc-800"
+								aria-label={`Quitar filtro ${labels[key]}`}
+								onClick={() => {
+									const next = { ...values, [key]: "" };
+									setValues(next);
+									navigate(next);
+								}}
+							>
+								{labels[key]}: {value} ×
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
+		</form>
+	);
+}
+function Identity({ purchase }) {
+	return (
+		<div className="space-y-1">
+			<Link
+				className="font-semibold text-blue-700 underline-offset-2 hover:underline dark:text-blue-300"
+				href={purchase.detail_url}
+			>
+				Compra #{purchase.id}
+			</Link>
+			<p className="text-xs text-zinc-500 dark:text-zinc-400">
+				{purchase.folio}
+			</p>
+			{purchase.deleted_at && (
+				<Badge color="zinc">Compra eliminada</Badge>
+			)}
 		</div>
 	);
 }
-
-function StatusBadge({ value }) {
-	if (!value) return <span className="text-zinc-400">—</span>;
-
-	return <Badge color={statusColors[value] || "zinc"}>{value}</Badge>;
+function Result({ purchase }) {
+	return (
+		<div className="space-y-2">
+			<StatusBadge value={purchase.decision_status} />
+			{purchase.needs_provider_review && (
+				<div>
+					<Badge color="amber">⚑ Revisión requerida</Badge>
+				</div>
+			)}
+		</div>
+	);
 }
-
-function MonitorTable({ purchases }) {
+function Technical({ purchase }) {
+	return (
+		<div className="space-y-2">
+			<StatusBadge value={purchase.technical_status} />
+			<p className="text-xs text-zinc-500 dark:text-zinc-400">
+				OpenAI:{" "}
+				<span className="text-zinc-700 dark:text-zinc-200">
+					{purchase.openai_status === "not_run" ? (
+						"Sin ejecución relevante"
+					) : (
+						<StatusBadge value={purchase.openai_status} />
+					)}
+				</span>
+			</p>
+		</div>
+	);
+}
+function MonitorList({ purchases }) {
 	return (
 		<PaginatedTable paginatedData={purchases}>
-			<Table>
-				<TableHead>
-					<TableRow>
-						<TableHeader>Compra</TableHeader>
-						<TableHeader>Folio</TableHeader>
-						<TableHeader>Laboratorio</TableHeader>
-						<TableHeader>Compra</TableHeader>
-						<TableHeader>Generación</TableHeader>
-						<TableHeader>Modo</TableHeader>
-						<TableHeader>Estado</TableHeader>
-						<TableHeader>Decisión</TableHeader>
-						<TableHeader>Fallback</TableHeader>
-						<TableHeader>Reglas</TableHeader>
-						<TableHeader>OpenAI</TableHeader>
-						<TableHeader>Revisión</TableHeader>
-						<TableHeader></TableHeader>
-					</TableRow>
-				</TableHead>
-				<TableBody>
-					{purchases.data.map((purchase) => (
-						<TableRow key={purchase.id}>
-							<TableCell>
-								<Link
-									className="font-medium text-blue-700 hover:underline dark:text-blue-300"
-									href={purchase.admin_purchase_url}
+			<div className="hidden min-w-0 md:block">
+				<table className="w-full table-fixed text-left text-sm">
+					<caption className="sr-only">
+						Compras monitoreadas y estado de su preparación
+					</caption>
+					<thead className="text-xs text-zinc-500 dark:text-zinc-400">
+						<tr>
+							{[
+								"Compra y folio",
+								"Laboratorio y fecha",
+								"Resultado y revisión",
+								"Estado técnico",
+								"Detalle",
+							].map((label) => (
+								<th
+									scope="col"
+									key={label}
+									className="px-2 py-3 font-medium [overflow-wrap:anywhere]"
 								>
-									#{purchase.id}
-								</Link>
-							</TableCell>
-							<TableCell>{purchase.folio}</TableCell>
-							<TableCell>{purchase.brand}</TableCell>
-							<TableCell>{formatDate(purchase.created_at)}</TableCell>
-							<TableCell>{formatDate(purchase.generated_at)}</TableCell>
-							<TableCell><StatusBadge value={purchase.mode} /></TableCell>
-							<TableCell><StatusBadge value={purchase.technical_status} /></TableCell>
-							<TableCell><StatusBadge value={purchase.decision_status} /></TableCell>
-							<TableCell className="max-w-64 truncate">{purchase.fallback_reason || "—"}</TableCell>
-							<TableCell>
-								<div className="flex flex-wrap gap-1">
-									{purchase.rules_applied?.length ? purchase.rules_applied.map((rule) => (
-										<Badge key={rule} color="slate">{rule}</Badge>
-									)) : "—"}
-								</div>
-							</TableCell>
-							<TableCell><StatusBadge value={purchase.openai_status} /></TableCell>
-							<TableCell>
-								{purchase.needs_provider_review ? (
-									<Badge color="amber">Sí</Badge>
-								) : (
-									<span className="text-zinc-400">No</span>
-								)}
-							</TableCell>
-							<TableCell>
-								<Button outline href={purchase.detail_url}>
-									Ver detalle
-								</Button>
-							</TableCell>
-						</TableRow>
-					))}
-				</TableBody>
-			</Table>
+									{label}
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+						{purchases.data.map((purchase) => (
+							<tr key={purchase.id} className="align-top">
+								<td className="px-2 py-4 [overflow-wrap:anywhere]">
+									<Identity purchase={purchase} />
+								</td>
+								<td className="px-2 py-4 [overflow-wrap:anywhere]">
+									<p>{purchase.brand}</p>
+									<p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+										{formatDate(purchase.created_at)}
+									</p>
+								</td>
+								<td className="px-2 py-4 [overflow-wrap:anywhere]">
+									<Result purchase={purchase} />
+								</td>
+								<td className="px-2 py-4 [overflow-wrap:anywhere]">
+									<Technical purchase={purchase} />
+								</td>
+								<td className="px-2 py-4">
+									<Link
+										href={purchase.detail_url}
+										className="inline-block text-sm font-medium text-blue-700 underline [overflow-wrap:anywhere] dark:text-blue-300"
+										aria-label={`Ver detalle de compra ${purchase.id}`}
+									>
+										Ver detalle
+									</Link>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			<ul
+				className="space-y-3 md:hidden"
+				aria-label="Compras monitoreadas"
+			>
+				{purchases.data.map((purchase) => (
+					<li
+						key={purchase.id}
+						className="min-w-0 space-y-4 rounded-xl border border-zinc-200 bg-white p-4 [overflow-wrap:anywhere] dark:border-zinc-800 dark:bg-zinc-900"
+					>
+						<Identity purchase={purchase} />
+						<p className="text-sm">
+							{purchase.brand} · {formatDate(purchase.created_at)}
+						</p>
+						<Result purchase={purchase} />
+						<Technical purchase={purchase} />
+						<Link
+							className="inline-block text-sm font-medium text-blue-700 underline dark:text-blue-300"
+							href={purchase.detail_url}
+						>
+							Ver detalle de compra #{purchase.id}
+						</Link>
+					</li>
+				))}
+			</ul>
 		</PaginatedTable>
 	);
 }
-
 export default function Monitor({
 	filters,
 	filterOptions,
 	metrics,
 	purchases,
 	universeNote,
+	semanticsNote,
 	featureFlags,
+	errors = {},
 }) {
 	return (
 		<AdminLayout title="Monitor de Indicaciones IA">
-			<div className="space-y-6 pb-8">
-				<div className="flex flex-wrap items-start justify-between gap-3">
-					<div>
-						<Heading>Monitor de Indicaciones IA</Heading>
-						<p className="mt-1 text-sm text-zinc-500">{universeNote}</p>
-					</div>
-					<div className="flex flex-wrap gap-2">
-						<Badge color={featureFlags.deterministic_v3_enabled ? "emerald" : "zinc"}>
-							V3 {featureFlags.deterministic_v3_enabled ? "ON" : "OFF"}
+			<div className="min-w-0 space-y-6 pb-8 text-zinc-950 dark:text-zinc-100">
+				<header className="min-w-0">
+					<Heading>Monitor de Indicaciones IA</Heading>
+					<p className="mt-2 max-w-4xl text-sm text-zinc-500 dark:text-zinc-400">
+						{universeNote}
+					</p>
+					<div className="mt-3 flex flex-wrap gap-2">
+						<Badge
+							color={
+								featureFlags.deterministic_v3_enabled
+									? "emerald"
+									: "zinc"
+							}
+						>
+							V3{" "}
+							{featureFlags.deterministic_v3_enabled
+								? "ON"
+								: "OFF"}
 						</Badge>
-						<Badge color="zinc">Shadow UI N/D</Badge>
+						<Badge color="zinc">
+							Shadow: sin datos persistidos
+						</Badge>
 					</div>
-				</div>
-				<MetricGrid metrics={metrics} />
-				<MonitorFilters filters={filters} options={filterOptions} />
+				</header>
+				<Metrics metrics={metrics} />
+				<details className="rounded-xl bg-zinc-100 p-4 text-sm dark:bg-zinc-900">
+					<summary className="cursor-pointer font-medium">
+						Cómo interpretar los indicadores
+					</summary>
+					<p className="mt-2">{semanticsNote}</p>
+					<p className="mt-2">
+						Una generación v3 aún en cola puede no tener una
+						ejecución persistida; el monitor no inventa ese estado.
+					</p>
+				</details>
+				<MonitorFilters
+					filters={filters}
+					options={filterOptions}
+					errors={errors}
+				/>
 				{purchases.data.length ? (
-					<MonitorTable purchases={purchases} />
+					<MonitorList purchases={purchases} />
 				) : (
-					<div className="rounded-lg border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
+					<p
+						role="status"
+						className="rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm"
+					>
 						No hay compras para los filtros seleccionados.
-					</div>
+					</p>
 				)}
 			</div>
 		</AdminLayout>

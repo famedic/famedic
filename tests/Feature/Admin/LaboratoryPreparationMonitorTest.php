@@ -11,11 +11,13 @@ use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchasePreparationSummary;
 use App\Models\User;
+use App\Services\LaboratoryPreparation\Admin\LaboratoryPreparationMonitorService;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationRuleEngine;
 use App\Services\OpenAi\OpenAiClient;
 use Illuminate\Auth\Middleware\EnsureEmailIsVerified;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -33,6 +35,9 @@ class LaboratoryPreparationMonitorTest extends TestCase
         RefreshDatabaseState::$migrated = true;
 
         parent::setUp();
+
+        $this->withoutVite();
+        Http::preventStrayRequests();
 
         $this->bootstrapSchema();
         $this->seedNavigationPermissions();
@@ -424,7 +429,7 @@ class LaboratoryPreparationMonitorTest extends TestCase
                 ->where('diagnostic.fallback_category', LaboratoryPurchasePreparationSummary::FALLBACK_CLINICAL_CONFLICT)
                 ->where('diagnostic.needs_provider_review', true)
                 ->where('openAi.status', AiExecution::STATUS_FAILED)
-                ->where('openAi.error', 'OpenAI rejected token [redacted]')
+                ->where('openAi.error', 'La ejecución no pudo completarse. Usa el ID de ejecución para una revisión técnica autorizada.')
                 ->where('indications.original.0.study_id', '101')
                 ->where('indications.consolidated_requirements.0.volume_ml', 25)
                 ->where('indications.flag_notice', 'Existe decisión v3 persistida, pero el flag determinístico está apagado; el paciente ve las indicaciones originales.')
@@ -460,6 +465,187 @@ class LaboratoryPreparationMonitorTest extends TestCase
             ->withSession(['auth.password_confirmed_at' => time()])
             ->get(route('admin.laboratory-preparation.monitor.index'))
             ->assertOk();
+    }
+
+    #[Test]
+    public function ejecucion_relevante_es_consistente_y_no_arrastra_fallos_historicos(): void
+    {
+        $admin = $this->seedAdminUser(true);
+        $withoutSummary = $this->seedPurchase();
+        $this->seedExecution($withoutSummary, AiExecution::STATUS_FAILED);
+        $latest = $this->seedExecution($withoutSummary, AiExecution::STATUS_SUCCEEDED);
+        $this->seedExecution($withoutSummary, AiExecution::STATUS_FAILED, ['feature' => 'unrelated_result_feature']);
+
+        $linked = $this->seedPurchase();
+        $linkedExecution = $this->seedExecution($linked, AiExecution::STATUS_SUCCEEDED);
+        $this->seedSummary($linked, ['ai_execution_id' => $linkedExecution->id]);
+        $this->seedExecution($linked, AiExecution::STATUS_FAILED);
+
+        $fallback = $this->seedPurchase();
+        $this->seedExecution($fallback, AiExecution::STATUS_FAILED);
+        $this->seedSummary($fallback);
+
+        $service = app(LaboratoryPreparationMonitorService::class);
+        $all = $service->indexPayload(Request::create('/'));
+        $metrics = collect($all['metrics'])->keyBy('id');
+        $rows = collect($all['purchases']->items())->keyBy('id');
+        $this->assertSame(3, $metrics['total']['value']);
+        $this->assertSame(0, $metrics['technical']['value']);
+        $this->assertSame(0, $metrics['pending']['value']);
+        $this->assertSame(2, $metrics['openai_ok']['value']);
+        $this->assertSame('succeeded_without_summary', $rows[$withoutSummary->id]['technical_status']);
+        $this->assertSame('not_run', $rows[$fallback->id]['openai_status']);
+        $this->assertSame('succeeded', $rows[$linked->id]['openai_status']);
+        $failed = $service->indexPayload(Request::create('/', 'GET', ['openai_status' => 'failed']));
+        $this->assertSame(0, $failed['purchases']->total());
+        $notRun = $service->indexPayload(Request::create('/', 'GET', ['openai_status' => 'not_run']));
+        $this->assertSame($fallback->id, $notRun['purchases']->items()[0]['id']);
+        $this->assertSame($latest->id, $service->detailPayload($withoutSummary)['openAi']['ai_execution_id']);
+    }
+
+    #[Test]
+    public function fallo_sin_resumen_no_es_pendiente_y_cola_no_prueba_llamada(): void
+    {
+        $failed = $this->seedPurchase();
+        $this->seedExecution($failed, AiExecution::STATUS_FAILED, ['feature' => 'laboratory_preparation_redactor']);
+        $queued = $this->seedPurchase();
+        $this->seedExecution($queued, AiExecution::STATUS_QUEUED);
+        $processing = $this->seedPurchase();
+        $this->seedExecution($processing, AiExecution::STATUS_PROCESSING);
+        $service = app(LaboratoryPreparationMonitorService::class);
+        $payload = $service->indexPayload(Request::create('/'));
+        $metrics = collect($payload['metrics'])->keyBy('id');
+        $rows = collect($payload['purchases']->items())->keyBy('id');
+        $this->assertSame(1, $metrics['technical']['value']);
+        $this->assertSame(1, $metrics['openai_failed']['value']);
+        $this->assertSame(2, $metrics['pending']['value']);
+        $this->assertSame('failed', $rows[$failed->id]['technical_status']);
+        $this->assertSame('v3', $rows[$failed->id]['mode']);
+        $this->assertFalse($service->detailPayload($queued)['openAi']['called']);
+        $this->assertNull($service->detailPayload($processing)['openAi']['called']);
+        $this->assertNull($service->detailPayload($failed)['openAi']['called']);
+        $filtered = $service->indexPayload(Request::create('/', 'GET', ['technical_status' => 'failed']));
+        $this->assertSame(1, $filtered['purchases']->total());
+        $this->assertSame($failed->id, $filtered['purchases']->items()[0]['id']);
+    }
+
+    #[Test]
+    public function consulta_del_listado_no_crece_con_el_numero_de_compras(): void
+    {
+        $first = $this->seedPurchase();
+        $this->seedExecution($first, AiExecution::STATUS_QUEUED);
+        $service = app(LaboratoryPreparationMonitorService::class);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $service->indexPayload(Request::create('/'));
+        $one = count(DB::getQueryLog());
+        for ($i = 0; $i < 24; $i++) {
+            $purchase = $this->seedPurchase();
+            $this->seedExecution($purchase, AiExecution::STATUS_FAILED);
+        }
+        DB::flushQueryLog();
+        $payload = $service->indexPayload(Request::create('/'));
+        $many = count(DB::getQueryLog());
+        DB::disableQueryLog();
+        $this->assertCount(25, $payload['purchases']->items());
+        $this->assertSame($one, $many, 'Las consultas no deben crecer por compra.');
+        $this->assertLessThanOrEqual(5, $many);
+    }
+
+    #[Test]
+    public function compras_eliminadas_tienen_detalle_autorizado_y_retorno_local(): void
+    {
+        $admin = $this->seedAdminUser(true);
+        $purchase = $this->seedPurchase();
+        $this->seedSummary($purchase);
+        $purchase->delete();
+        $response = $this->actingAs($admin)->get(route('admin.laboratory-preparation.monitor.index', ['search' => $purchase->gda_order_id, 'page' => 1]))->assertOk();
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('purchases.data.0.id', $purchase->id)
+            ->where('purchases.data.0.admin_purchase_url', null));
+        $this->get(route('admin.laboratory-preparation.monitor.show', ['laboratory_purchase' => $purchase->id, 'return' => ['search' => $purchase->gda_order_id, 'page' => 2, 'redirect' => 'https://example.test']]))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('purchase.admin_url', null)
+            ->where('back_url', route('admin.laboratory-preparation.monitor.index', ['search' => $purchase->gda_order_id, 'page' => 2], false)));
+        $this->actingAs($this->seedAdminUser(false))->get(route('admin.laboratory-preparation.monitor.show', $purchase->id))->assertForbidden();
+    }
+
+    #[Test]
+    public function historial_es_acotado_y_no_expone_payloads_ni_errores_sensibles(): void
+    {
+        $purchase = $this->seedPurchase();
+        for ($i = 0; $i < 22; $i++) {
+            $this->seedExecution($purchase, AiExecution::STATUS_FAILED, [
+                'error' => 'AUDIT_CLINICAL_CANARY_SYNTHETIC_25ML Paciente Privado patient@example.test Authorization: Bearer secret',
+                'request_payload_redacted' => ['prompt' => 'PRIVATE_PROMPT'],
+            ]);
+        }
+        $this->seedSummary($purchase, ['summary_json' => [
+            'summary' => 'Seguro',
+            'decision' => ['consolidated_requirements' => [['volume_ml' => 25, 'authorization' => 'Bearer secret', 'nested' => ['api_key' => 'secret']]]],
+            'redaction' => ['patient_text' => 'Seguro', 'prompt' => 'PRIVATE_PROMPT'],
+            'unexpected' => 'PRIVATE_UNKNOWN',
+        ]]);
+        $payload = app(LaboratoryPreparationMonitorService::class)->detailPayload($purchase);
+        $this->assertCount(20, $payload['history']['executions']);
+        $this->assertTrue($payload['history']['has_more']);
+        $json = json_encode($payload);
+        foreach (['AUDIT_CLINICAL_CANARY_SYNTHETIC_25ML', 'patient@example.test', 'PRIVATE_PROMPT', 'PRIVATE_UNKNOWN', 'Bearer secret', 'api_key'] as $secret) {
+            $this->assertStringNotContainsString($secret, $json);
+        }
+        $this->assertSame(25, $payload['indications']['consolidated_requirements'][0]['volume_ml']);
+    }
+
+    #[Test]
+    public function filtros_invalidos_son_rechazados_y_fecha_final_sola_es_valida(): void
+    {
+        $admin = $this->seedAdminUser(true);
+        $this->actingAs($admin)->getJson(route('admin.laboratory-preparation.monitor.index', ['date_from' => 'not-a-date']))
+            ->assertUnprocessable()->assertJsonValidationErrors('date_from');
+        $this->getJson(route('admin.laboratory-preparation.monitor.index', ['search' => ['unexpected']]))
+            ->assertUnprocessable()->assertJsonValidationErrors('search');
+        $this->get(route('admin.laboratory-preparation.monitor.index', ['date_to' => '2026-10-16']))->assertOk();
+    }
+
+    #[Test]
+    public function detalle_muestra_auto_vigente_y_originales_tras_apagar_v3(): void
+    {
+        config(['services.laboratory_preparation.deterministic_v3_enabled' => true]);
+        $purchase = $this->seedPurchase();
+        $source = app(\App\Services\LaboratoryPreparation\LaboratoryPreparationSource::class);
+        $execution = $this->seedExecution($purchase, AiExecution::STATUS_SUCCEEDED, ['feature' => 'laboratory_preparation_redactor']);
+        $this->seedSummary($purchase, [
+            'decision_status' => LaboratoryPurchasePreparationSummary::DECISION_AUTO_CONSOLIDATED,
+            'source_hash' => $source->deterministicHash($purchase),
+            'ai_execution_id' => $execution->id,
+            'summary_text' => 'Indicaciones consolidadas vigentes.',
+            'summary_json' => ['summary' => 'Indicaciones consolidadas vigentes.', 'sections' => [['title' => 'Preparación', 'content' => 'Indicaciones consolidadas vigentes.']], 'special_instructions' => [], 'individual_instructions' => []],
+        ]);
+        $service = app(LaboratoryPreparationMonitorService::class);
+        $auto = $service->detailPayload($purchase->fresh());
+        $this->assertTrue($auto['indications']['patient_presenter']['has_ai_summary']);
+        $this->assertSame('AI_READY', $auto['indications']['patient_presenter']['ai_status']);
+        config(['services.laboratory_preparation.deterministic_v3_enabled' => false]);
+        $original = $service->detailPayload($purchase->fresh());
+        $this->assertFalse($original['indications']['patient_presenter']['has_ai_summary']);
+        $this->assertSame('Muestra de 25 mL, último día de la semana laboral.', $original['indications']['patient_presenter']['studies'][0]['instructions']);
+        $this->assertSame('AUTO_CONSOLIDATED', $original['diagnostic']['decision_status']);
+    }
+
+    #[Test]
+    public function ejecucion_de_otra_compra_no_se_expone_como_relevante(): void
+    {
+        $purchase = $this->seedPurchase();
+        $other = $this->seedPurchase();
+        $execution = $this->seedExecution($other, AiExecution::STATUS_FAILED, ['error' => 'Dato privado de otra compra']);
+        $this->seedSummary($purchase, ['ai_execution_id' => $execution->id]);
+        $service = app(LaboratoryPreparationMonitorService::class);
+        $rows = collect($service->indexPayload(Request::create('/'))['purchases']->items())->keyBy('id');
+        $this->assertSame('not_run', $rows[$purchase->id]['openai_status']);
+        $detail = $service->detailPayload($purchase->fresh());
+        $this->assertNull($detail['openAi']['ai_execution_id']);
+        $this->assertSame('not_run', $detail['openAi']['status']);
+        $this->assertCount(0, $detail['history']['executions']);
     }
 
     private function seedAdminUser(bool $withAdministratorRole): User
@@ -677,6 +863,7 @@ class LaboratoryPreparationMonitorTest extends TestCase
             $table->string('brand');
             $table->string('gda_order_id')->nullable();
             $table->unsignedInteger('gda_consecutivo')->nullable();
+            $table->string('gda_status', 32)->nullable();
             $table->string('name');
             $table->string('paternal_lastname');
             $table->string('maternal_lastname');

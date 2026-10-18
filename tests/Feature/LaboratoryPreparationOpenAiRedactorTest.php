@@ -207,7 +207,7 @@ it('produce fallback técnico seguro ante error de proveedor', function () {
 
     expect($result->decision->fallbackReason)->toBe('ai_redaction_failed')
         ->and($result->technicalFailureReason)->toBe('ai_redaction_failed')
-        ->and($result->aiExecution->error)->toContain('status 500');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('produce fallback técnico seguro ante JSON inválido', function () {
@@ -227,7 +227,7 @@ it('rechaza una cifra inventada por la IA', function () {
     $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact(redactorAutoDecision());
 
     expect($result->usedOpenAiText())->toBeFalse()
-        ->and($result->aiExecution->error)->toContain('invented number [12]');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('rechaza una cifra omitida por la IA', function () {
@@ -238,7 +238,7 @@ it('rechaza una cifra omitida por la IA', function () {
     $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact(redactorAutoDecision());
 
     expect($result->usedOpenAiText())->toBeFalse()
-        ->and($result->aiExecution->error)->toContain('omitted number [8]');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('rechaza un medicamento alterado por la IA', function () {
@@ -249,7 +249,7 @@ it('rechaza un medicamento alterado por la IA', function () {
     $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact(redactorAutoDecision());
 
     expect($result->usedOpenAiText())->toBeFalse()
-        ->and($result->aiExecution->error)->toContain('metformina');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('rechaza un requisito consolidado omitido', function () {
@@ -260,7 +260,7 @@ it('rechaza un requisito consolidado omitido', function () {
     $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact(redactorAutoDecision());
 
     expect($result->usedOpenAiText())->toBeFalse()
-        ->and($result->aiExecution->error)->toContain('frasco');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('rechaza una unidad modificada', function () {
@@ -290,7 +290,7 @@ it('rechaza una unidad modificada', function () {
     $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact($decision);
 
     expect($result->usedOpenAiText())->toBeFalse()
-        ->and($result->aiExecution->error)->toContain('omitted unit [hora]');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('rechaza una fusión incorrecta de muestras al omitir requisitos de una muestra independiente', function () {
@@ -305,7 +305,7 @@ it('rechaza una fusión incorrecta de muestras al omitir requisitos de una muest
     $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact(redactorAutoDecision());
 
     expect($result->usedOpenAiText())->toBeFalse()
-        ->and($result->aiExecution->error)->toContain('orina');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('rechaza un intento de modificar el estado por parte de la IA', function () {
@@ -316,7 +316,7 @@ it('rechaza un intento de modificar el estado por parte de la IA', function () {
     $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact(redactorAutoDecision());
 
     expect($result->usedOpenAiText())->toBeFalse()
-        ->and($result->aiExecution->error)->toContain('change the decision status');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('rechaza texto vacío', function () {
@@ -327,7 +327,7 @@ it('rechaza texto vacío', function () {
     $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact(redactorAutoDecision());
 
     expect($result->usedOpenAiText())->toBeFalse()
-        ->and($result->aiExecution->error)->toContain('patient_text is empty');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('rechaza duplicaciones no autorizadas', function () {
@@ -338,7 +338,7 @@ it('rechaza duplicaciones no autorizadas', function () {
     $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact(redactorAutoDecision());
 
     expect($result->usedOpenAiText())->toBeFalse()
-        ->and($result->aiExecution->error)->toContain('repeats an instruction');
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=');
 });
 
 it('no incluye indicaciones originales completas ni PII innecesaria en el payload enviado a OpenAI', function () {
@@ -380,4 +380,17 @@ it('construye payload AUTO sin usar toSchemaPayload completo ni originales', fun
         ->and($encoded)->not->toContain('Paciente Juan Pérez')
         ->and($encoded)->toContain('Ayuno de 8 horas')
         ->and($encoded)->toContain('metformina');
+});
+
+
+it('does not persist a provider exception canary in failed execution diagnostics', function () {
+    $canary = 'AUDIT_CLINICAL_CANARY_SYNTHETIC_25ML';
+    bindRedactorOpenAiThrowing(new RuntimeException($canary));
+    $result = app(LaboratoryPreparationOpenAiRedactor::class)->redact(redactorAutoDecision());
+
+    expect($result->aiExecution->status)->toBe(AiExecution::STATUS_FAILED)
+        ->and($result->aiExecution->error)->toContain('laboratory_preparation_redaction_failed correlation=')
+        ->and($result->aiExecution->error)->toContain('category=provider')
+        ->and(json_encode($result->aiExecution->toArray()))->not->toContain($canary)
+        ->and($result->decision->fallbackReason)->toBe('ai_redaction_failed');
 });

@@ -5,7 +5,10 @@ namespace App\Actions\Laboratories;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Customer;
-use Exception;
+use App\Exceptions\GdaOrderDefinitiveException;
+use App\Exceptions\GdaOrderResultUncertainException;
+use App\Services\Laboratory\GdaOrderConfirmation;
+use Throwable;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -41,13 +44,14 @@ class CreateGDAQuotationAction
                 'generated_id' => uniqid(),
             ]);
 
-            return ['id' => uniqid()];
+            return ['id' => strtoupper(uniqid('GDA')), 'infogda_consecutivo' => random_int(10000000, 99999999)];
         }
 
         $url = config('services.gda.url') . 'infogda-fullV3/service-request';
         
         Log::info('CreateGDAQuotationAction: URL configurada', ['url' => $url]);
 
+        try {
         // Construir payload
         $payload = [
             "header" => [
@@ -83,52 +87,22 @@ class CreateGDAQuotationAction
             ],
         ];
 
-        // Log del payload (con información sensible parcialmente oculta)
-        $logPayload = $payload;
-        if (isset($logPayload['header']['token'])) {
-            $logPayload['header']['token'] = '***OCULTO***';
+        } catch (Throwable) {
+            throw new GdaOrderDefinitiveException;
         }
-        //Log::info('CreateGDAQuotationAction: Payload enviado a API', $logPayload);
 
         try {
-            Log::info('CreateGDAQuotationAction: Enviando petición a API GDA');
             $response = Http::post($url, $payload);
-            
-            // Log de la respuesta completa
             $responseData = $response->json();
-            
-            Log::info('CreateGDAQuotationAction: Respuesta recibida de API GDA', [
-                'status_code' => $response->status(),
-                'success' => $response->successful(),
-                'failed' => $response->failed(),
-                'response_body' => $responseData,
-                'response_headers' => $response->headers()
-            ]);
-
-            // Log específico si hay errores
-            if ($response->failed()) {
-                Log::error('CreateGDAQuotationAction: La API respondió con error', [
-                    'status' => $response->status(),
-                    'body' => $responseData,
-                    'laboratoryPurchaseId' => $laboratoryPurchaseId
-                ]);
-                throw new Exception('Error en API GDA: ' . ($responseData['message'] ?? 'Error desconocido'));
+            if (! $response->successful() || ! is_array($responseData) || ! GdaOrderConfirmation::valid($responseData)) {
+                throw new GdaOrderResultUncertainException;
             }
-
-            Log::info('CreateGDAQuotationAction: Proceso completado exitosamente', [
-                'response_id' => $responseData['id'] ?? null,
-                'laboratoryPurchaseId' => $laboratoryPurchaseId
-            ]);
-
             return $responseData;
-
-        } catch (Exception $e) {
-            Log::error('CreateGDAQuotationAction: Excepción capturada', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'laboratoryPurchaseId' => $laboratoryPurchaseId
-            ]);
-            throw $e;
+        } catch (Throwable $exception) {
+            $safe = $exception instanceof GdaOrderResultUncertainException
+                ? $exception : new GdaOrderResultUncertainException;
+            \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'gda_order_request_uncertain', $safe->context());
+            throw $safe;
         }
     }
 
@@ -172,12 +146,6 @@ class CreateGDAQuotationAction
                 'name' => $laboratoryCartItem->laboratoryTest->name,
                 'price' => $laboratoryCartItem->laboratoryTest->famedic_price_cents
             ];
-            
-            Log::debug('CreateGDAQuotationAction: Item procesado', [
-                'test_id' => $laboratoryCartItem->laboratoryTest->id,
-                'gda_id' => $laboratoryCartItem->laboratoryTest->gda_id,
-                'name' => $laboratoryCartItem->laboratoryTest->name
-            ]);
             
             $details[] = $detail;
         }

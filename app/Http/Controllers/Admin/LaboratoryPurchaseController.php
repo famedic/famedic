@@ -156,6 +156,12 @@ class LaboratoryPurchaseController extends Controller
             ]);
         }
 
+        $coordinator = app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class);
+        if ($coordinator->usesDurableDelivery()) {
+            $intent = $coordinator->requestResend($laboratoryPurchase, (int) $request->user()->id);
+            return back()->flashMessage('Se registró el reenvío de confirmación #'.$intent->id.' para procesamiento.');
+        }
+
         $user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
 
         return back()->flashMessage(

@@ -228,7 +228,7 @@ Route::prefix('admin')->middleware([
             ->name('laboratory-purchases.chart');
         Route::get('laboratory-preparation/monitor', [LaboratoryPreparationMonitorController::class, 'index'])
             ->name('laboratory-preparation.monitor.index');
-        Route::get('laboratory-preparation/monitor/{laboratory_purchase}', [LaboratoryPreparationMonitorController::class, 'show'])
+        Route::get('laboratory-preparation/monitor/{laboratory_purchase}', [LaboratoryPreparationMonitorController::class, 'show'])->withTrashed()
             ->name('laboratory-preparation.monitor.show');
         Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show', 'destroy']);
         Route::post(

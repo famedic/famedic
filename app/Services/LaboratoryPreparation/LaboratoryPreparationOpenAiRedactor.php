@@ -6,7 +6,6 @@ use App\Models\AiExecution;
 use App\Models\AiPrompt;
 use App\Services\OpenAi\OpenAiClient;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -38,6 +37,7 @@ final class LaboratoryPreparationOpenAiRedactor
         $model = $prompt->model ?: (string) config('services.openai.model', 'gpt-4o-mini');
         $startedAt = microtime(true);
 
+        $failureCategory = 'provider';
         try {
             $result = $this->openAiClient->chatCompletionWithMetadata(
                 messages: $this->messages($prompt, $payload),
@@ -47,7 +47,9 @@ final class LaboratoryPreparationOpenAiRedactor
                 temperature: 0,
             );
 
+            $failureCategory = 'validation';
             $content = $this->validator->validate($result['content'], $payload);
+            $failureCategory = 'persistence';
             $execution = $this->recordExecution(
                 prompt: $prompt,
                 model: (string) ($result['model'] ?: $model),
@@ -70,7 +72,7 @@ final class LaboratoryPreparationOpenAiRedactor
                 status: AiExecution::STATUS_FAILED,
                 durationMs: $this->durationMs($startedAt),
                 subject: $subject,
-                error: Str::limit($exception->getMessage(), 2000, ''),
+                error: (new LaboratoryPreparationOperationalException('redaction', $failureCategory))->getMessage(),
             );
 
             $technicalDecision = LaboratoryPreparationDecision::fallbackOriginal(

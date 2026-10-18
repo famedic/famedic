@@ -40,8 +40,16 @@ class LaboratoryPurchaseCreated extends Notification
     use Queueable;
 
     public function __construct(
-        protected LaboratoryPurchase $laboratoryPurchase
+        protected LaboratoryPurchase $laboratoryPurchase,
+        protected ?array $frozenViewData = null,
+        protected ?bool $frozenWithAppointment = null,
     ) {
+    }
+
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        return $channel !== 'mail' || ! app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class)
+            ->suppressesSummaryMail($this->laboratoryPurchase);
     }
 
     public function via(object $notifiable): array
@@ -51,6 +59,10 @@ class LaboratoryPurchaseCreated extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
+        if ($this->frozenViewData !== null) {
+            return (new MailMessage)->subject('Gracias por tu orden de Laboratorio en Famedic')
+                ->markdown($this->frozenWithAppointment ? 'emails.laboratory.purchase-with-appointment' : 'emails.laboratory.purchase-without-appointment', $this->frozenViewData);
+        }
         $purchase = $this->laboratoryPurchase->loadMissing([
             'laboratoryPurchaseItems',
             'laboratoryAppointment.laboratoryStore',

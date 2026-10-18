@@ -115,6 +115,7 @@ function preparationDispatchPurchase(array $attributes = []): LaboratoryPurchase
         'additional_references' => 'No enviar',
         'total_cents' => 100000,
         'gda_consecutivo' => 123456,
+        'gda_status' => \App\Enums\GdaOrderStatus::Confirmed,
     ], $attributes));
 
     $transaction = Transaction::query()->create([
@@ -293,16 +294,13 @@ it('does not call OpenAI during the purchase fulfillment request', function () {
     expect($fake->calls)->toBe(0);
 });
 
-it('does not dispatch v3 for fulfillment without a GDA consecutivo', function () {
-    config(['services.laboratory_preparation.deterministic_v3_enabled' => true]);
-    Queue::fake();
-    Notification::fake();
-
-    $purchase = fulfillPreparationDispatchPurchase(preparationDispatchFixture());
-
-    expect(AiExecution::query()->where('feature', 'laboratory_preparation_summary')->count())->toBe(0)
-        ->and($purchase->gda_consecutivo)->toBeNull();
-
+it('does not complete fulfillment or dispatch v3 without a GDA consecutivo', function () {
+    Queue::fake(); Notification::fake();
+    $gda = Mockery::mock(CreateGDAQuotationAction::class);
+    $gda->shouldReceive('__invoke')->once()->andReturn(['id' => 'GDA-MISSING-CONSECUTIVE']);
+    app()->instance(CreateGDAQuotationAction::class, $gda);
+    expect(fn () => fulfillPreparationDispatchPurchase(preparationDispatchFixture()))
+        ->toThrow(\App\Exceptions\GdaOrderResultUncertainException::class);
     Queue::assertNotPushed(GenerateLaboratoryPurchasePreparationSummaryJob::class);
 });
 
@@ -660,6 +658,7 @@ it('requires a valid GDA folio and positive consecutivo', function () {
 
 it('rejects preparation eligibility when explicit GDA status is absent', function () {
     $purchase = preparationDispatchPurchase();
+    $purchase->update(['gda_status' => null]);
     preparationDispatchItem($purchase, ['indications' => 'Ayuno de 8 horas.']);
 
     expect(app(LaboratoryPreparationEligibility::class)->evaluate($purchase)->reason)

@@ -12,6 +12,10 @@ class LaboratoryPreparationSummaryNotificationService
 {
     public function notifyIfNeeded(LaboratoryPurchasePreparationSummary $summary): bool
     {
+        $confirmation = app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class);
+        if ($confirmationPurchase = $summary->laboratoryPurchase) {
+            $confirmation->wake($confirmationPurchase);
+        }
         if ($summary->status !== LaboratoryPurchasePreparationSummary::STATUS_GENERATED) {
             return false;
         }
@@ -96,6 +100,10 @@ class LaboratoryPreparationSummaryNotificationService
             return false;
         }
 
+        if ($confirmation->suppressesSummaryMail($purchase)) {
+            return true;
+        }
+
         try {
             $user->notify(new LaboratoryPreparationSummaryAvailable(
                 $purchase,
@@ -116,8 +124,7 @@ class LaboratoryPreparationSummaryNotificationService
                 'summary_id' => $lockedSummary->id,
                 'purchase_id' => $purchase->id,
                 'user_id' => $user->id,
-                'exception' => $exception::class,
-                'message' => $exception->getMessage(),
+                ...(new LaboratoryPreparationOperationalException('notification'))->context(),
             ]);
         }
 

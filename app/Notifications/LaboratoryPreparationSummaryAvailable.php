@@ -18,6 +18,18 @@ class LaboratoryPreparationSummaryAvailable extends Notification implements Shou
         private readonly LaboratoryPurchasePreparationSummary $summary,
     ) {}
 
+    /** @return list<object> */
+    public function middleware(object $notifiable, string $channel): array
+    {
+        return [new \App\Services\LaboratoryPreparation\LaboratoryPreparationSafeNotificationMiddleware];
+    }
+
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        return $channel !== 'mail' || ! app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class)
+            ->suppressesSummaryMail($this->laboratoryPurchase);
+    }
+
     public function via(object $notifiable): array
     {
         return ['mail'];

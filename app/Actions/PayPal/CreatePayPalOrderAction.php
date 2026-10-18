@@ -103,7 +103,14 @@ class CreatePayPalOrderAction
 
         $amount = round($amountToChargeCents / 100, 2);
 
+        $this->syncMonitoringCartService->syncLaboratory($customer, $clientContext);
+        $monitoringCart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
+        return app(\App\Services\Laboratory\UncertainGdaPaymentGuard::class)->withCartLock($monitoringCart, function () use (
+            $customer, $address, $contact, $laboratoryBrand, $laboratoryAppointment, $totalCents,
+            $couponId, $promoValidationToken, $cartHash, $discountCents, $amountToChargeCents, $amount, $clientContext, $monitoringCart,
+        ) {
         return DB::transaction(function () use (
+            $monitoringCart,
             $customer,
             $address,
             $contact,
@@ -129,6 +136,7 @@ class CreatePayPalOrderAction
                 'payment_status' => 'pending',
                 'details' => array_filter([
                     'customer_id' => $customer->id,
+                    'cart_id' => $monitoringCart->id,
                     'contact_id' => $contact?->id,
                     'address_id' => $address->id,
                     'laboratory_brand' => $laboratoryBrand->value,
@@ -172,6 +180,7 @@ class CreatePayPalOrderAction
                 'order_id' => $paypal['order_id'],
                 'transaction_id' => $transaction->id,
             ];
+        });
         });
     }
 

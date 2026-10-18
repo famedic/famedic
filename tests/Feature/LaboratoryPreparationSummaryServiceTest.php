@@ -690,3 +690,71 @@ it('skips deterministic v3 shadow when the expected snapshot is stale', function
         ))
         ->once();
 });
+
+
+it('keeps legacy provider exception canaries out of persisted diagnostics and safe rethrows', function () {
+    $canary = 'AUDIT_CLINICAL_CANARY_SYNTHETIC_25ML';
+    $purchase = preparationSummaryPurchase();
+    preparationSummaryItem($purchase, ['indications' => 'Ayuno de 8 horas.']);
+    $provider = Mockery::mock(OpenAiClient::class);
+    $provider->shouldReceive('chatCompletionWithMetadata')->once()->andThrow(new RuntimeException($canary));
+    app()->instance(OpenAiClient::class, $provider);
+    $caught = null;
+    try {
+        app(LaboratoryPreparationSummaryService::class)->generate($purchase, throwOnFailure: true);
+    } catch (\App\Services\LaboratoryPreparation\LaboratoryPreparationOperationalException $safe) {
+        $caught = $safe;
+    }
+    $execution = AiExecution::query()->latest('id')->first();
+    expect($caught)->not->toBeNull()
+        ->and($caught->getPrevious())->toBeNull()
+        ->and((string) $caught)->not->toContain($canary)
+        ->and($execution->error)->toBe($caught->getMessage())
+        ->and($execution->error)->toContain('category=provider')
+        ->and(json_encode($execution->toArray()))->not->toContain($canary)
+        ->and($execution->response_payload)->toBeNull()
+        ->and(LaboratoryPurchasePreparationSummary::query()->where('laboratory_purchase_id', $purchase->id)->count())->toBe(0);
+});
+
+
+it('runs local QA real deterministic engine and delivers only the pinned confirmation', function (string $scenario) {
+    Notification::fake();
+    \Illuminate\Support\Facades\Queue::fake();
+    $purchase = preparationSummaryPurchase(['gda_status' => \App\Enums\GdaOrderStatus::Confirmed,
+        'gda_consecutivo' => '12345678']);
+    preparationSummaryItem($purchase, ['indications' => 'Ayuno de 8 horas.']);
+    app()->instance('env', 'local');
+    config(['local-checkout-qa.enabled' => true, 'local-checkout-qa.recipient' => $purchase->customer->user->email,
+        'local-checkout-qa.scenario' => $scenario,
+        'laboratory-confirmation.enabled' => true,
+        'laboratory-confirmation.activated_at' => now()->subMinute()->utc()->toIso8601String(),
+        'laboratory-confirmation.connection' => 'database',
+        'services.laboratory_preparation.deterministic_v3_enabled' => true,
+        'services.laboratory_preparation.deterministic_v3_shadow_enabled' => false]);
+    app()->bind(OpenAiClient::class, \App\Support\LocalQaOpenAiClient::class);
+    $inner = new \Illuminate\Mail\Transport\ArrayTransport;
+    $manager = new \App\Support\LocalQaMailManager(app());
+    $manager->extend('smtp', fn () => $inner);
+    config(['mail.default' => 'qa-test', 'mail.mailers.qa-test' => ['transport' => 'smtp', 'host' => 'smtp.gmail.com']]);
+    app()->instance('mail.manager', $manager);
+    \Illuminate\Support\Facades\Mail::clearResolvedInstance('mail.manager');
+    $coordinator = app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class);
+    $intent = $coordinator->register($purchase);
+    expect($intent)->not->toBeNull();
+    $started = microtime(true);
+    $summary = app(LaboratoryPreparationSummaryService::class)->generate($purchase)?->refresh();
+    if ($scenario === 'late') { expect(microtime(true) - $started)->toBeGreaterThanOrEqual(20); }
+    expect($summary->decision_status)->toBe(in_array($scenario, ['auto', 'late']) ? 'AUTO_CONSOLIDATED' : 'FALLBACK_ORIGINAL');
+    $coordinator->coordinate($intent->id);
+    $coordinator->coordinate($intent->id);
+    $intent->refresh();
+    expect($intent->status)->toBe('accepted')
+        ->and($intent->content_kind)->toBe($scenario === 'auto' ? 'auto' : 'original')
+        ->and($intent->snapshot_version)->not->toBeNull()
+        ->and($inner->messages())->toHaveCount(1);
+    $message = $inner->messages()->first()->getOriginalMessage();
+    expect($message->getHtmlBody())->toBe($intent->payload['html'])
+        ->and($message->getTextBody())->toBe($intent->payload['text']);
+    app(LaboratoryPreparationSummaryNotificationService::class)->notifyIfNeeded($summary);
+    Notification::assertNotSentTo($purchase->customer->user, \App\Notifications\LaboratoryPreparationSummaryAvailable::class);
+})->with(['auto', 'fallback', 'late', 'error']);

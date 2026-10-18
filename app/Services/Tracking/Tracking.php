@@ -25,11 +25,13 @@ class Tracking
 
     public function queueEvent(Base $event): void
     {
+        if (\App\Support\LocalCheckoutQa::enabled()) { return; }
         session()->push('trackingEvents', $event);
     }
 
     public function propagateEvents(?array $events = null): void
     {
+        if (\App\Support\LocalCheckoutQa::enabled()) { return; }
         $events ??= [];
 
         $pixelId = config('services.facebook.pixel_id');

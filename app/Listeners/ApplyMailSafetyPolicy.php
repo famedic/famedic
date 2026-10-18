@@ -14,6 +14,11 @@ class ApplyMailSafetyPolicy
 
     public function handle(MessageSending $event): bool
     {
+        if (\App\Support\LocalCheckoutQa::enabled()) {
+            \App\Support\LocalCheckoutQa::assertRecipients([...$event->message->getTo(), ...$event->message->getCc(), ...$event->message->getBcc()]);
+            return true;
+        }
+
         if (app()->isProduction()) {
             return true;
         }

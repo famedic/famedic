@@ -47,7 +47,7 @@ class HandleStatusUpdateAction
         }
 
         $purchaseColumns = Schema::getColumnListing('laboratory_purchases');
-        $updates = ['gda_status' => $data['status']];
+        $updates = [];
 
         // Actualizar gda_acuse si viene
         if (isset($data['GDA_menssage']['acuse']) && in_array('gda_acuse', $purchaseColumns)) {
@@ -59,7 +59,9 @@ class HandleStatusUpdateAction
             $updates['cancelled_at'] = now();
         }
 
-        $purchase->update($updates);
+        if ($updates !== []) {
+            $purchase->update($updates);
+        }
 
         Log::info('Purchase status updated', [
             'purchase_id' => $purchase->id,

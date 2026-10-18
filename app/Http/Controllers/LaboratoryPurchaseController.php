@@ -58,6 +58,8 @@ class LaboratoryPurchaseController extends Controller
                     : null,
                 clientContext: ClientContext::fromRequest($request),
             );
+        } catch (\App\Exceptions\LaboratoryPaymentInProgressException $e) {
+            return redirect()->back()->withErrors(['payment_method' => $e->getMessage()]);
         } catch (MissingLaboratoryAppointmentException $e) {
             return redirect()
                 ->route('laboratory.checkout', [
@@ -82,6 +84,11 @@ class LaboratoryPurchaseController extends Controller
         } catch (OdessaInsufficientFundsException $e) {
             return redirect()->back()
                 ->withErrors(['payment_method' => 'No cuentas con suficiente Saldo a la Vista en tu caja de ahorro para realizar el pago.']);
+        }
+
+        if ($laboratoryPurchase->gda_status === \App\Enums\GdaOrderStatus::Uncertain) {
+            return redirect()->route('laboratory-purchases.show', $laboratoryPurchase)
+                ->flashMessage('Tu pago fue recibido. Estamos validando la creación de tu orden de laboratorio.', 'warning');
         }
 
         session()->flash('confetti', true);

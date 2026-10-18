@@ -5,6 +5,11 @@ namespace App\Actions\Laboratories;
 use App\Actions\Marketing\RecordMarketingCampaignConversionAction;
 use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
+use App\Enums\GdaOrderStatus;
+use App\Exceptions\GdaOrderDefinitiveException;
+use App\Exceptions\GdaOrderResultUncertainException;
+use App\Services\Laboratory\GdaOrderConfirmation;
+use App\Services\Laboratory\UncertainGdaPaymentGuard;
 use App\Jobs\GenerateLaboratoryPurchasePreparationSummaryJob;
 use App\Models\Address;
 use App\Models\Cart;
@@ -68,6 +73,35 @@ class FulfillLaboratoryCartOrderAction
         ?Cart $cart = null,
         ?array $clientContext = null,
     ): LaboratoryPurchase {
+        return app(UncertainGdaPaymentGuard::class)->withLock('transaction:'.$transaction->id, function () use ($customer, $laboratoryBrand, $address, $contact, $transaction, $laboratoryAppointment, $laboratoryCartItems, $gdaBrandValue, $couponId, $promoValidationToken, $cartHash, $cart, $clientContext) {
+            $existing = $transaction->laboratoryPurchases()->useWritePdo()->withTrashed()->first();
+            if ($existing) {
+                if (in_array($existing->gda_status, [GdaOrderStatus::Pending, GdaOrderStatus::Uncertain], true)) {
+                    $safe = new GdaOrderResultUncertainException('gda_replay_unresolved', $existing);
+                    $this->markGdaUncertain($existing, $safe);
+                    throw $safe;
+                }
+                return $existing;
+            }
+            return $this->fulfill($customer, $laboratoryBrand, $address, $contact, $transaction, $laboratoryAppointment, $laboratoryCartItems, $gdaBrandValue, $couponId, $promoValidationToken, $cartHash, $cart, $clientContext);
+        });
+    }
+
+    private function fulfill(
+        Customer $customer,
+        LaboratoryBrand $laboratoryBrand,
+        Address $address,
+        Contact $contact,
+        Transaction $transaction,
+        ?LaboratoryAppointment $laboratoryAppointment,
+        Collection $laboratoryCartItems,
+        string $gdaBrandValue,
+        ?int $couponId = null,
+        ?string $promoValidationToken = null,
+        ?string $cartHash = null,
+        ?Cart $cart = null,
+        ?array $clientContext = null,
+    ): LaboratoryPurchase {
         $cart ??= $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
 
         if (! $cart && $customer->user_id && $laboratoryCartItems->isNotEmpty()) {
@@ -79,6 +113,13 @@ class FulfillLaboratoryCartOrderAction
             ]);
         }
 
+        $initialTransactionLevel = DB::transactionLevel();
+        if ($initialTransactionLevel > 0 && ! app()->runningUnitTests()) {
+            throw new GdaOrderDefinitiveException;
+        }
+        $durable = false;
+        $gdaQuotation = null;
+        $laboratoryPurchase = null;
         DB::beginTransaction();
 
         $clinicalOrderUuid = null;
@@ -127,21 +168,20 @@ class FulfillLaboratoryCartOrderAction
             logger('LaboratoryBrand Enum value: '.$laboratoryBrand->value);
             logger('GDA brand value: '.$gdaBrandValue);
 
-            if (app()->environment('local')) {
-                $gdaQuotation = ['id' => rand(100000, 999999)];
-            } else {
-                $gdaQuotation = ($this->createGDAQuotationAction)(
-                    $customer,
-                    $address,
-                    $contact,
-                    $gdaBrandValue,
-                    $laboratoryCartItems,
-                    $laboratoryPurchase->id
-                );
+            // Persist the payment linkage before any possibly ambiguous external order request.
+            DB::commit();
+            $durable = true;
+            $gdaQuotation = ($this->createGDAQuotationAction)(
+                $customer, $address, $contact, $gdaBrandValue, $laboratoryCartItems, $laboratoryPurchase->id,
+            );
+            if (! GdaOrderConfirmation::valid($gdaQuotation)) {
+                throw new GdaOrderResultUncertainException('gda_invalid_identifiers', $laboratoryPurchase);
             }
+            DB::beginTransaction();
 
             $laboratoryPurchase->update([
                 'gda_order_id' => $gdaQuotation['id'],
+                'gda_status' => GdaOrderStatus::Confirmed,
                 'gda_consecutivo' => $gdaQuotation['infogda_consecutivo'] ?? null,
                 'gda_acuse' => $gdaQuotation['gda_acuse'] ?? null,
                 'gda_response' => $gdaQuotation['gda_response'] ?? null,
@@ -183,54 +223,104 @@ class FulfillLaboratoryCartOrderAction
             $this->clearCart($customer, $laboratoryBrand);
 
             DB::commit();
-        } catch (\Throwable $th) {
-            DB::rollBack();
-            throw $th;
-        }
-
-        // Post-commit only: purchase + transaction are durable. Never rollback checkout on automation failure.
-        $this->dispatchLaboratoryPreparationSummaryGeneration($laboratoryPurchase);
-        ($this->recordMarketingCampaignConversionAction)($laboratoryPurchase);
-        $this->dispatchLaboratoryOrderAutomation($laboratoryPurchase);
-
-        if (is_string($clinicalOrderUuid) && $clinicalOrderUuid !== '') {
+        } catch (\Throwable $exception) {
             try {
-                $clinicalOrders = app(\App\Services\ClinicalOrder\ClinicalOrderService::class);
-                $clinicalOrder = $clinicalOrders->findByUuid($clinicalOrderUuid);
-                if ($clinicalOrder) {
-                    $clinicalOrders->completeFromLaboratoryPurchase(
-                        $clinicalOrder,
-                        (int) $laboratoryPurchase->id,
-                    );
+                if (DB::transactionLevel() > $initialTransactionLevel) {
+                    DB::rollBack($initialTransactionLevel);
                 }
-            } catch (\Throwable $e) {
-                logger()->warning('clinical_interpreter.purchase_link_failed', [
-                    'clinical_order_uuid' => $clinicalOrderUuid,
-                    'purchase_id' => $laboratoryPurchase->id,
-                    'message' => $e->getMessage(),
-                ]);
+            } catch (\Throwable) {
+                // A failed rollback must never route a submitted order into automatic refund.
             }
+            if ($durable && $laboratoryPurchase) {
+                if ($exception instanceof GdaOrderDefinitiveException) {
+                    $laboratoryPurchase->update(['gda_status' => GdaOrderStatus::Failed]);
+                    throw $exception;
+                }
+                if (is_array($gdaQuotation) && GdaOrderConfirmation::valid($gdaQuotation)) {
+                    $laboratoryPurchase->forceFill(['gda_order_id' => $gdaQuotation['id'], 'gda_consecutivo' => $gdaQuotation['infogda_consecutivo']]);
+                }
+                $safe = $exception instanceof GdaOrderResultUncertainException
+                    ? $exception->withPurchase($laboratoryPurchase)
+                    : new GdaOrderResultUncertainException('gda_persistence_failed', $laboratoryPurchase);
+                $this->markGdaUncertain($laboratoryPurchase, $safe);
+                throw $safe;
+            }
+            throw $exception;
         }
 
-        $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
-
-        if ($laboratoryAppointment?->laboratory_purchase_id === $laboratoryPurchase->id) {
-            $laboratoryAppointment->refresh();
-            $laboratoryAppointment->loadMissing([
-                'laboratoryStore',
-                'laboratoryPurchase.transactions',
-                'laboratoryPurchase.laboratoryPurchaseItems',
-                'customer.laboratoryCartItems.laboratoryTest',
-            ]);
-
-            $laboratoryPurchase->customer->user->notify(
-                new LaboratoryAppointmentUpdatedByConcierge($laboratoryAppointment)
-            );
+        // Communication registration cannot roll back a confirmed financial operation.
+        try {
+            $coordinatedConfirmation = app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class)
+                ->enrollAfterCommit($laboratoryPurchase);
+        } catch (Throwable) {
+            // Even dependency resolution is post-commit. Unknown ownership must not replay legacy mail.
+            $coordinatedConfirmation = true;
+            \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'laboratory_confirmation_registration_unavailable', ['purchase_id' => $laboratoryPurchase->id]);
         }
 
-        $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
+        try {
+            // Post-commit only: purchase + transaction are durable. Never rollback checkout on automation failure.
+            $this->dispatchLaboratoryPreparationSummaryGeneration($laboratoryPurchase);
+            ($this->recordMarketingCampaignConversionAction)($laboratoryPurchase);
+            $this->dispatchLaboratoryOrderAutomation($laboratoryPurchase);
+
+            if (is_string($clinicalOrderUuid) && $clinicalOrderUuid !== '') {
+                try {
+                    $clinicalOrders = app(\App\Services\ClinicalOrder\ClinicalOrderService::class);
+                    $clinicalOrder = $clinicalOrders->findByUuid($clinicalOrderUuid);
+                    if ($clinicalOrder) {
+                        $clinicalOrders->completeFromLaboratoryPurchase(
+                            $clinicalOrder,
+                            (int) $laboratoryPurchase->id,
+                        );
+                    }
+                } catch (\Throwable $e) {
+                    logger()->warning('clinical_interpreter.purchase_link_failed', [
+                        'clinical_order_uuid' => $clinicalOrderUuid,
+                        'purchase_id' => $laboratoryPurchase->id,
+                        'message' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if (! $coordinatedConfirmation) {
+                $laboratoryPurchase->customer->user->notify(new LaboratoryPurchaseCreated($laboratoryPurchase));
+            }
+
+            if (! $coordinatedConfirmation && $laboratoryAppointment?->laboratory_purchase_id === $laboratoryPurchase->id) {
+                $laboratoryAppointment->refresh();
+                $laboratoryAppointment->loadMissing([
+                    'laboratoryStore',
+                    'laboratoryPurchase.transactions',
+                    'laboratoryPurchase.laboratoryPurchaseItems',
+                    'customer.laboratoryCartItems.laboratoryTest',
+                ]);
+
+                $laboratoryPurchase->customer->user->notify(
+                    new LaboratoryAppointmentUpdatedByConcierge($laboratoryAppointment)
+                );
+            }
+
+            $this->checkAndSendInvoiceDeadlineNotification($laboratoryPurchase);
+
+        } catch (Throwable) {
+            \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'laboratory_purchase_post_commit_failed', ['purchase_id' => $laboratoryPurchase->id, 'error_code' => 'post_commit_delivery_failed']);
+        }
 
         return $laboratoryPurchase;
+    }
+
+    private function markGdaUncertain(LaboratoryPurchase $purchase, GdaOrderResultUncertainException $safe): void
+    {
+        $purchase->forceFill(['gda_status' => GdaOrderStatus::Uncertain,
+            'has_gda_warning' => true, 'gda_warning_message' => $safe->getMessage()]);
+        try {
+            $purchase->save();
+        } catch (Throwable) {
+            // The previously durable pending row remains a retry barrier if storage is unavailable.
+            \App\Services\Laboratory\GdaPaymentDiagnostics::record('error', 'gda_uncertain_state_persistence_failed', $safe->context());
+        }
+        \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'gda_order_uncertain', $safe->context());
     }
 
     private function dispatchLaboratoryPreparationSummaryGeneration(LaboratoryPurchase $laboratoryPurchase): void
@@ -261,12 +351,22 @@ class FulfillLaboratoryCartOrderAction
                     return;
                 }
 
-                GenerateLaboratoryPurchasePreparationSummaryJob::dispatch(
+                $confirmationCoordinator = app(\App\Services\LaboratoryConfirmation\LaboratoryConfirmationCoordinator::class);
+                $coordinated = $confirmationCoordinator->appliesTo($laboratoryPurchase);
+                if ($coordinated && ! $confirmationCoordinator->asyncConfigurationValid()) {
+                    \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'laboratory_confirmation_generation_queue_invalid', ['purchase_id' => $laboratoryPurchase->id]);
+                    return;
+                }
+                $preparationJob = GenerateLaboratoryPurchasePreparationSummaryJob::dispatch(
                     $laboratoryPurchase->id,
                     null,
                     $this->laboratoryPreparationSummaryService->expectedSourceHash($laboratoryPurchase),
                     GenerateLaboratoryPurchasePreparationSummaryJob::MODE_GENERATE,
                 )->afterCommit();
+                if ($coordinated) {
+                    $preparationJob->onConnection(config('laboratory-confirmation.connection', 'database'))
+                        ->onQueue(config('laboratory-confirmation.generation_queue', 'laboratory-preparation'));
+                }
 
                 return;
             }
@@ -280,8 +380,7 @@ class FulfillLaboratoryCartOrderAction
         } catch (Throwable $e) {
             Log::warning('[Laboratory Preparation AI] Failed to queue summary generation', [
                 'purchase_id' => $laboratoryPurchase->id,
-                'exception' => $e::class,
-                'message' => $e->getMessage(),
+                ...(new \App\Services\LaboratoryPreparation\LaboratoryPreparationOperationalException('job', 'persistence'))->context(),
             ]);
         }
     }
@@ -405,6 +504,7 @@ class FulfillLaboratoryCartOrderAction
 
         $payload = [
             'gda_order_id' => 0,
+            'gda_status' => GdaOrderStatus::Pending,
             'brand' => $laboratoryBrand->value,
             'name' => $contact->name,
             'paternal_lastname' => $contact->paternal_lastname,
@@ -449,6 +549,7 @@ class FulfillLaboratoryCartOrderAction
 
     private function checkAndSendInvoiceDeadlineNotification(LaboratoryPurchase $laboratoryPurchase): void
     {
+        if (\App\Support\LocalCheckoutQa::enabled()) { return; }
         if (! $laboratoryPurchase->customer->taxProfiles()->exists()) {
             return;
         }
