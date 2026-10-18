@@ -19,7 +19,9 @@ Si staging ya tiene una frontera persistida, revisar pendientes y pausar sin bor
 ## Migraciones y despliegue posterior
 
 Las tres migraciones incluidas deben revisarse contra el esquema real del destino antes de desplegar.
-La migración GDA se niega intencionalmente si `gda_status` existe: no autoriza ejecutar su DDL ni marcarla como aplicada sin comprobar columna, índice, nulabilidad y valores.
+La migración GDA valida ahora una columna `gda_status` importada: sólo acepta varchar(32), nullable, default NULL, charset/collation esperados, índice BTREE canónico no UNIQUE y completo, sin restricciones extra sobre el estado, valores exactos del contrato y evidencia válida en compras confirmed.
+Si todo coincide, no ejecuta DDL ni backfill y Laravel registra la migración normalmente. Si existe una incompatibilidad, se detiene con `gda_status_schema_incompatible:`.
+El rollback de esta columna está bloqueado para conservar evidencia histórica; no usar rollback de base de datos como estrategia de reversión de este release.
 El baseline importado se reconcilió únicamente en la base local; esa modificación del historial NO viaja con el commit.
 Mantener respaldo verificable y rollout apagado durante la revisión. No se ejecutó despliegue ni migración de staging.
 
@@ -35,3 +37,12 @@ Mantener respaldo verificable y rollout apagado durante la revisión. No se ejec
 El push no autoriza deploy, activación de coordinador, envío de correo ni conexión a proveedores.
 
 Validación repetida al preparar Git: JavaScript 109 PASS, 0 FAIL, 1 SKIP por Chrome no disponible en el runtime. Diff check y escaneo de artefactos/credenciales del índice correctos. Logs, respaldo SQL, `.env` y lock de QA excluidos.
+
+## Corrección de compatibilidad de migración GDA importada
+
+El cambio se prueba únicamente con bases MySQL descartables. No se conectó Forge ni staging.
+La reparación no renombra columnas, no añade índices a un esquema importado incompatible y no transforma estados.
+Mantener respaldo verificado del destino y ambos gates del coordinador apagados antes de reintentar el despliegue.
+Si la validación falla, revisar la causa indicada; no insertar manualmente el historial ni eliminar validaciones.
+
+Validación de la corrección GDA: 22 pruebas MySQL PASS / 100 aserciones, usando únicamente esquemas descartables. Cubre creación limpia, importación equivalente e historial Laravel idempotente, 18 variantes incompatibles, conservación del histórico y bloqueo del rollback destructivo, además de las tablas de confirmación.
