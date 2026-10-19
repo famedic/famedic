@@ -89,7 +89,8 @@ export default function CustomerAccountPanel({
 
 	const handleTaxProfileSaved = () => {
 		setTaxProfileForm(null);
-		router.reload({ only: ["customer"], preserveScroll: true });
+		// Perfiles fiscales viven en monitorData (Inertia::defer), no en customer del layout.
+		router.reload({ only: ["monitorData"], preserveScroll: true });
 	};
 
 	const openCreateForm = () => {

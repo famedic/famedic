@@ -148,6 +148,7 @@ class HandleInertiaRequests extends Middleware
             },
             ...($request->user() ? ['laboratoryCarts' => $this->getLaboratoryCarts()] : []),
             'laboratoryBrands' => LaboratoryBrand::brandsData(),
+            'taxRegimes' => fn () => config('taxregimes.regimes'),
             ...($request->user() ? ['onlinePharmacyCart' => $this->getOnlinePharmacyCart()] : []),
             'inAppNotificationFeed' => fn () => $this->getInAppNotificationFeed($request),
         ];

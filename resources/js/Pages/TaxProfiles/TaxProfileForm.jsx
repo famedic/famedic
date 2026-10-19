@@ -16,7 +16,7 @@ import { Input } from "@/Components/Catalyst/input";
 import { Button } from "@/Components/Catalyst/button";
 import { usePage, useForm, router } from "@inertiajs/react";
 import { ErrorMessage } from "@/Components/Catalyst/fieldset";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
 	ArrowPathIcon,
 	DocumentTextIcon,
@@ -111,7 +111,22 @@ export default function TaxProfileForm({
 	const { taxProfile: pageTaxProfile, taxRegimes: pageTaxRegimes } =
 		pageProps;
 	const resolvedTaxProfile = taxProfileProp ?? pageTaxProfile ?? null;
-	const resolvedTaxRegimes = taxRegimesProp ?? pageTaxRegimes ?? {};
+	const resolvedTaxRegimes = useMemo(() => {
+		const hasRegimes = (value) =>
+			value &&
+			typeof value === "object" &&
+			Object.keys(value).length > 0;
+
+		if (hasRegimes(taxRegimesProp)) {
+			return taxRegimesProp;
+		}
+
+		if (hasRegimes(pageTaxRegimes)) {
+			return pageTaxRegimes;
+		}
+
+		return {};
+	}, [taxRegimesProp, pageTaxRegimes]);
 
 	const [cachedTaxRegimes, setCachedTaxRegimes] =
 		useState(resolvedTaxRegimes);
@@ -1810,7 +1825,7 @@ export default function TaxProfileForm({
 							) : (
 								<ListboxOption value="" disabled>
 									<ListboxLabel>
-										Cargando regímenes...
+										No hay regímenes fiscales disponibles
 									</ListboxLabel>
 								</ListboxOption>
 							)}
