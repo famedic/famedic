@@ -10,6 +10,25 @@
     $sections = array_values($summary['sections'] ?? []);
     $specialInstructions = array_values($summary['special_instructions'] ?? []);
     $individualInstructions = array_values($summary['individual_instructions'] ?? []);
+    $instructionParts = static function (mixed $content): array {
+        $text = trim((string) $content);
+
+        if ($text === '') {
+            return [];
+        }
+
+        $parts = preg_split('/(?:^|\s)•\s*/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        if (count($parts) <= 1) {
+            $parts = preg_split('/\R+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [$text];
+        }
+
+        return collect($parts)
+            ->map(static fn (string $part): string => trim($part))
+            ->filter()
+            ->values()
+            ->all();
+    };
 @endphp
 
 @if ($isAiReady)
@@ -25,13 +44,18 @@ Hemos simplificado las indicaciones para que sea más fácil prepararte.
 
 @if (count($sections) > 0)
 @foreach ($sections as $section)
+@php($parts = $instructionParts($section['content'] ?? ''))
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border-collapse:separate;">
 <tr>
 <td style="padding:14px 16px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">
 <p style="margin:0 0 10px;color:#2d3748;font-size:16px;line-height:1.5;font-weight:600;">
 {{ $section['title'] ?? 'Preparación' }}
 </p>
-<p style="margin:0;color:#3d4852;font-size:16px;line-height:1.6;white-space:pre-wrap;">{{ trim((string) ($section['content'] ?? '')) }}</p>
+<ul style="margin:0;padding-left:22px;color:#3d4852;font-size:16px;line-height:1.6;">
+@foreach ($parts as $part)
+<li style="margin:0 0 8px;padding-left:3px;">{{ $part }}</li>
+@endforeach
+</ul>
 </td>
 </tr>
 </table>
@@ -46,7 +70,11 @@ Hemos simplificado las indicaciones para que sea más fácil prepararte.
 Importante
 </p>
 @foreach ($specialInstructions as $instruction)
-<p style="margin:0 0 10px;color:#78350f;font-size:16px;line-height:1.6;white-space:pre-wrap;">{{ trim((string) ($instruction['content'] ?? '')) }}</p>
+<ul style="margin:0 0 10px;padding-left:22px;color:#78350f;font-size:16px;line-height:1.6;">
+@foreach ($instructionParts($instruction['content'] ?? '') as $part)
+<li style="margin:0 0 8px;padding-left:3px;">{{ $part }}</li>
+@endforeach
+</ul>
 @endforeach
 </td>
 </tr>
@@ -58,6 +86,7 @@ Importante
 Indicaciones específicas
 </p>
 @foreach ($individualInstructions as $instruction)
+@php($parts = $instructionParts($instruction['content'] ?? ''))
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border-collapse:separate;">
 <tr>
 <td style="padding:14px 16px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;">
@@ -67,7 +96,11 @@ Estudio
 <p style="margin:0 0 10px;color:#2d3748;font-size:16px;line-height:1.5;font-weight:600;">
 {{ $instruction['study_name'] ?? '—' }}
 </p>
-<p style="margin:0;color:#3d4852;font-size:16px;line-height:1.6;white-space:pre-wrap;">{{ trim((string) ($instruction['content'] ?? '')) }}</p>
+<ul style="margin:0;padding-left:22px;color:#3d4852;font-size:16px;line-height:1.6;">
+@foreach ($parts as $part)
+<li style="margin:0 0 8px;padding-left:3px;">{{ $part }}</li>
+@endforeach
+</ul>
 </td>
 </tr>
 </table>
