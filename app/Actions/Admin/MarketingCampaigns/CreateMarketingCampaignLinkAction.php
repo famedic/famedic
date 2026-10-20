@@ -6,6 +6,7 @@ use App\Enums\MarketingCampaignTargetType;
 use App\Models\Administrator;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignLink;
+use App\Models\MarketingCampaignLinkImage;
 use App\Services\Marketing\MarketingCampaignLinkBrandResolver;
 use App\Services\Marketing\MarketingCampaignLinkCategoryService;
 use App\Services\Marketing\MarketingCampaignLinkImageService;
@@ -66,16 +67,28 @@ class CreateMarketingCampaignLinkAction
 
         $primaryIds = $data['primary_laboratory_test_ids'] ?? [];
         $relatedIds = $data['related_laboratory_test_ids'] ?? [];
+        $primaryImages = $data['primary_product_images'] ?? [];
+        $relatedImages = $data['related_product_images'] ?? [];
+        $primaryUploads = $data['primary_product_image_uploads'] ?? [];
+        $relatedUploads = $data['related_product_image_uploads'] ?? [];
         $categoryIds = $data['related_category_ids'] ?? [];
         $galleryItemsPayload = $data['gallery_items'] ?? $galleryItems;
         $galleryUploadsPayload = $data['gallery_uploads'] ?? $galleryUploads;
+        $sourceLinkId = (int) ($data['source_link_id'] ?? 0);
+        $reuseSourceMedia = (bool) ($data['reuse_source_media'] ?? false);
 
         $linkData = Arr::except($data, [
             'primary_laboratory_test_ids',
             'related_laboratory_test_ids',
+            'primary_product_images',
+            'related_product_images',
+            'primary_product_image_uploads',
+            'related_product_image_uploads',
             'related_category_ids',
             'gallery_items',
             'gallery_uploads',
+            'source_link_id',
+            'reuse_source_media',
         ]);
 
         return DB::transaction(function () use (
@@ -84,10 +97,16 @@ class CreateMarketingCampaignLinkAction
             $targetType,
             $primaryIds,
             $relatedIds,
+            $primaryImages,
+            $relatedImages,
+            $primaryUploads,
+            $relatedUploads,
             $categoryIds,
             $heroUpload,
             $galleryItemsPayload,
             $galleryUploadsPayload,
+            $sourceLinkId,
+            $reuseSourceMedia,
         ) {
             $newMediaPaths = [];
 
@@ -120,16 +139,31 @@ class CreateMarketingCampaignLinkAction
                     ]);
                 }
 
-                $this->productService->sync($link, $primaryIds, $relatedIds, $brand);
                 $this->categoryService->sync($link, $categoryIds);
-                $newMediaPaths = array_merge(
-                    $newMediaPaths,
-                    $this->mediaCleanup->applyHero($link, $heroFields, $heroUpload)['created'],
+
+                $this->productService->sync(
+                    $link,
+                    $primaryIds,
+                    $relatedIds,
+                    $brand,
+                    $primaryImages,
+                    $relatedImages,
+                    $primaryUploads,
+                    $relatedUploads,
                 );
-                $newMediaPaths = array_merge(
-                    $newMediaPaths,
-                    $this->imageService->sync($link, $galleryItemsPayload, $galleryUploadsPayload),
-                );
+
+                if ($reuseSourceMedia && $sourceLinkId > 0) {
+                    $this->copyMediaFromSource($link, $sourceLinkId, copyProductImages: true);
+                } else {
+                    $newMediaPaths = array_merge(
+                        $newMediaPaths,
+                        $this->mediaCleanup->applyHero($link, $heroFields, $heroUpload)['created'],
+                    );
+                    $newMediaPaths = array_merge(
+                        $newMediaPaths,
+                        $this->imageService->sync($link, $galleryItemsPayload, $galleryUploadsPayload),
+                    );
+                }
 
                 return $link->fresh();
             } catch (\Throwable $exception) {
@@ -138,5 +172,50 @@ class CreateMarketingCampaignLinkAction
                 throw $exception;
             }
         });
+    }
+
+    private function copyMediaFromSource(
+        MarketingCampaignLink $link,
+        int $sourceLinkId,
+        bool $copyProductImages = false,
+    ): void
+    {
+        $source = MarketingCampaignLink::query()
+            ->whereKey($sourceLinkId)
+            ->where('marketing_campaign_id', $link->marketing_campaign_id)
+            ->with([
+                'landingProducts',
+                'landingImages' => fn ($query) => $query->where('type', 'gallery')->orderBy('position')->orderBy('id'),
+            ])
+            ->first();
+
+        if (! $source) {
+            return;
+        }
+
+        $link->update([
+            'hero_image_source' => $source->hero_image_source,
+            'hero_image_disk' => $source->hero_image_disk,
+            'hero_image_path' => $source->hero_image_path,
+            'hero_image_url' => $source->hero_image_url,
+            'hero_image_alt' => $source->hero_image_alt,
+        ]);
+
+        foreach ($source->landingImages as $image) {
+            MarketingCampaignLinkImage::query()->create([
+                'marketing_campaign_link_id' => $link->id,
+                'type' => $image->type,
+                'source' => $image->source,
+                'disk' => $image->disk,
+                'path' => $image->path,
+                'external_url' => $image->external_url,
+                'alt_text' => $image->alt_text,
+                'position' => $image->position,
+            ]);
+        }
+
+        if ($copyProductImages) {
+            $this->productService->copyImagesFromSource($link, $source);
+        }
     }
 }

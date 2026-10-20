@@ -27,11 +27,11 @@ export default function CampaignProductGrid({
 			{(title || subtitle) && (
 				<div className="space-y-1">
 					{title && (
-						<Subheading className="font-poppins text-2xl font-semibold text-famedic-darker">
+						<Subheading className="font-poppins text-2xl font-semibold text-famedic-darker dark:text-white">
 							{title}
 						</Subheading>
 					)}
-					{subtitle && <p className="text-sm leading-6 text-slate-600">{subtitle}</p>}
+					{subtitle && <p className="text-sm leading-6 text-slate-600 dark:text-zinc-300">{subtitle}</p>}
 				</div>
 			)}
 			{visibleProducts.length === 0 ? (

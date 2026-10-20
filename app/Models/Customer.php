@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Actions\Stripe\FindOrCreateStripeCustomerAction;
 use App\Enums\LaboratoryBrand;
+use App\Support\Database\PersonNameSearch;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -42,27 +43,26 @@ class Customer extends Model
     {
         return $query
             ->when($filters['search'] ?? null, function ($query, $search) {
+                $search = trim((string) $search);
+
+                if ($search === '') {
+                    return;
+                }
+
                 $query->where(function ($query) use ($search) {
                     $query->whereHas('user', function ($query) use ($search) {
-                        $query->where(function ($query) use ($search) {
-                            $query->where('name', 'like', '%' . $search . '%')
-                                ->orWhere('paternal_lastname', 'like', '%' . $search . '%')
-                                ->orWhere('maternal_lastname', 'like', '%' . $search . '%')
-                                ->orWhere('email', 'like', '%' . $search . '%');
-                        });
+                        PersonNameSearch::apply($query, $search, 'users', ['email']);
                     })
                         ->orWhereHasMorph('customerable', [OdessaAfiliateAccount::class], function ($query) use ($search) {
-                            $query->where('odessa_identifier', 'like', '%' . $search . '%')
-                                ->orWhere('partner_identifier', 'like', '%' . $search . '%')
-                                ->orWhere('odessa_afiliated_company_id', 'like', '%' . $search . '%')
+                            $query->where('odessa_identifier', 'like', '%'.$search.'%')
+                                ->orWhere('partner_identifier', 'like', '%'.$search.'%')
+                                ->orWhere('odessa_afiliated_company_id', 'like', '%'.$search.'%')
                                 ->orWhereHas('odessaAfiliatedCompany', function ($query) use ($search) {
-                                    $query->where('name', 'like', '%' . $search . '%');
+                                    $query->where('name', 'like', '%'.$search.'%');
                                 });
                         })
                         ->orWhereHasMorph('customerable', [FamilyAccount::class], function ($query) use ($search) {
-                            $query->where('name', 'like', '%' . $search . '%')
-                                ->orWhere('paternal_lastname', 'like', '%' . $search . '%')
-                                ->orWhere('maternal_lastname', 'like', '%' . $search . '%');
+                            PersonNameSearch::apply($query, $search, $query->getModel()->getTable());
                         });
                 });
             })

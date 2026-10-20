@@ -483,6 +483,20 @@ class ActiveCampaignTagsManagerService
                 'description' => 'Compra laboratorio completada (ID legacy)',
             ],
             [
+                'config_key' => 'legacy.laboratory_purchase_with_appointment',
+                'name' => 'Compra-lab-con-cita',
+                'ac_id' => $this->intConfig('tag_laboratory_purchase_with_appointment'),
+                'family' => 'lab',
+                'description' => 'Compra laboratorio con cita',
+            ],
+            [
+                'config_key' => 'legacy.laboratory_purchase_without_appointment',
+                'name' => 'Compra-lab-sin-cita',
+                'ac_id' => $this->intConfig('tag_laboratory_purchase_without_appointment'),
+                'family' => 'lab',
+                'description' => 'Compra laboratorio sin cita',
+            ],
+            [
                 'config_key' => 'legacy.lab_sample',
                 'name' => 'Lab Toma de muestra',
                 'ac_id' => $this->intConfig('tag_lab_sample_collected'),

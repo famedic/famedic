@@ -43,6 +43,7 @@ export default function Requests({
 	brandOptions = [],
 	thresholdDays,
 	canManageAutomaticReports = false,
+	navCounts = {},
 }) {
 	const [rangeProcessing, setRangeProcessing] = useState(false);
 	const onProcessingChange = useCallback(
@@ -98,6 +99,7 @@ export default function Requests({
 					active="requests"
 					query={filters}
 					canManageAutomaticReports={canManageAutomaticReports}
+					navCounts={navCounts}
 				/>
 
 				<div className="flex flex-wrap gap-2">

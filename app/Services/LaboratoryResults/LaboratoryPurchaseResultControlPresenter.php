@@ -30,12 +30,19 @@ class LaboratoryPurchaseResultControlPresenter
         $hasStoredResults = filled($purchase->results);
         $legacyAvailable = $hasStoredResults || $purchase->hasResultsAvailable();
         $legacyNoStatuses = $completion->legacyFallback || $purchase->laboratoryResultStatuses->isEmpty();
-        $overallStatus = $this->overallStatus($completion, $legacyAvailable, $legacyNoStatuses);
+        $hasSampleCollected = $purchase->hasSampleCollected();
+        $overallStatus = $this->overallStatus(
+            $completion,
+            $legacyAvailable,
+            $legacyNoStatuses,
+            $hasSampleCollected,
+        );
 
         $resultControl = [
             'overall_status' => $overallStatus,
             'label' => $this->labelForOverallStatus($overallStatus),
-            'message' => $this->messageForOverallStatus($overallStatus, $legacyAvailable),
+            'message' => $this->messageForOverallStatus($overallStatus, $legacyAvailable, $hasSampleCollected),
+            'has_sample_collected' => $hasSampleCollected,
             'is_complete' => $completion->isComplete,
             'can_view_results' => $legacyAvailable,
             'button_label' => $completion->isComplete ? 'Ver resultado completo' : 'Ver documento disponible',
@@ -56,8 +63,12 @@ class LaboratoryPurchaseResultControlPresenter
         ];
     }
 
-    private function overallStatus(object $completion, bool $legacyAvailable, bool $legacyNoStatuses): string
-    {
+    private function overallStatus(
+        object $completion,
+        bool $legacyAvailable,
+        bool $legacyNoStatuses,
+        bool $hasSampleCollected,
+    ): string {
         if ($completion->isComplete) {
             return 'complete';
         }
@@ -78,8 +89,8 @@ class LaboratoryPurchaseResultControlPresenter
             return 'pending_interpretation';
         }
 
-        if ($completion->missing > 0) {
-            return 'pending';
+        if (! $legacyAvailable && ! $hasSampleCollected) {
+            return 'awaiting_sample';
         }
 
         return $legacyAvailable ? 'legacy_available' : 'pending';
@@ -91,23 +102,27 @@ class LaboratoryPurchaseResultControlPresenter
             'complete' => 'Resultado completo',
             'legacy_available' => 'Resultado disponible',
             'pending_interpretation' => 'Pendiente de interpretación',
+            'awaiting_sample' => 'Pendiente de toma de muestra',
             'manual_review' => 'Revisión manual',
             'error' => 'Error de actualización',
-            default => 'Pendiente',
+            default => 'En proceso',
         };
     }
 
-    private function messageForOverallStatus(string $status, bool $legacyAvailable): string
+    private function messageForOverallStatus(string $status, bool $legacyAvailable, bool $hasSampleCollected): string
     {
         return match ($status) {
             'complete' => 'Todos los estudios tienen resultado interpretado.',
             'legacy_available' => 'Hay un PDF de resultados disponible para esta orden.',
             'pending_interpretation' => $legacyAvailable
                 ? 'Hay un documento disponible, pero aún falta la interpretación final.'
-                : 'Los resultados aún están en proceso de interpretación.',
+                : 'El laboratorio ya está procesando tus resultados.',
+            'awaiting_sample' => 'El siguiente paso es acudir a tu toma de muestra. Cuando el laboratorio la confirme, aquí verás que tus resultados están en proceso.',
             'manual_review' => 'El resultado requiere revisión del equipo operativo antes de notificarse.',
             'error' => 'No fue posible confirmar el estado final del resultado.',
-            default => 'Aún no hay resultados completos disponibles para esta orden.',
+            default => $hasSampleCollected
+                ? 'Ya registramos tu toma de muestra. El laboratorio está procesando tus resultados.'
+                : 'Aún no hay resultados completos disponibles para esta orden.',
         };
     }
 

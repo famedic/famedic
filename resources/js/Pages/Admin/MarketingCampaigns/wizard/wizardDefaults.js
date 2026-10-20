@@ -41,6 +41,91 @@ function collectionLabel(collections, id) {
 	return match?.public_title || match?.name || "";
 }
 
+function uniqueLinkSlug(baseSlug) {
+	const suffix = Date.now().toString(36).slice(-5);
+	return slugify(`${baseSlug || "enlace"}-${suffix}`);
+}
+
+function sourcePromotion(sourceLink) {
+	const targetType = sourceLink?.target_type;
+	const primaryProducts = sourceLink?.primary_products || [];
+
+	if (targetType === "category") return "category";
+	if (targetType === "product") return "product";
+	if (targetType === "collection") return "existing_collection";
+	if (targetType === "brand" && primaryProducts.length > 0) {
+		return "multiple_products";
+	}
+
+	return targetType === "brand" ? "brand" : "";
+}
+
+function stateFromSourceLink(sourceLink, campaignName) {
+	const payload = sourceLink?.target_payload || {};
+	const primaryProducts = sourceLink?.primary_products || [];
+	const sourceName = sourceLink?.name || campaignName || "Nuevo enlace";
+	const nextName = `${sourceName} - nuevo canal`;
+	const brand = payload.brand || primaryProducts[0]?.brand || "";
+	const channelStep = LINK_STEPS.findIndex((step) => step.id === "channel");
+
+	return {
+		step: channelStep >= 0 ? channelStep : 0,
+		promotion: sourcePromotion(sourceLink),
+		brand,
+		categoryId: payload.laboratory_test_category_id || "",
+		product:
+			sourceLink?.target_type === "product"
+				? primaryProducts.find(
+						(item) => Number(item.id) === Number(payload.laboratory_test_id),
+					) || primaryProducts[0] || null
+				: null,
+		collectionId: payload.marketing_campaign_collection_id || "",
+		primaryProducts,
+		relatedProducts: sourceLink?.related_products || [],
+		relatedCategories: sourceLink?.related_categories || [],
+		galleryItems: [],
+		heroPreviewUrl: sourceLink?.hero_image_preview_url || null,
+		link: {
+			name: nextName,
+			slug: uniqueLinkSlug(sourceLink?.slug || nextName),
+			status: "draft",
+			target_type: sourceLink?.target_type || "brand",
+			target_payload: payload,
+			public_title: sourceLink?.public_title || "",
+			public_subtitle: sourceLink?.public_subtitle || "",
+			public_description: sourceLink?.public_description || "",
+			eyebrow: sourceLink?.eyebrow || "",
+			primary_cta_label: sourceLink?.primary_cta_label || "",
+			secondary_cta_label: sourceLink?.secondary_cta_label || "",
+			show_prices: sourceLink?.show_prices ?? true,
+			show_brand_logo: sourceLink?.show_brand_logo ?? true,
+			show_campaign_dates: sourceLink?.show_campaign_dates ?? false,
+			landing_layout: sourceLink?.landing_layout || "default",
+			landing_template: sourceLink?.landing_template || "conversion",
+			editorial_eyebrow: sourceLink?.editorial_eyebrow || "",
+			editorial_title: sourceLink?.editorial_title || "",
+			editorial_body: sourceLink?.editorial_body || "",
+			editorial_items: sourceLink?.editorial_items || [],
+			hero_image_source: "none",
+			hero_image_url: "",
+			hero_image_alt: sourceLink?.hero_image_alt || "",
+			hero_image: null,
+			utm_source: "",
+			utm_medium: "",
+			utm_campaign: sourceLink?.utm_campaign || slugify(campaignName || sourceName),
+			utm_term: "",
+			utm_content: "",
+			starts_at: sourceLink?.starts_at || "",
+			ends_at: sourceLink?.ends_at || "",
+			source_link_id: sourceLink?.id || null,
+			reuse_source_media: true,
+		},
+		utmPreset: "",
+		contentTouched: true,
+		slugTouched: true,
+	};
+}
+
 export function initialWizardState(mode, props = {}) {
 	const campaignName = props.campaign?.name || "";
 	const draft = props.initialDraft || null;
@@ -48,6 +133,11 @@ export function initialWizardState(mode, props = {}) {
 	if (draft) {
 		return draft;
 	}
+
+	const sourceDefaults =
+		mode === "link" && props.sourceLink
+			? stateFromSourceLink(props.sourceLink, campaignName)
+			: {};
 
 	return {
 		step: 0,
@@ -111,6 +201,7 @@ export function initialWizardState(mode, props = {}) {
 		utmPreset: "",
 		contentTouched: false,
 		slugTouched: false,
+		...sourceDefaults,
 	};
 }
 

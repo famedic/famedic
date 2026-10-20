@@ -223,7 +223,10 @@ export default function CouponsShow({
 			authorizer_ids: d.authorizer_ids,
 		};
 		if (d.assignment_mode === "individual") {
-			out.email = d.email;
+			const trimmed = String(d.email ?? "").trim();
+			if (trimmed) {
+				out.bulk_emails = [trimmed];
+			}
 		}
 		if (d.assignment_mode === "bulk") {
 			const confirmed = bulkRowsRef.current
@@ -1573,8 +1576,14 @@ export default function CouponsShow({
 									? "Escribe un correo registrado en la plataforma."
 									: userLookup.message}
 							</p>
-							{assignErrors.email && (
-								<p className="text-sm text-red-600 dark:text-red-400">{assignErrors.email}</p>
+							{(assignErrors.email ||
+								assignErrors.bulk_emails ||
+								assignErrors["bulk_emails.0"]) && (
+								<p className="text-sm text-red-600 dark:text-red-400">
+									{assignErrors.email ||
+										assignErrors.bulk_emails ||
+										assignErrors["bulk_emails.0"]}
+								</p>
 							)}
 						</Field>
 					)}

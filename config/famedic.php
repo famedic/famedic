@@ -19,6 +19,7 @@ return [
             ['manage.results' => 'Subir y actualizar resultados'],
             ['manage.cancel' => 'Cancelar ordenes'],
             ['manage.export' => 'Descargar ordenes'],
+            ['manage.recover-gda' => 'Recuperar pedidos con GDA incierto usando saldo a favor'],
             ['manage.vendor-payments' => 'Gestionar pagos a proveedor'],
 
         ],

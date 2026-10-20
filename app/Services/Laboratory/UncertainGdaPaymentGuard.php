@@ -96,6 +96,7 @@ class UncertainGdaPaymentGuard
         }
         // Confirmed and pending attempts also block recapture of the same cart.
         return LaboratoryPurchase::query()->useWritePdo()->where('cart_id', $cart->id)
+            ->whereNull('replacement_laboratory_purchase_id')
             ->whereHas('transactions', fn ($query) => $this->successfulTransactionScope($query))
             ->latest('id')->first();
     }

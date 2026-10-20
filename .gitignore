@@ -50,3 +50,8 @@ database/famedic_jun_23
 # Local QA runtime artifacts and isolated test logs
 /codex/pest-*.log
 /storage/framework/local-qa-listen.lock
+storage/tmp/publication_gate_tests.out
+storage/tmp/diag_report7_v39.php
+storage/framework/testing-structured-qa-manifest.json
+storage/framework/lab_diag_8c61.json
+**/*Zone.Identifier

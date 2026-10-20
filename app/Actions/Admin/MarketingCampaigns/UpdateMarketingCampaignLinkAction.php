@@ -72,6 +72,10 @@ class UpdateMarketingCampaignLinkAction
 
         $primaryIds = $data['primary_laboratory_test_ids'] ?? [];
         $relatedIds = $data['related_laboratory_test_ids'] ?? [];
+        $primaryImages = $data['primary_product_images'] ?? [];
+        $relatedImages = $data['related_product_images'] ?? [];
+        $primaryUploads = $data['primary_product_image_uploads'] ?? [];
+        $relatedUploads = $data['related_product_image_uploads'] ?? [];
         $categoryIds = $data['related_category_ids'] ?? [];
         $galleryItemsPayload = $data['gallery_items'] ?? $galleryItems;
         $galleryUploadsPayload = $data['gallery_uploads'] ?? $galleryUploads;
@@ -80,6 +84,10 @@ class UpdateMarketingCampaignLinkAction
             'slug',
             'primary_laboratory_test_ids',
             'related_laboratory_test_ids',
+            'primary_product_images',
+            'related_product_images',
+            'primary_product_image_uploads',
+            'related_product_image_uploads',
             'related_category_ids',
             'gallery_items',
             'gallery_uploads',
@@ -96,6 +104,10 @@ class UpdateMarketingCampaignLinkAction
             $targetPayload,
             $primaryIds,
             $relatedIds,
+            $primaryImages,
+            $relatedImages,
+            $primaryUploads,
+            $relatedUploads,
             $categoryIds,
             $heroFields,
             $heroUpload,
@@ -121,8 +133,18 @@ class UpdateMarketingCampaignLinkAction
                     ]);
                 }
 
-                $this->productService->sync($link, $primaryIds, $relatedIds, $brand);
                 $this->categoryService->sync($link, $categoryIds);
+
+                $this->productService->sync(
+                    $link,
+                    $primaryIds,
+                    $relatedIds,
+                    $brand,
+                    $primaryImages,
+                    $relatedImages,
+                    $primaryUploads,
+                    $relatedUploads,
+                );
 
                 $heroResult = $this->mediaCleanup->applyHero(
                     $link,

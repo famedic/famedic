@@ -3,6 +3,8 @@
 
 namespace App\Actions\Laboratory;
 
+use App\Actions\InvoiceRequests\AttemptActivateLaboratoryInvoiceRequestForPurchaseAction;
+use App\Enums\InvoiceRequestStatusLogTrigger;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryQuote;
 use App\Models\LaboratoryPurchase;
@@ -21,6 +23,7 @@ class HandleSampleCollectionNotificationAction
     public function __construct(
         protected LabOrderNotificationGateService $notificationGateService,
         protected GdaWebhookPayloadResolver $payloadResolver,
+        protected AttemptActivateLaboratoryInvoiceRequestForPurchaseAction $attemptActivateLaboratoryInvoiceRequest,
     ) {
     }
 
@@ -98,6 +101,13 @@ class HandleSampleCollectionNotificationAction
                 'sample_received_count' => $gateResult['state']->sample_received_count,
                 'total_studies' => $gateResult['expected_studies'],
             ]);
+        }
+
+        if ($purchase && $this->notificationGateService->areSamplesComplete($gateResult['state'])) {
+            $this->attemptActivateLaboratoryInvoiceRequest->execute(
+                $purchase->fresh(['invoiceRequest']),
+                InvoiceRequestStatusLogTrigger::SampleWebhook,
+            );
         }
 
         // Marcar como procesada

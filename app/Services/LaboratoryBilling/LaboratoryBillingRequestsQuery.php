@@ -2,6 +2,7 @@
 
 namespace App\Services\LaboratoryBilling;
 
+use App\Enums\InvoiceRequestWorkflowStatus;
 use App\Enums\LaboratoryBrand;
 use App\Enums\LaboratoryBillingStatus;
 use App\Models\InvoiceRequest;
@@ -77,7 +78,8 @@ class LaboratoryBillingRequestsQuery
 
     public function filteredQuery(array $filters, LaboratoryBillingDateRange $range): Builder
     {
-        $query = $this->metrics->requestsInRange($range);
+        $query = $this->metrics->requestsInRange($range)
+            ->where('workflow_status', InvoiceRequestWorkflowStatus::SubmittedToBilling->value);
 
         $search = trim((string) ($filters['search'] ?? ''));
         if ($search !== '') {

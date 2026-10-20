@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Auth\RecordUserLoginAction;
 use App\Actions\Marketing\AttachMarketingCampaignAttributionToCustomerAction;
 use App\Actions\Register\RegisterRegularCustomerAction;
 use App\Http\Controllers\Controller;
@@ -23,6 +24,7 @@ class GoogleAuthController extends Controller
         Request $request,
         RegisterRegularCustomerAction $action,
         AttachMarketingCampaignAttributionToCustomerAction $attachMarketingAttribution,
+        RecordUserLoginAction $recordUserLogin,
     )
     {
         $googleUser = Socialite::driver('google')->user();
@@ -42,6 +44,8 @@ class GoogleAuthController extends Controller
 
             Auth::login($emailUser);
 
+            $recordUserLogin($emailUser, $request);
+
             $this->attachMarketingAttribution($request, $emailUser, $attachMarketingAttribution, 'google_login');
 
             return redirect()->route('home')->flashMessage('Inicio de sesión exitoso.');
@@ -56,6 +60,8 @@ class GoogleAuthController extends Controller
         );
 
         Auth::login($regularAccount->customer->user);
+
+        $recordUserLogin($regularAccount->customer->user, $request);
 
         $this->attachMarketingAttribution(
             $request,

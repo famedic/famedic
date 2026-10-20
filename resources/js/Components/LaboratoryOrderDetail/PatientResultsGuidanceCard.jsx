@@ -9,7 +9,7 @@ import {
 	CheckCircleIcon,
 	ClockIcon,
 	EyeIcon,
-	InformationCircleIcon,
+	FlagIcon,
 } from "@heroicons/react/24/outline";
 
 function patientGuidance(resultControl, hasResults) {
@@ -37,7 +37,7 @@ function patientGuidance(resultControl, hasResults) {
 		pending_interpretation: {
 			title: "Estamos preparando tus resultados",
 			description:
-				"Recibimos información del laboratorio y estamos terminando la interpretación de cada estudio.",
+				"El laboratorio ya está procesando tus estudios. Te avisaremos cuando la interpretación esté lista.",
 			badge: "En proceso",
 			badgeColor: "amber",
 			icon: ClockIcon,
@@ -46,32 +46,41 @@ function patientGuidance(resultControl, hasResults) {
 				"Mientras tanto, revisa la pestaña Instrucciones.",
 			],
 		},
-		manual_review: {
-			title: "Tu orden está en revisión",
+		awaiting_sample: {
+			title: "Primero acude a tu toma de muestra",
 			description:
-				"Nuestro equipo valida tus resultados para asegurarnos de que todo esté correcto antes de avisarte.",
-			badge: "En revisión",
-			badgeColor: "amber",
+				"Tus resultados aparecerán aquí después de que el laboratorio confirme la toma de muestra. Hasta entonces, el siguiente paso es presentarte en sucursal o a tu cita.",
+			badge: "Toma de muestra",
+			badgeColor: "sky",
 			icon: ClockIcon,
+			tips: [
+				"Revisa Instrucciones para preparación y datos de sucursal.",
+				"Cuando confirmen la toma de muestra, esta tarjeta cambiará a resultados en proceso.",
+			],
+		},
+		manual_review: {
+			title: "Tus resultados siguen en proceso",
+			description: "",
+			badge: "Seguimiento",
+			badgeColor: "green",
+			icon: FlagIcon,
 			tips: ["Si necesitamos algo adicional, te contactaremos."],
 		},
 		error: {
-			title: "Estamos atendiendo tu orden",
-			description:
-				"Hubo un detalle al sincronizar con el laboratorio. Nuestro equipo ya lo está revisando.",
-			badge: "En seguimiento",
-			badgeColor: "amber",
-			icon: InformationCircleIcon,
+			title: "Tus resultados siguen en proceso",
+			description: "",
+			badge: "Seguimiento",
+			badgeColor: "green",
+			icon: FlagIcon,
 			tips: ["No necesitas hacer nada por ahora.", "Te avisaremos cuando haya actualización."],
 		},
 		pending: {
-			title: "Tus estudios siguen en proceso",
-			description:
-				"El laboratorio aún no libera los resultados. Cuando estén disponibles, te avisaremos y podrás verlos aquí.",
-			badge: "Pendiente",
-			badgeColor: "slate",
+			title: "Tus resultados están en proceso",
+			description: "",
+			badge: "En proceso",
+			badgeColor: "amber",
 			icon: ClockIcon,
-			tips: ["Revisa Instrucciones para preparación y datos de sucursal."],
+			tips: ["Te avisaremos por correo en cuanto haya novedades."],
 		},
 	};
 
@@ -90,7 +99,7 @@ export default function PatientResultsGuidanceCard({
 	const guidance = patientGuidance(resultControl, hasResults);
 	const Icon = guidance.icon;
 	const canView = Boolean(hasResults && resultControl.can_view_results && onViewResults);
-	const buttonLabel = resultControl.button_label || "Ver resultados";
+	const buttonLabel = "Ver resultados";
 
 	return (
 		<Card className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50/80 to-white p-4 shadow-sm dark:border-sky-900/40 dark:from-sky-950/20 dark:to-slate-900 sm:p-6">
@@ -109,9 +118,11 @@ export default function PatientResultsGuidanceCard({
 							</Badge>
 						</div>
 					</div>
-					<p className="mt-3 text-sm leading-relaxed text-zinc-700 dark:text-slate-200">
-						{guidance.description}
-					</p>
+					{guidance.description ? (
+						<p className="mt-3 text-sm leading-relaxed text-zinc-700 dark:text-slate-200">
+							{guidance.description}
+						</p>
+					) : null}
 					{guidance.tips?.length > 0 && (
 						<ul className="mt-3 space-y-1.5 text-sm text-zinc-600 dark:text-slate-400">
 							{guidance.tips.map((tip) => (

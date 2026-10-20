@@ -68,9 +68,11 @@ class CreateMarketingCampaignSetupAction
                 'marketing_campaign_id' => $campaign->id,
             ]);
 
-            if (! empty($linkPayload['gallery_items']) && is_string($linkPayload['gallery_items'])) {
-                $decoded = json_decode($linkPayload['gallery_items'], true);
-                $linkPayload['gallery_items'] = is_array($decoded) ? $decoded : [];
+            foreach (['gallery_items', 'primary_product_images', 'related_product_images'] as $field) {
+                if (is_string($linkPayload[$field] ?? null)) {
+                    $decoded = json_decode($linkPayload[$field], true);
+                    $linkPayload[$field] = is_array($decoded) ? $decoded : [];
+                }
             }
 
             if ($galleryUploads !== []) {

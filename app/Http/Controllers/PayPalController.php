@@ -7,6 +7,7 @@ use App\Actions\PayPal\CreatePayPalOrderAction;
 use App\Actions\PayPal\HandlePayPalWebhookAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\CouponApplicationException;
+use App\Exceptions\LaboratoryPaymentAlreadyReceivedException;
 use App\Exceptions\PromoCodeException;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { router, useForm } from "@inertiajs/react";
+import { router, useForm, usePage } from "@inertiajs/react";
 import {
 	MagnifyingGlassIcon,
 	ClockIcon,
@@ -10,6 +10,8 @@ import {
 	ArrowPathIcon,
 	PhoneIcon,
 	ChatBubbleLeftRightIcon,
+	FunnelIcon,
+	EyeIcon,
 } from "@heroicons/react/16/solid";
 import { BuildingStorefrontIcon } from "@heroicons/react/24/solid";
 import { PresentationChartLineIcon } from "@heroicons/react/24/outline";
@@ -41,7 +43,6 @@ import {
 } from "@/Components/Catalyst/table";
 import EmptyListCard from "@/Components/EmptyListCard";
 import SearchInput from "@/Components/Admin/SearchInput";
-import UpdateButton from "@/Components/Admin/UpdateButton";
 import PaginatedTable from "@/Components/Admin/PaginatedTable";
 import LaboratoryBrandCard from "@/Components/LaboratoryBrandCard";
 import SearchResultsWithFilters from "@/Components/Admin/SearchResultsWithFilters";
@@ -90,16 +91,22 @@ export default function LaboratoryAppointments({
 	laboratoryAppointments,
 	filters,
 	dashboard,
+	appointmentSummary,
 	brands,
 	pendingCount = 0,
 	canDeleteOld = false,
 }) {
+	const { auth } = usePage().props;
 	const view = filters.view || "list";
+	const firstName =
+		auth?.user?.name?.split(" ")?.[0] ||
+		auth?.user?.full_name?.split(" ")?.[0] ||
+		"Concierge";
 
 	const { data, setData, get, processing } = useForm({
 		search: filters.search || "",
 		completed: filters.completed || "",
-		date_range: filters.date_range || "",
+		date_range: filters.date_range || "last_7_days",
 		brand: filters.brand || "",
 		phone_call_intent: filters.phone_call_intent || "",
 		callback_info: filters.callback_info || "",
@@ -114,7 +121,7 @@ export default function LaboratoryAppointments({
 		setData({
 			search: filters.search || "",
 			completed: filters.completed || "",
-			date_range: filters.date_range || "",
+			date_range: filters.date_range || "last_7_days",
 			brand: filters.brand || "",
 			phone_call_intent: filters.phone_call_intent || "",
 			callback_info: filters.callback_info || "",
@@ -342,7 +349,17 @@ export default function LaboratoryAppointments({
 
 	const listTabHref = route("admin.laboratory-appointments.index", {
 		search: data.search || undefined,
-		completed: data.completed || undefined,
+		completed: "false",
+		date_range: data.date_range || undefined,
+		brand: data.brand || undefined,
+		phone_call_intent: data.phone_call_intent || undefined,
+		callback_info: data.callback_info || undefined,
+		view: "list",
+	});
+
+	const confirmedTabHref = route("admin.laboratory-appointments.index", {
+		search: data.search || undefined,
+		completed: "true",
 		date_range: data.date_range || undefined,
 		brand: data.brand || undefined,
 		phone_call_intent: data.phone_call_intent || undefined,
@@ -366,71 +383,125 @@ export default function LaboratoryAppointments({
 
 	return (
 		<AdminLayout title="Citas de laboratorio">
-			<div className="space-y-8">
-				<div className="flex flex-wrap items-center justify-between gap-4">
-					<Heading>Citas de laboratorio</Heading>
-					<div className="flex max-w-full overflow-x-auto rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-600">
-						<Button
-							href={listTabHref}
-							outline={view !== "list"}
-							className="shrink-0 rounded-md !border-0"
-						>
-							Citas
-						</Button>
-						<Button
-							href={pendingTabHref}
-							outline={view !== "pending"}
-							className="shrink-0 rounded-md !border-0"
-						>
-							Pendientes por atender
-							{pendingCount > 0 && (
-								<Badge color="rose" className="ml-1.5">
-									{pendingCount}
-								</Badge>
-							)}
-						</Button>
-						<Button
-							href={dashboardTabHref}
-							outline={view !== "dashboard"}
-							className="shrink-0 rounded-md !border-0"
-						>
-							<PresentationChartLineIcon className="size-5" />
-							Dashboard
-						</Button>
-					</div>
-				</div>
+			<div className="space-y-6">
+				<div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+					<div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+						<div className="space-y-2">
+							<div className="flex flex-wrap items-center gap-2">
+								<Badge color="famedic-lime">Concierge</Badge>
+								<Badge color="sky">Laboratorio</Badge>
+							</div>
+							<Heading>
+								Hola{" "}
+								<span className="text-famedic-dark dark:text-famedic-lime">
+									{firstName}
+								</span>
+								, tienes {appointmentSummary?.pending ?? 0} citas pendientes de confirmar
+							</Heading>
+						</div>
 
-				<form className="space-y-8" onSubmit={updateResults}>
-					<div className="flex flex-col justify-between gap-8 md:flex-row md:items-center">
-						<SearchInput
-							value={data.search}
-							onChange={(value) => setData("search", value)}
-							placeholder="Buscar por nombre, apellidos, correo o teléfono del paciente/usuario..."
-						/>
-						<div className="flex items-center justify-end gap-2">
-							{(view === "list" || view === "pending") && (
-								<Button
-									outline
-									className="w-full"
-									onClick={() => setShowFilters(!showFilters)}
-								>
-									Filtros
-									<FilterCountBadge count={filtersCount} />
-								</Button>
-							)}
+						<div className="flex max-w-full overflow-x-auto rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-950">
+							<Button
+								href={listTabHref}
+								outline={view !== "list" || filters.completed === "true"}
+								className="shrink-0 rounded-lg !border-0"
+							>
+								Solicitadas
+							</Button>
+							<Button
+								href={confirmedTabHref}
+								outline={view !== "list" || filters.completed !== "true"}
+								className="shrink-0 rounded-lg !border-0"
+							>
+								Confirmadas
+								{appointmentSummary?.confirmed > 0 && (
+									<Badge color="famedic-lime" className="ml-1.5">
+										{appointmentSummary.confirmed}
+									</Badge>
+								)}
+							</Button>
+							<Button
+								href={pendingTabHref}
+								outline={view !== "pending"}
+								className="shrink-0 rounded-lg !border-0"
+							>
+								Pendientes
+								{pendingCount > 0 && (
+									<Badge color="rose" className="ml-1.5">
+										{pendingCount}
+									</Badge>
+								)}
+							</Button>
+							<Button
+								href={dashboardTabHref}
+								outline={view !== "dashboard"}
+								className="shrink-0 rounded-lg !border-0"
+							>
+								<PresentationChartLineIcon className="size-5" />
+								Dashboard
+							</Button>
 						</div>
 					</div>
 
+					{(view === "list" || view === "pending") && (
+						<AppointmentKpiStrip
+							laboratoryAppointments={laboratoryAppointments}
+							appointmentSummary={appointmentSummary}
+							pendingCount={pendingCount}
+							view={view}
+						/>
+					)}
+				</div>
+
+				<form
+					className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
+					onSubmit={updateResults}
+				>
+					<div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+						<div className="min-w-0 flex-1">
+							<Text className="mb-2 text-xs font-medium uppercase text-zinc-500">
+								Buscar
+							</Text>
+							<SearchInput
+								value={data.search}
+								onChange={(value) => setData("search", value)}
+								placeholder="Paciente, teléfono, correo, orden o folio..."
+							/>
+						</div>
+						{(view === "list" || view === "pending") && (
+							<Button
+								outline
+								type="button"
+								className="lg:w-auto"
+								onClick={() => setShowFilters(!showFilters)}
+							>
+								<FunnelIcon />
+								Más filtros
+								<FilterCountBadge count={filtersCount} />
+							</Button>
+						)}
+						{showUpdateButton && (
+							<Button type="submit" disabled={processing}>
+								Filtrar
+								<ArrowPathIcon className={processing ? "animate-spin" : ""} />
+							</Button>
+						)}
+					</div>
+
 					{showFilters && view === "list" && (
-						<Filters data={data} setData={setData} brands={brands} />
+						<div className="mt-5 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+							<Filters data={data} setData={setData} brands={brands} />
+						</div>
 					)}
 
-					{showFilters && view === "pending" && (
-						<PendingFilters data={data} setData={setData} brands={brands} />
+					{(showFilters || view === "pending") && view === "pending" && (
+						<div className="mt-5 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+							<PendingFilters data={data} setData={setData} brands={brands} />
+						</div>
 					)}
 
 					{view === "dashboard" && (
-						<div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+						<div className="mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800">
 							<Text className="text-sm text-zinc-600 dark:text-zinc-400">
 								Zona horaria Monterrey. Por defecto, últimos 30 días. Los filtros
 								de estado (solicitadas / confirmadas) solo aplican a la pestaña
@@ -448,28 +519,6 @@ export default function LaboratoryAppointments({
 									onChange={(value) => setData("end_date", value)}
 								/>
 							</div>
-						</div>
-					)}
-
-					{showUpdateButton && (
-						<div className="flex justify-center">
-							{view === "dashboard" ? (
-								<Button
-									className="max-md:w-full"
-									type="submit"
-									disabled={processing}
-								>
-									Actualizar dashboard
-									<ArrowPathIcon
-										className={processing ? "animate-spin" : ""}
-									/>
-								</Button>
-							) : (
-								<UpdateButton
-									type="submit"
-									processing={processing}
-								/>
-							)}
 						</div>
 					)}
 				</form>
@@ -504,6 +553,119 @@ export default function LaboratoryAppointments({
 				)}
 			</div>
 		</AdminLayout>
+	);
+}
+
+function AppointmentKpiStrip({
+	laboratoryAppointments,
+	appointmentSummary,
+	pendingCount,
+	view,
+}) {
+	const rows = laboratoryAppointments?.data || [];
+	const activeCartCount = rows.filter((row) =>
+		(row.admin_cart_status_label || "").toLowerCase().includes("activo"),
+	).length;
+	const recentActivityCount = rows.filter(
+		(row) => row.concierge_cart_activity_signal?.color === "emerald",
+	).length;
+	const cleanupCount = rows.filter(
+		(row) => row.is_old_delete_eligible === true,
+	).length;
+
+	if (view === "list") {
+		return (
+			<div className="mt-5 grid gap-3 md:grid-cols-3">
+				<AppointmentMetricCard
+					icon={ClockIcon}
+					label="Citas pendientes del periodo"
+					value={appointmentSummary?.pending ?? 0}
+					description={appointmentSummary?.period_label || "Periodo filtrado"}
+					tone="orange"
+				/>
+				<AppointmentMetricCard
+					icon={CheckCircleIcon}
+					label="Citas confirmadas"
+					value={appointmentSummary?.confirmed ?? 0}
+					description={appointmentSummary?.period_label || "Periodo filtrado"}
+					tone="green"
+				/>
+				<AppointmentMetricCard
+					icon={ArchiveBoxIcon}
+					label="Citas pagadas"
+					value={appointmentSummary?.paid ?? 0}
+					description={appointmentSummary?.period_label || "Periodo filtrado"}
+					tone="sky"
+				/>
+			</div>
+		);
+	}
+
+	return (
+		<div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+			<AppointmentMetricCard
+				icon={ClockIcon}
+				label="Pendientes de confirmar"
+				value={pendingCount}
+				description="Requieren agenda o seguimiento"
+				tone="orange"
+			/>
+			<AppointmentMetricCard
+				icon={CalendarDaysIcon}
+				label="En esta página"
+				value={rows.length}
+				description="Resultados visibles"
+				tone="blue"
+			/>
+			<AppointmentMetricCard
+				icon={ArrowPathIcon}
+				label="Actividad reciente"
+				value={recentActivityCount}
+				description="Últimas señales del paciente"
+				tone="green"
+			/>
+			<AppointmentMetricCard
+				icon={BuildingStorefrontIcon}
+				label="Con carrito activo"
+				value={activeCartCount}
+				description="Listas para agendar"
+				tone="sky"
+			/>
+			<AppointmentMetricCard
+				icon={ArchiveBoxIcon}
+				label="Elegibles limpieza"
+				value={cleanupCount}
+				description="Más de 30 días"
+				tone="violet"
+			/>
+		</div>
+	);
+}
+
+function AppointmentMetricCard({ icon: Icon, label, value, description, tone }) {
+	const toneClasses = {
+		orange: "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200",
+		blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200",
+		green: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200",
+		sky: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200",
+		violet: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-200",
+	};
+
+	return (
+		<div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+			<div className="flex items-start gap-3">
+				<div className={`rounded-xl border p-2 ${toneClasses[tone]}`}>
+					<Icon className="size-5" />
+				</div>
+				<div className="min-w-0">
+					<Text className="text-xs text-zinc-500">{label}</Text>
+					<div className="mt-1 text-2xl font-semibold text-zinc-950 dark:text-white">
+						{value ?? 0}
+					</div>
+					<Text className="text-xs text-zinc-500">{description}</Text>
+				</div>
+			</div>
+		</div>
 	);
 }
 
@@ -633,6 +795,91 @@ function LaboratoryAppointmentsList({
 }) {
 	if (laboratoryAppointments.data.length === 0) return <EmptyListCard />;
 
+	const pendingAppointments = laboratoryAppointments.data.filter(
+		(appointment) => !appointment.confirmed_at && !appointment.admin_is_paid,
+	);
+	const completedAppointments = laboratoryAppointments.data.filter(
+		(appointment) => appointment.confirmed_at || appointment.admin_is_paid,
+	);
+	const showingConfirmed = filters.completed === "true";
+	const groupedAppointments = showingConfirmed
+		? completedAppointments
+		: pendingAppointments;
+	const firstPendingId = pendingAppointments[0]?.id;
+	const firstCompletedId = completedAppointments[0]?.id;
+	const sectionLabelFor = (appointment) => {
+		if (!showingConfirmed && appointment.id === firstPendingId) {
+			return "Citas pendientes del periodo";
+		}
+
+		if (showingConfirmed && appointment.id === firstCompletedId) {
+			return "Citas confirmadas / pagadas";
+		}
+
+		return null;
+	};
+	const renderSectionLabel = (appointment) => {
+		const label = sectionLabelFor(appointment);
+
+		if (!label) {
+			return null;
+		}
+
+		return (
+			<div className="mb-3 flex items-center gap-2">
+				<span className="h-px w-5 bg-zinc-200 dark:bg-zinc-700" />
+				<Text className="text-xs font-semibold uppercase text-zinc-500">
+					{label}
+				</Text>
+			</div>
+		);
+	};
+	const interactionBadgesFor = (appointment) => {
+		const badges = [];
+
+		if (appointment.formatted_phone_call_intent_at) {
+			badges.push({
+				color: "sky",
+				label: "Intentó llamar",
+			});
+		}
+
+		if (appointment.has_left_callback_info) {
+			badges.push({
+				color: "emerald",
+				label: "Pref. llamada",
+			});
+		}
+
+		if (appointment.admin_has_whatsapp_intent) {
+			badges.push({
+				color: "famedic-lime",
+				label: "WhatsApp",
+			});
+		}
+
+		return badges;
+	};
+	const requestAgeBadgeClass = (appointment) => {
+		const createdAt = appointment.created_at ? Date.parse(appointment.created_at) : null;
+
+		if (!createdAt) {
+			return "!bg-rose-600 !text-white [&>[data-slot=icon]]:!fill-white";
+		}
+
+		const ageHours = (Date.now() - createdAt) / (1000 * 60 * 60);
+
+		if (ageHours >= 24) {
+			return "!bg-red-700 !text-white shadow-sm shadow-red-500/25 [&>[data-slot=icon]]:!fill-white";
+		}
+
+		if (ageHours >= 8) {
+			return "!bg-red-600 !text-white shadow-sm shadow-red-500/20 [&>[data-slot=icon]]:!fill-white";
+		}
+
+		return "!bg-orange-500 !text-white shadow-sm shadow-orange-500/20 [&>[data-slot=icon]]:!fill-white";
+	};
+
 	return (
 		<>
 			<SearchResultsWithFilters
@@ -647,16 +894,16 @@ function LaboratoryAppointmentsList({
 							<TableHeader>Cliente</TableHeader>
 							<TableHeader>Cita</TableHeader>
 							<TableHeader>Flujo / carrito</TableHeader>
-							<TableHeader>Pago</TableHeader>
 							<TableHeader>Última actividad</TableHeader>
-							<TableHeader>Intentó llamar</TableHeader>
-							<TableHeader>Pref. llamada</TableHeader>
+							<TableHeader>Interacciones</TableHeader>
 							<TableHeader>Laboratorio</TableHeader>
 						</TableRow>
 					</TableHead>
 					<TableBody>
-						{laboratoryAppointments.data.map(
-							(laboratoryAppointment) => (
+						{groupedAppointments.map((laboratoryAppointment) => {
+							const interactionBadges = interactionBadgesFor(laboratoryAppointment);
+
+							return (
 								<TableRow
 									key={laboratoryAppointment.id}
 									href={route(
@@ -667,6 +914,7 @@ function LaboratoryAppointmentsList({
 									dusk={`editLaboratoryAppointment-${laboratoryAppointment.id}`}
 								>
 									<TableCell>
+										{renderSectionLabel(laboratoryAppointment)}
 										<div className="flex items-center gap-2">
 											<Avatar
 												src={
@@ -689,8 +937,11 @@ function LaboratoryAppointmentsList({
 														</span>
 													</Badge>
 												) : (
-													<Badge color="slate">
-														<ClockIcon className="size-3 fill-famedic-dark dark:fill-famedic-light" />
+													<Badge
+														color="rose"
+														className={requestAgeBadgeClass(laboratoryAppointment)}
+													>
+														<ClockIcon className="size-3" />
 														<span className="text-xs">
 															Solicitada{" "}
 															{
@@ -755,19 +1006,6 @@ function LaboratoryAppointmentsList({
 									</TableCell>
 
 									<TableCell>
-										<Badge
-											color={
-												laboratoryAppointment.admin_payment_blocked
-													? "amber"
-													: "emerald"
-											}
-										>
-											{laboratoryAppointment.admin_payment_status_label ||
-												"—"}
-										</Badge>
-									</TableCell>
-
-									<TableCell>
 										{laboratoryAppointment.admin_last_user_activity_human ? (
 											<Text className="text-sm">
 												{
@@ -780,22 +1018,14 @@ function LaboratoryAppointmentsList({
 									</TableCell>
 
 									<TableCell>
-										{laboratoryAppointment.formatted_phone_call_intent_at ? (
-											<Text className="text-sm">
-												{
-													laboratoryAppointment.formatted_phone_call_intent_at
-												}
-											</Text>
-										) : (
-											<Text className="text-sm text-zinc-400">
-												—
-											</Text>
-										)}
-									</TableCell>
-
-									<TableCell>
-										{laboratoryAppointment.has_left_callback_info ? (
-											<Badge color="emerald">Sí</Badge>
+										{interactionBadges.length > 0 ? (
+											<div className="flex flex-wrap gap-1.5">
+												{interactionBadges.map((badge) => (
+													<Badge key={badge.label} color={badge.color}>
+														{badge.label}
+													</Badge>
+												))}
+											</div>
 										) : (
 											<Text className="text-sm text-zinc-400">
 												—
@@ -814,8 +1044,8 @@ function LaboratoryAppointmentsList({
 										/>
 									</TableCell>
 								</TableRow>
-							),
-						)}
+							);
+						})}
 					</TableBody>
 				</Table>
 			</PaginatedTable>
@@ -1050,7 +1280,7 @@ function LaboratoryAppointmentsPendingList({
 			)}
 
 			<PaginatedTable paginatedData={laboratoryAppointments}>
-				<Table className="[--gutter:theme(spacing.6)]">
+				<Table className="[--gutter:theme(spacing.4)] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
 					<TableHead>
 						<TableRow>
 							{canDeleteOld && (
@@ -1071,8 +1301,9 @@ function LaboratoryAppointmentsPendingList({
 								</TableHeader>
 							)}
 							<TableHeader>Paciente</TableHeader>
-							<TableHeader>Antigüedad</TableHeader>
-							<TableHeader>Actividad del carrito</TableHeader>
+							<TableHeader>Solicitud</TableHeader>
+							<TableHeader>Laboratorio</TableHeader>
+							<TableHeader>Estado operativo</TableHeader>
 							<TableHeader>Contacto</TableHeader>
 							<TableHeader className="text-right">
 								Acción
@@ -1120,14 +1351,19 @@ function LaboratoryAppointmentsPendingList({
 
 								<TableCell>
 									<div className="flex min-w-64 items-start gap-3">
-										<LaboratoryBrandCard
-											className="w-20 shrink-0 p-2"
-											src={
-												"/images/gda/GDA-" +
-												laboratoryAppointment.brand.toUpperCase() +
-												".png"
-											}
-										/>
+										<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-famedic-light/10 text-sm font-semibold text-famedic-dark dark:bg-famedic-light/20 dark:text-famedic-light">
+											{(
+												laboratoryAppointment.patient_full_name ||
+												laboratoryAppointment.customer?.user?.full_name ||
+												"?"
+											)
+												.split(" ")
+												.filter(Boolean)
+												.slice(0, 2)
+												.map((part) => part[0])
+												.join("")
+												.toUpperCase()}
+										</div>
 										<div className="min-w-0">
 											<Text>
 												<Strong>
@@ -1138,16 +1374,11 @@ function LaboratoryAppointmentsPendingList({
 												</Strong>
 											</Text>
 											<Text className="text-xs text-zinc-500">
-												Solicitud{" "}
-												{laboratoryAppointment.formatted_request_saved_at ||
-													laboratoryAppointment.formatted_created_at ||
-													"—"}
+												Cita #{laboratoryAppointment.id}
 											</Text>
-											{laboratoryAppointment.admin_cart_status_label && (
-												<Text className="text-xs text-zinc-500">
-													{
-														laboratoryAppointment.admin_cart_status_label
-													}
+											{laboratoryAppointment.customer?.user?.email && (
+												<Text className="truncate text-xs text-zinc-500">
+													{laboratoryAppointment.customer.user.email}
 												</Text>
 											)}
 										</div>
@@ -1155,19 +1386,50 @@ function LaboratoryAppointmentsPendingList({
 								</TableCell>
 
 								<TableCell>
-									<Badge
-										color={
-											laboratoryAppointment
-												.concierge_operational_age
-												?.color || "slate"
-										}
-									>
-										{
-											laboratoryAppointment
-												.concierge_operational_age
-												?.label || "—"
-										}
-									</Badge>
+									<div className="space-y-1">
+										<Text className="text-sm">
+											{laboratoryAppointment.formatted_request_saved_at ||
+												laboratoryAppointment.formatted_created_at ||
+												"—"}
+										</Text>
+										<Badge
+											color={
+												laboratoryAppointment
+													.concierge_operational_age
+													?.color || "slate"
+											}
+										>
+											{
+												laboratoryAppointment
+													.concierge_operational_age
+													?.label || "—"
+											}
+										</Badge>
+									</div>
+								</TableCell>
+
+								<TableCell>
+									<div className="flex items-center gap-3">
+										<LaboratoryBrandCard
+											className="w-20 shrink-0 p-2"
+											src={
+												"/images/gda/GDA-" +
+												laboratoryAppointment.brand.toUpperCase() +
+												".png"
+											}
+										/>
+										<div className="min-w-0">
+											<Text className="text-sm font-medium">
+												{laboratoryAppointment.laboratory_store?.name ||
+													"Sucursal pendiente"}
+											</Text>
+											{laboratoryAppointment.admin_cart_status_label && (
+												<Text className="text-xs text-zinc-500">
+													{laboratoryAppointment.admin_cart_status_label}
+												</Text>
+											)}
+										</div>
+									</div>
 								</TableCell>
 
 								<TableCell>
@@ -1218,7 +1480,7 @@ function LaboratoryAppointmentsPendingList({
 
 								<TableCell className="text-right">
 									<span
-										className="relative z-10 inline-flex"
+										className="relative z-10 inline-flex gap-2"
 										onClick={(event) => event.stopPropagation()}
 									>
 										<Button
@@ -1229,7 +1491,8 @@ function LaboratoryAppointmentsPendingList({
 											outline
 											className="whitespace-nowrap"
 										>
-											Gestionar
+											<EyeIcon />
+											Ver
 										</Button>
 									</span>
 								</TableCell>

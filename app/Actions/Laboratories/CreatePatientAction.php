@@ -5,6 +5,7 @@ namespace App\Actions\Laboratories;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Customer;
+use App\Support\GDA\GdaApiUrl;
 use Exception;
 use Illuminate\Support\Facades\Http;
 
@@ -12,7 +13,7 @@ class CreatePatientAction
 {
     public function __invoke(Customer $customer, Contact $contact, Address $address, string $brand): int
     {
-        $url = config('services.gda.url') . 'infogda-fullV3/patient';
+        $url = GdaApiUrl::endpoint('patient');
 
         $payload = [
             "header" => [

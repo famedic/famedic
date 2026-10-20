@@ -14,13 +14,14 @@ use App\Http\Requests\Admin\LaboratoryTests\StoreLaboratoryTestRequest;
 use App\Http\Requests\Admin\LaboratoryTests\UpdateLaboratoryTestRequest;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
+use App\Services\Admin\LaboratoryTestAdminStatsService;
 use Inertia\Inertia;
 
 class LaboratoryTestController extends Controller
 {
     public function index(IndexLaboratoryTestRequest $request)
     {
-        $filters = collect($request->only(['search', 'brand', 'category', 'requires_appointment']))->filter()->all();
+        $filters = collect($request->only(['search', 'brand', 'category', 'requires_appointment', 'needs_gda_review']))->filter()->all();
 
         $laboratoryTests = LaboratoryTest::query()
             ->with([
@@ -60,8 +61,10 @@ class LaboratoryTestController extends Controller
             elements: $request->elements,
             common_use: $request->common_use,
             requires_appointment: $request->requires_appointment,
-            public_price_cents: (int) round($request->public_price * 100),
-            famedic_price_cents: (int) round($request->famedic_price * 100),
+            needs_gda_review: $request->needs_gda_review,
+            gda_review_note: $request->gda_review_note,
+            public_price: (float) $request->public_price,
+            famedic_price: (float) $request->famedic_price,
             laboratory_test_category_id: $request->laboratory_test_category_id,
         );
 
@@ -69,12 +72,16 @@ class LaboratoryTestController extends Controller
             ->flashMessage('Prueba de laboratorio creada exitosamente');
     }
 
-    public function show(ShowLaboratoryTestRequest $request, LaboratoryTest $laboratoryTest)
-    {
+    public function show(
+        ShowLaboratoryTestRequest $request,
+        LaboratoryTest $laboratoryTest,
+        LaboratoryTestAdminStatsService $statsService,
+    ) {
         return Inertia::render('Admin/LaboratoryTest', [
             'laboratoryTest' => $laboratoryTest->load([
                 'laboratoryTestCategory' => fn ($query) => $query->withTrashed(),
             ]),
+            'stats' => $statsService->forTest($laboratoryTest),
             'brands' => LaboratoryBrand::brandsData(),
             'categories' => LaboratoryTestCategory::orderBy('name')->get(['id', 'name']),
         ]);
@@ -103,8 +110,10 @@ class LaboratoryTestController extends Controller
             elements: $request->elements,
             common_use: $request->common_use,
             requires_appointment: $request->requires_appointment,
-            public_price_cents: (int) round($request->public_price * 100),
-            famedic_price_cents: (int) round($request->famedic_price * 100),
+            needs_gda_review: $request->needs_gda_review,
+            gda_review_note: $request->gda_review_note,
+            public_price: (float) $request->public_price,
+            famedic_price: (float) $request->famedic_price,
             laboratory_test_category_id: $request->laboratory_test_category_id,
         );
 

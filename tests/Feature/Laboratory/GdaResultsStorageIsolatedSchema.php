@@ -31,6 +31,7 @@ trait GdaResultsStorageIsolatedSchema
             'laboratory_purchase_items',
             'laboratory_quotes',
             'laboratory_purchases',
+            'administrators',
             'customers',
             'users',
         ] as $table) {
@@ -53,6 +54,13 @@ trait GdaResultsStorageIsolatedSchema
             $table->softDeletes();
         });
 
+        Schema::create('administrators', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
         Schema::create('laboratory_purchases', function (Blueprint $table) {
             $table->id();
             $table->foreignId('customer_id')->constrained();
@@ -64,6 +72,7 @@ trait GdaResultsStorageIsolatedSchema
             $table->string('gda_code_http')->nullable();
             $table->string('gda_mensaje')->nullable();
             $table->text('gda_description')->nullable();
+            $table->string('gda_status')->nullable();
             $table->longText('pdf_base64')->nullable();
             $table->string('results')->nullable();
             $table->string('name');
@@ -273,6 +282,7 @@ trait GdaResultsStorageIsolatedSchema
             'laboratory_purchase_items',
             'laboratory_quotes',
             'laboratory_purchases',
+            'administrators',
             'customers',
             'users',
         ] as $table) {

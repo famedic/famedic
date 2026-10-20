@@ -43,6 +43,7 @@ export default function Dashboard({
 	topOverdue,
 	recentActivity,
 	canManageAutomaticReports = false,
+	navCounts = {},
 }) {
 	const [processing, setProcessing] = useState(false);
 	const onProcessingChange = useCallback((value) => setProcessing(value), []);
@@ -61,6 +62,7 @@ export default function Dashboard({
 					active="dashboard"
 					query={filters}
 					canManageAutomaticReports={canManageAutomaticReports}
+					navCounts={navCounts}
 				/>
 
 				<BillingDateRangeFilter

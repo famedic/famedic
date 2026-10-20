@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Auth\RecordUserLoginAction;
 use App\Actions\Marketing\AttachMarketingCampaignAttributionToCustomerAction;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -15,6 +16,7 @@ class PasswordlessAuthenticationController extends Controller
     public function __invoke(
         Request $request,
         AttachMarketingCampaignAttributionToCustomerAction $attachMarketingAttribution,
+        RecordUserLoginAction $recordUserLogin,
     )
     {
         $user = User::findOrFail($request->user);
@@ -26,6 +28,8 @@ class PasswordlessAuthenticationController extends Controller
         Auth::login($user);
 
         $request->session()->regenerate();
+
+        $recordUserLogin($user, $request);
 
         $this->attachMarketingAttribution($request, $user, $attachMarketingAttribution, 'passwordless_login');
 

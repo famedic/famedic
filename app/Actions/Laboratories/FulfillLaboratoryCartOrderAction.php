@@ -5,6 +5,8 @@ namespace App\Actions\Laboratories;
 use App\Actions\Marketing\RecordMarketingCampaignConversionAction;
 use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
+use App\Enums\LaboratoryGdaFailureOperation;
+use App\Services\Laboratory\LaboratoryGdaFailureLogService;
 use App\Enums\GdaOrderStatus;
 use App\Exceptions\GdaOrderDefinitiveException;
 use App\Exceptions\GdaOrderResultUncertainException;
@@ -52,6 +54,7 @@ class FulfillLaboratoryCartOrderAction
         private RecordMarketingCampaignConversionAction $recordMarketingCampaignConversionAction,
         private LaboratoryPreparationSummaryService $laboratoryPreparationSummaryService,
         private LaboratoryPreparationEligibility $laboratoryPreparationEligibility,
+        private LaboratoryGdaFailureLogService $laboratoryGdaFailureLogService,
     ) {}
 
     /**
@@ -191,6 +194,8 @@ class FulfillLaboratoryCartOrderAction
                 'pdf_base64' => $gdaQuotation['pdf_base64'] ?? null,
             ]);
 
+            $this->assertGdaConfirmedBeforeCompletingCart($laboratoryPurchase);
+
             if ($promoValidationToken !== null) {
                 $resolvedCartHash = $cartHash ?? $this->promoCodeService->buildLaboratoryCartHash(
                     $laboratoryCartItems,
@@ -310,10 +315,29 @@ class FulfillLaboratoryCartOrderAction
         return $laboratoryPurchase;
     }
 
+    private function assertGdaConfirmedBeforeCompletingCart(LaboratoryPurchase $laboratoryPurchase): void
+    {
+        $laboratoryPurchase->refresh();
+
+        if (
+            $laboratoryPurchase->gda_status !== GdaOrderStatus::Confirmed
+            || blank($laboratoryPurchase->gda_order_id)
+            || trim((string) $laboratoryPurchase->gda_order_id) === '0'
+            || blank($laboratoryPurchase->gda_consecutivo)
+        ) {
+            throw GdaOrderResultUncertainException::forInvariant(
+                'gda_completion_invariant_failed',
+                $laboratoryPurchase,
+            );
+        }
+    }
+
     private function markGdaUncertain(LaboratoryPurchase $purchase, GdaOrderResultUncertainException $safe): void
     {
         $purchase->forceFill(['gda_status' => GdaOrderStatus::Uncertain,
-            'has_gda_warning' => true, 'gda_warning_message' => $safe->getMessage()]);
+            'has_gda_warning' => true, 'gda_warning_message' => $safe->getMessage(),
+            'gda_code_http' => $safe->httpStatus(), 'gda_mensaje' => 'uncertain',
+            'gda_description' => $safe->reason()]);
         try {
             $purchase->save();
         } catch (Throwable) {
@@ -321,6 +345,11 @@ class FulfillLaboratoryCartOrderAction
             \App\Services\Laboratory\GdaPaymentDiagnostics::record('error', 'gda_uncertain_state_persistence_failed', $safe->context());
         }
         \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'gda_order_uncertain', $safe->context());
+        try {
+            $this->laboratoryGdaFailureLogService->recordUncertain($safe, LaboratoryGdaFailureOperation::Checkout, purchase: $purchase);
+        } catch (Throwable) {
+            \App\Services\Laboratory\GdaPaymentDiagnostics::record('error', 'gda_failure_log_persistence_failed', $safe->context());
+        }
     }
 
     private function dispatchLaboratoryPreparationSummaryGeneration(LaboratoryPurchase $laboratoryPurchase): void

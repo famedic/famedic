@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActiveCampaignController;
+use App\Http\Controllers\Admin\ActiveCampaignJobsController;
 use App\Http\Controllers\Admin\ActiveCampaignOperationsController;
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\ArchiveMarketingCampaignController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Admin\CouponConceptController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CouponCreationOtpController;
 use App\Http\Controllers\Admin\CustomerController;
+use App\Http\Controllers\Admin\CustomerTaxProfileController;
 use App\Http\Controllers\Admin\CustomerReferralController;
 use App\Http\Controllers\Admin\DocumentationController;
 use App\Http\Controllers\Admin\EfevooTokenController;
@@ -24,6 +26,7 @@ use App\Http\Controllers\Admin\GdaNotificationSimulatorController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\AutomaticReportsController as LaboratoryBillingAutomaticReportsController;
+use App\Http\Controllers\Admin\LaboratoryBilling\AwaitingSampleController;
 use App\Http\Controllers\Admin\LaboratoryBilling\DashboardController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ExportController as LaboratoryBillingExportController;
 use App\Http\Controllers\Admin\LaboratoryBilling\InvoicesController;
@@ -149,6 +152,12 @@ Route::prefix('admin')->middleware([
         });
         Route::resource('customers', CustomerController::class)->only(['index', 'show', 'destroy']);
         Route::post('customers/export', ExportCustomersController::class)->name('customers.export');
+        Route::post('customers/{customer}/tax-profiles/extract-data', [CustomerTaxProfileController::class, 'extractData'])
+            ->name('customers.tax-profiles.extract-data');
+        Route::post('customers/{customer}/tax-profiles', [CustomerTaxProfileController::class, 'store'])
+            ->name('customers.tax-profiles.store');
+        Route::put('customers/{customer}/tax-profiles/{tax_profile}', [CustomerTaxProfileController::class, 'update'])
+            ->name('customers.tax-profiles.update');
         Route::patch('users/{user}', [UserController::class, 'update'])->name('users.update');
         Route::post('users/{user}/verify-email', [UserController::class, 'verifyEmail'])->name('users.verify-email');
         Route::post('users/{user}/verify-phone', [UserController::class, 'verifyPhone'])->name('users.verify-phone');
@@ -171,6 +180,9 @@ Route::prefix('admin')->middleware([
         Route::resource('laboratory-stores', AdminLaboratoryStoreController::class)
             ->only(['index', 'show', 'update', 'destroy'])
             ->withTrashed(['show', 'update', 'destroy']);
+        Route::resource('laboratory-gda-failure-logs', \App\Http\Controllers\Admin\LaboratoryGdaFailureLogController::class)
+            ->only(['index', 'show'])
+            ->parameters(['laboratory-gda-failure-logs' => 'laboratoryGdaFailureLog']);
 
         Route::prefix('marketing-campaigns')->name('marketing-campaigns.')->group(function () {
             Route::get('product-search', MarketingCampaignProductSearchController::class)->name('product-search');
@@ -235,6 +247,14 @@ Route::prefix('admin')->middleware([
             'laboratory-purchases/{laboratory_purchase}/resend-confirmation-email',
             [LaboratoryPurchaseController::class, 'resendConfirmationEmail']
         )->name('laboratory-purchases.resend-confirmation-email');
+        Route::post(
+            'laboratory-purchases/{laboratory_purchase}/recover-gda',
+            [LaboratoryPurchaseController::class, 'recoverGda']
+        )->name('laboratory-purchases.recover-gda');
+        Route::post(
+            'laboratory-purchases/{laboratory_purchase}/replace-gda',
+            [LaboratoryPurchaseController::class, 'replaceGda']
+        )->name('laboratory-purchases.replace-gda');
         Route::post('laboratory-purchases/{laboratory_purchase}/invoice', InvoiceController::class)->name('laboratory-purchases.invoice');
         Route::post('laboratory-purchases/{laboratory_purchase}/results', ResultsController::class)->name('laboratory-purchases.results');
         Route::post('laboratory-purchases/{laboratory_purchase}/result-control/refresh', [LaboratoryPurchaseResultControlController::class, 'refresh'])
@@ -250,6 +270,7 @@ Route::prefix('admin')->middleware([
 
         Route::prefix('laboratory-billing')->name('laboratory-billing.')->group(function () {
             Route::get('/', DashboardController::class)->name('dashboard');
+            Route::get('/awaiting-sample', AwaitingSampleController::class)->name('awaiting-sample');
             Route::get('/requests', RequestsController::class)->name('requests');
             Route::get('/invoices', InvoicesController::class)->name('invoices');
             Route::get('/tax-profiles', [TaxProfilesBillingController::class, 'index'])->name('tax-profiles.index');
@@ -310,6 +331,7 @@ Route::prefix('admin')->middleware([
         Route::get('logs-general/manage', [LogsGeneralController::class, 'index'])->name('logs-general.manage');
         Route::get('logs-general/download', [LogsGeneralController::class, 'download'])->name('logs-general.download');
         Route::get('failed-jobs', [FailedJobsController::class, 'index'])->name('failed-jobs.index');
+        Route::get('activecampaign-jobs', [ActiveCampaignJobsController::class, 'index'])->name('activecampaign-jobs.index');
 
         // Asistente IA de monitoreo
         Route::get('monitoring-ai', [MonitoringAiController::class, 'index'])->name('monitoring-ai.index');
@@ -484,6 +506,9 @@ Route::prefix('admin')->middleware([
         Route::get('simulators/emails/preview/{type}', [EmailSimulatorController::class, 'preview'])
             ->where('type', '[a-z0-9_]+')
             ->name('simulators.emails.preview');
+        Route::post('simulators/emails/send/{type}', [EmailSimulatorController::class, 'send'])
+            ->where('type', '[a-z0-9_]+')
+            ->name('simulators.emails.send');
         Route::get('simulators/otp', [OtpSimulatorController::class, 'show'])->name('simulators.otp');
         Route::prefix('simulators/otp/{laboratory_purchase}')->name('simulators.otp.')->group(function () {
             Route::get('status', [OtpSimulatorController::class, 'status'])->name('status');

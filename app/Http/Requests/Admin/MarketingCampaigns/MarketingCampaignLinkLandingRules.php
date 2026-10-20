@@ -50,6 +50,20 @@ trait MarketingCampaignLinkLandingRules
             'primary_laboratory_test_ids.*' => ['integer'],
             'related_laboratory_test_ids' => ['nullable', 'array'],
             'related_laboratory_test_ids.*' => ['integer'],
+            'primary_product_images' => ['nullable', 'array'],
+            'primary_product_images.*.laboratory_test_id' => ['required', 'integer'],
+            'primary_product_images.*.upload_index' => ['nullable', 'integer', 'min:0'],
+            'primary_product_images.*.clear' => ['sometimes', 'boolean'],
+            'primary_product_images.*.alt' => ['nullable', 'string', 'max:180'],
+            'primary_product_image_uploads' => ['nullable', 'array', 'max:20'],
+            'primary_product_image_uploads.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'related_product_images' => ['nullable', 'array'],
+            'related_product_images.*.laboratory_test_id' => ['required', 'integer'],
+            'related_product_images.*.upload_index' => ['nullable', 'integer', 'min:0'],
+            'related_product_images.*.clear' => ['sometimes', 'boolean'],
+            'related_product_images.*.alt' => ['nullable', 'string', 'max:180'],
+            'related_product_image_uploads' => ['nullable', 'array', 'max:8'],
+            'related_product_image_uploads.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'related_category_ids' => ['nullable', 'array'],
             'related_category_ids.*' => ['integer'],
 
@@ -68,27 +82,22 @@ trait MarketingCampaignLinkLandingRules
     {
         $this->prepareLandingBooleans();
 
-        if (is_string($this->input('gallery_items'))) {
-            $decoded = json_decode($this->input('gallery_items'), true);
+        foreach (['gallery_items', 'editorial_items', 'primary_product_images', 'related_product_images'] as $field) {
             $this->merge([
-                'gallery_items' => is_array($decoded) ? $decoded : [],
+                $field => $this->decodeJsonArray($this->input($field)),
             ]);
         }
+    }
 
-        if (! is_array($this->input('gallery_items'))) {
-            $this->merge(['gallery_items' => []]);
+    protected function decodeJsonArray(mixed $value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+
+            return is_array($decoded) ? $decoded : [];
         }
 
-        if (is_string($this->input('editorial_items'))) {
-            $decoded = json_decode($this->input('editorial_items'), true);
-            $this->merge([
-                'editorial_items' => is_array($decoded) ? $decoded : [],
-            ]);
-        }
-
-        if (! is_array($this->input('editorial_items'))) {
-            $this->merge(['editorial_items' => []]);
-        }
+        return is_array($value) ? $value : [];
     }
 
     protected function prepareLandingBooleans(): void

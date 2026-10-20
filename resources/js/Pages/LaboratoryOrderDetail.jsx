@@ -74,6 +74,7 @@ export default function LaboratoryOrderDetail({
 	const [showShareDialog, setShowShareDialog] = useState(false);
 	const [otpPurchaseId, setOtpPurchaseId] = useState(null);
 	const [isProcessingResults, setIsProcessingResults] = useState(false);
+	const [resultsError, setResultsError] = useState(null);
 	const [otpStatus, setOtpStatus] = useState({ verified: false, expiresIn: 0 });
 	const pendingAfterOtpRef = useRef(null);
 
@@ -500,11 +501,45 @@ export default function LaboratoryOrderDetail({
 		if (!url) return;
 
 		setIsProcessingResults(true);
+		setResultsError(null);
 
 		void (async () => {
+			let resultsTab = null;
 			try {
 				if (!labResultsOtpRequired) {
-					openLabResultsInNewTabOrSame(url);
+					resultsTab = window.open("about:blank", "_blank");
+					if (!resultsTab) {
+						setResultsError("No pudimos abrir una nueva pestaña. Permite ventanas emergentes para ver tus resultados.");
+						return;
+					}
+					try {
+						resultsTab.opener = null;
+						resultsTab.document.write("<p>Obteniendo resultados...</p>");
+					} catch {
+						// ignore
+					}
+
+					const response = await fetch(url, {
+						method: "GET",
+						credentials: "same-origin",
+						headers: {
+							Accept: "application/json",
+							"X-Requested-With": "XMLHttpRequest",
+						},
+					});
+					const data = await response.json().catch(() => ({}));
+
+					if (!response.ok || !data?.url) {
+						try {
+							resultsTab.close();
+						} catch {
+							// ignore
+						}
+						setResultsError(data?.message || "No fue posible obtener tus resultados en este momento. Intenta nuevamente en unos minutos.");
+						return;
+					}
+
+					resultsTab.location.href = data.url;
 					return;
 				}
 
@@ -516,6 +551,13 @@ export default function LaboratoryOrderDetail({
 					const status = await fetchLabResultsOtpStatus(laboratoryPurchase.id);
 					setOtpStatus(status);
 				}
+			} catch {
+				try {
+					resultsTab?.close();
+				} catch {
+					// ignore
+				}
+				setResultsError("No fue posible obtener tus resultados en este momento. Intenta nuevamente en unos minutos.");
 			} finally {
 				setIsProcessingResults(false);
 			}
@@ -541,6 +583,7 @@ export default function LaboratoryOrderDetail({
 			structuredResultsData={structuredResults.data}
 			onRetryStructuredResults={structuredResults.reload}
 			purchaseId={laboratoryPurchase?.id}
+			errorMessage={resultsError}
 		/>
 	);
 
@@ -554,6 +597,9 @@ export default function LaboratoryOrderDetail({
 					<StudiesTable
 						studies={studies}
 						onOpenPreparationInstructions={goToPreparationInstructions}
+						hasSampleCollected={Boolean(
+							hasSampleCollected || resultControl?.has_sample_collected,
+						)}
 					/>
 					{laboratoryPurchase?.laboratory_appointment && (
 						<AppointmentSummary

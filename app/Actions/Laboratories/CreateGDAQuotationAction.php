@@ -5,6 +5,8 @@ namespace App\Actions\Laboratories;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Customer;
+use App\Support\GDA\GdaApiUrl;
+use Illuminate\Http\Client\Response;
 use App\Exceptions\GdaOrderDefinitiveException;
 use App\Exceptions\GdaOrderResultUncertainException;
 use App\Services\Laboratory\GdaOrderConfirmation;
@@ -35,9 +37,8 @@ class CreateGDAQuotationAction
             'environment' => app()->environment()
         ]);
 
-        $nonProductionEnvs = ['local', 'staging', 'testing'];
-        $currentEnv = strtolower((string) config('app.env'));
-        if (in_array($currentEnv, $nonProductionEnvs, true)) {
+        if (GdaApiUrl::shouldSimulateOrders()) {
+            $currentEnv = strtolower((string) config('app.env'));
             Log::warning('CreateGDAQuotationAction: Entorno no productivo, retornando ID simulado', [
                 'app_env' => config('app.env'),
                 'normalized_env' => $currentEnv,
@@ -47,7 +48,7 @@ class CreateGDAQuotationAction
             return ['id' => strtoupper(uniqid('GDA')), 'infogda_consecutivo' => random_int(10000000, 99999999)];
         }
 
-        $url = config('services.gda.url') . 'infogda-fullV3/service-request';
+        $url = GdaApiUrl::endpoint('service-request');
         
         Log::info('CreateGDAQuotationAction: URL configurada', ['url' => $url]);
 
@@ -93,10 +94,13 @@ class CreateGDAQuotationAction
 
         try {
             $response = Http::post($url, $payload);
-            $responseData = $response->json();
-            if (! $response->successful() || ! is_array($responseData) || ! GdaOrderConfirmation::valid($responseData)) {
-                throw new GdaOrderResultUncertainException;
+            $responseData = $this->decodeJsonResponse($response, (int) $laboratoryPurchaseId);
+            if (! $response->successful()) {
+                throw GdaOrderResultUncertainException::forResponse(
+                    'gda_http_failed', (int) $laboratoryPurchaseId, $response->status(), $this->summarizeResponse($responseData),
+                );
             }
+            $this->assertSemanticSuccess($responseData, (int) $laboratoryPurchaseId, $response->status());
             return $responseData;
         } catch (Throwable $exception) {
             $safe = $exception instanceof GdaOrderResultUncertainException
@@ -104,6 +108,61 @@ class CreateGDAQuotationAction
             \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'gda_order_request_uncertain', $safe->context());
             throw $safe;
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeJsonResponse(Response $response, int $laboratoryPurchaseId): array
+    {
+        $responseData = $response->json();
+
+        if (! is_array($responseData) || $responseData === []) {
+            throw GdaOrderResultUncertainException::forResponse(
+                reason: 'gda_empty_or_malformed_json',
+                laboratoryPurchaseId: $laboratoryPurchaseId,
+                httpStatus: $response->status(),
+                responseSummary: [
+                    'has_body' => trim($response->body()) !== '',
+                    'body_length' => strlen($response->body()),
+                ],
+            );
+        }
+
+        return $responseData;
+    }
+
+    /**
+     * @param  array<string, mixed>  $responseData
+     */
+    private function assertSemanticSuccess(array $responseData, int $laboratoryPurchaseId, int $httpStatus): void
+    {
+        if (! GdaOrderConfirmation::valid($responseData)) {
+            throw GdaOrderResultUncertainException::forResponse(
+                reason: 'gda_missing_required_identifiers',
+                laboratoryPurchaseId: $laboratoryPurchaseId,
+                httpStatus: $httpStatus,
+                responseSummary: $this->summarizeResponse($responseData),
+            );
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $responseData
+     * @return array<string, mixed>
+     */
+    private function summarizeResponse(array $responseData): array
+    {
+        return [
+            'id' => $responseData['id'] ?? null,
+            'infogda_consecutivo' => $responseData['infogda_consecutivo'] ?? null,
+            'gda_code_http' => $responseData['gda_code_http'] ?? data_get($responseData, 'GDA_menssage.codeHttp'),
+            'gda_mensaje' => $responseData['gda_mensaje'] ?? data_get($responseData, 'GDA_menssage.mensaje'),
+            'gda_description' => $responseData['gda_description']
+                ?? data_get($responseData, 'GDA_menssage.descripcion'),
+            'gda_status' => $responseData['status'] ?? null,
+            'has_pdf_base64' => filled($responseData['pdf_base64'] ?? null),
+        ];
     }
 
     private function buildCoding(array $laboratoryTestsDetail)

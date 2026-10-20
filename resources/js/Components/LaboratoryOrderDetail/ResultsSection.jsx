@@ -7,9 +7,10 @@ import {
 	patientResultStatusColor,
 	patientResultStatusLabel,
 	patientResultStatusMessage,
+	resolveEffectiveResultStatus,
 } from "@/lib/laboratoryPurchaseResultUi";
 import { STRUCTURED_RESULTS_FETCH_STATE } from "@/lib/laboratoryStructuredPatientResults";
-import { ArrowPathIcon, ClockIcon, EyeIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, FlagIcon, ClockIcon, EyeIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 
 function formatCountdown(totalSeconds = 0) {
 	const safe = Math.max(0, Number(totalSeconds) || 0);
@@ -32,6 +33,7 @@ export default function ResultsSection({
 	structuredResultsData = null,
 	onRetryStructuredResults = null,
 	purchaseId = null,
+	errorMessage = null,
 }) {
 	const statusLabel = patientResultStatusLabel(resultControl, hasResults);
 	const statusColor = patientResultStatusColor(resultControl, hasResults);
@@ -41,6 +43,9 @@ export default function ResultsSection({
 		structuredResultsStatus === STRUCTURED_RESULTS_FETCH_STATE.AVAILABLE &&
 		Boolean(structuredResultsData);
 	const pdfButtonLabel = hasStructuredResults ? "Ver resultado original" : defaultButtonLabel;
+	const effectiveStatus = resolveEffectiveResultStatus(resultControl, hasResults);
+	const compactStatusBadge = effectiveStatus === "manual_review" || effectiveStatus === "error";
+	const compactStatusLabel = "Señal de seguimiento";
 
 	return (
 		<div className="space-y-4">
@@ -48,10 +53,19 @@ export default function ResultsSection({
 				<h3 className="break-words text-base font-semibold text-zinc-900 dark:text-white">Resultados</h3>
 				<div className="flex flex-wrap items-center gap-2">
 					{isNewResult && <NewResultBadge compact />}
-					<Badge color={statusColor}>{statusLabel}</Badge>
+					<Badge
+						color={statusColor}
+						className={compactStatusBadge ? "size-6 justify-center rounded-full p-0" : undefined}
+						title={compactStatusBadge ? compactStatusLabel : statusLabel}
+						aria-label={compactStatusBadge ? compactStatusLabel : statusLabel}
+					>
+						{compactStatusBadge ? <FlagIcon className="size-3.5" /> : statusLabel}
+					</Badge>
 				</div>
 			</div>
-			<Text className="text-sm text-zinc-600 dark:text-slate-400">{statusMessage}</Text>
+			{statusMessage ? (
+				<Text className="text-sm text-zinc-600 dark:text-slate-400">{statusMessage}</Text>
+			) : null}
 
 			{hasResults ? (
 				<>
@@ -106,10 +120,10 @@ export default function ResultsSection({
 						color="famedic-lime"
 						className="w-full justify-center"
 					>
-						{isProcessing && otpRequired ? (
+						{isProcessing ? (
 							<>
 								<ArrowPathIcon className="size-4 animate-spin" />
-								Validando...
+								Obteniendo resultados...
 							</>
 						) : (
 							<>
@@ -118,12 +132,13 @@ export default function ResultsSection({
 							</>
 						)}
 					</Button>
+					{errorMessage ? (
+						<Text className="text-sm text-red-600 dark:text-red-300" role="alert">
+							{errorMessage}
+						</Text>
+					) : null}
 				</>
-			) : (
-				<Text className="text-sm text-zinc-500 dark:text-slate-400">
-					Aún no hay resultados disponibles para esta orden.
-				</Text>
-			)}
+			) : null}
 		</div>
 	);
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Laboratories\OrderAction;
+use App\Enums\GdaOrderStatus;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\CouponApplicationException;
 use App\Exceptions\EfevooPaymentException;
@@ -86,9 +87,13 @@ class LaboratoryPurchaseController extends Controller
                 ->withErrors(['payment_method' => 'No cuentas con suficiente Saldo a la Vista en tu caja de ahorro para realizar el pago.']);
         }
 
-        if ($laboratoryPurchase->gda_status === \App\Enums\GdaOrderStatus::Uncertain) {
-            return redirect()->route('laboratory-purchases.show', $laboratoryPurchase)
-                ->flashMessage('Tu pago fue recibido. Estamos validando la creación de tu orden de laboratorio.', 'warning');
+        if ($laboratoryPurchase->gda_status === GdaOrderStatus::Uncertain) {
+            return redirect()->route('laboratory-purchases.show', [
+                'laboratory_purchase' => $laboratoryPurchase,
+            ])->flashMessage(
+                'Tu pago fue recibido. Estamos validando la creación de tu orden de laboratorio.',
+                'warning',
+            );
         }
 
         session()->flash('confetti', true);
@@ -239,7 +244,7 @@ class LaboratoryPurchaseController extends Controller
             'filterOptions' => [
                 'study_statuses' => [
                     ['value' => 'all', 'label' => 'Todos los estados'],
-                    ['value' => 'in_progress', 'label' => 'En proceso'],
+                    ['value' => 'in_progress', 'label' => 'Pendiente de toma de muestra'],
                     ['value' => 'sample_taken', 'label' => 'Muestra tomada'],
                     ['value' => 'results_ready', 'label' => 'Resultados listos'],
                     ['value' => 'cancelled', 'label' => 'Cancelados'],
@@ -336,23 +341,20 @@ class LaboratoryPurchaseController extends Controller
         $laboratoryPurchase->hydrateLaboratoryPurchaseItemsFeatureLists();
 
         $hasStoredResults = ! empty($laboratoryPurchase->results);
-        $hasSampleCollected = false;
+        $hasSampleCollected = $laboratoryPurchase->hasSampleCollected();
         $hasResultsAvailable = false;
         $latestSampleCollectionAt = null;
         $latestResultsAt = null;
         $hasResultsPdfCached = false;
 
+        $latestSampleCollection = $laboratoryPurchase->latestSampleCollection();
+        $latestSampleCollectionAt = $latestSampleCollection?->created_at
+            ? localizedDate($latestSampleCollection->created_at)->isoFormat('D MMM Y h:mm a')
+            : null;
+
         if (! $hasStoredResults) {
-            $hasSampleCollected = $laboratoryPurchase->hasSampleCollected();
             $hasResultsAvailable = $laboratoryPurchase->hasResultsAvailable();
-
-            $latestSampleCollection = $laboratoryPurchase->latestSampleCollection();
             $latestResultsNotification = $laboratoryPurchase->latestResultsNotification();
-
-            $latestSampleCollectionAt = $latestSampleCollection?->created_at
-                ? localizedDate($latestSampleCollection->created_at)->isoFormat('D MMM Y h:mm a')
-                : null;
-
             $hasResultsPdfCached = (bool) $latestResultsNotification?->hasResults();
         }
 

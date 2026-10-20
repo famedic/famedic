@@ -88,8 +88,11 @@ export function Listbox({
 			</Headless.ListboxButton>
 			<Headless.ListboxOptions
 				transition
+				modal={false}
 				anchor="selection start"
 				className={clsx(
+					// Above Catalyst Dialog (z-[100001]) when portaled via anchor
+					"z-[100002]",
 					// Anchor positioning
 					"[--anchor-offset:-1.625rem] [--anchor-padding:theme(spacing.4)] sm:[--anchor-offset:-1.375rem]",
 					// Base styles

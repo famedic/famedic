@@ -8,12 +8,13 @@ export default function ResultsAndExport({
 	filters,
 	exportUrl,
 	exportTitle,
+	hideAppliedFilters = false,
 }) {
 	return (
 		<>
 			<SearchResultsWithFilters
 				paginatedData={paginatedData}
-				filterBadges={filterBadges}
+				filterBadges={hideAppliedFilters ? [] : filterBadges}
 			/>
 			<ExportDialog
 				canExport={canExport}

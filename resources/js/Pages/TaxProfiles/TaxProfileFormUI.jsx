@@ -6,12 +6,18 @@ import {
 	ShieldCheckIcon,
 	BoltIcon,
 	BuildingLibraryIcon,
+	CpuChipIcon,
+	InformationCircleIcon,
+	PencilSquareIcon,
+	SparklesIcon,
+	UserIcon,
 	XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 const STEPPER_STEPS = [
-	{ id: 1, label: "Método" },
-	{ id: 2, label: "Revisar y guardar" },
+	{ id: 1, label: "Persona física" },
+	{ id: 2, label: "Método" },
+	{ id: 3, label: "Revisar y guardar" },
 ];
 
 export function TaxProfileModalCloseButton({ onClose, disabled }) {
@@ -119,6 +125,7 @@ export function TaxProfileEntryModeCard({
 	features,
 	ctaLabel,
 	accent = "blue",
+	methodBadge = null,
 }) {
 	const accentStyles = {
 		blue: {
@@ -127,6 +134,8 @@ export function TaxProfileEntryModeCard({
 			icon: "bg-blue-500/15 text-blue-600 ring-blue-500/25 dark:text-blue-300",
 			check: "bg-blue-600 text-white dark:bg-blue-500",
 			cta: "text-blue-700 dark:text-blue-300",
+			badge:
+				"bg-blue-100 text-blue-700 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-200 dark:ring-blue-400/20",
 		},
 		emerald: {
 			selected:
@@ -134,6 +143,8 @@ export function TaxProfileEntryModeCard({
 			icon: "bg-emerald-500/15 text-emerald-600 ring-emerald-500/25 dark:text-emerald-300",
 			check: "bg-emerald-600 text-white dark:bg-emerald-500",
 			cta: "text-emerald-700 dark:text-emerald-300",
+			badge:
+				"bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-400/20",
 		},
 	};
 
@@ -175,6 +186,13 @@ export function TaxProfileEntryModeCard({
 					<Icon className="h-5 w-5" aria-hidden />
 				</span>
 				<div className="min-w-0 flex-1">
+					{methodBadge && (
+						<TaxProfileMethodBadge
+							label={methodBadge.label}
+							icon={methodBadge.icon}
+							className={styles.badge}
+						/>
+					)}
 					<h3 className="text-base font-semibold leading-snug text-slate-900 dark:text-white">
 						{title}
 					</h3>
@@ -214,6 +232,22 @@ export function TaxProfileEntryModeCard({
 	);
 }
 
+function TaxProfileMethodBadge({ label, icon, className }) {
+	const Icon = icon === "manual" ? PencilSquareIcon : icon === "chip" ? CpuChipIcon : SparklesIcon;
+
+	return (
+		<span
+			className={clsx(
+				"mb-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none ring-1",
+				className,
+			)}
+		>
+			<Icon className="h-3.5 w-3.5" aria-hidden />
+			{label}
+		</span>
+	);
+}
+
 export function TaxProfileCompactAlert({ children, tone = "amber" }) {
 	const tones = {
 		amber: {
@@ -233,6 +267,7 @@ export function TaxProfileCompactAlert({ children, tone = "amber" }) {
 		},
 	};
 	const styles = tones[tone] ?? tones.amber;
+	const AlertIcon = tone === "blue" ? InformationCircleIcon : ExclamationTriangleInlineIcon;
 
 	return (
 		<div
@@ -248,20 +283,7 @@ export function TaxProfileCompactAlert({ children, tone = "amber" }) {
 					styles.icon,
 				)}
 			>
-				<svg
-					className="h-3.5 w-3.5"
-					fill="none"
-					viewBox="0 0 24 24"
-					strokeWidth={2}
-					stroke="currentColor"
-					aria-hidden
-				>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
-					/>
-				</svg>
+				<AlertIcon className="h-3.5 w-3.5" aria-hidden />
 			</span>
 			<div className={clsx("text-xs leading-relaxed sm:text-sm", styles.text)}>
 				{children}
@@ -270,12 +292,105 @@ export function TaxProfileCompactAlert({ children, tone = "amber" }) {
 	);
 }
 
+function ExclamationTriangleInlineIcon({ className, ...props }) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			viewBox="0 0 24 24"
+			strokeWidth={2}
+			stroke="currentColor"
+			{...props}
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+			/>
+		</svg>
+	);
+}
+
 export function TaxProfilePhysicalPersonNotice() {
 	return (
-		<TaxProfileCompactAlert tone="blue">
-			Por el momento, Famedic solo permite registrar perfiles fiscales de personas
-			físicas.
-		</TaxProfileCompactAlert>
+		<div
+			className="flex items-start gap-3 rounded-lg border border-blue-100 bg-blue-50/70 px-4 py-3 text-blue-900 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100"
+			role="note"
+		>
+			<span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
+				<CheckIcon className="h-3.5 w-3.5" strokeWidth={3} aria-hidden />
+			</span>
+			<p className="text-sm leading-relaxed">
+				Famedic puede facturar perfiles fiscales registrados como persona física.
+			</p>
+		</div>
+	);
+}
+
+export function TaxProfilePersonTypeCard({
+	selected,
+	onSelect,
+	title,
+	subtitle,
+	tone = "blue",
+}) {
+	const toneStyles = {
+		blue: {
+			selected:
+				"border-blue-500 bg-blue-50/80 ring-1 ring-blue-500/30 dark:border-blue-400 dark:bg-blue-500/10 dark:ring-blue-400/30",
+			icon: "bg-blue-500/15 text-blue-600 ring-blue-500/25 dark:text-blue-300",
+			check: "bg-blue-600 text-white dark:bg-blue-500",
+		},
+		slate: {
+			selected:
+				"border-slate-400 bg-slate-50 ring-1 ring-slate-400/30 dark:border-slate-500 dark:bg-slate-800/70 dark:ring-slate-500/30",
+			icon: "bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600",
+			check: "bg-slate-700 text-white dark:bg-slate-500",
+		},
+	};
+	const styles = toneStyles[tone] ?? toneStyles.blue;
+
+	return (
+		<button
+			type="button"
+			onClick={onSelect}
+			aria-pressed={selected}
+			className={clsx(
+				"group relative flex h-full min-h-[7.5rem] w-full items-start gap-3 rounded-xl border p-4 text-left transition-all duration-200 sm:p-5",
+				"border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80",
+				"dark:border-slate-700 dark:bg-slate-800/40 dark:hover:border-slate-600 dark:hover:bg-slate-800/70",
+				"focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
+				selected ? styles.selected : "shadow-sm",
+			)}
+		>
+			<span
+				className={clsx(
+					"flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1",
+					styles.icon,
+				)}
+			>
+				<UserIcon className="h-5 w-5" aria-hidden />
+			</span>
+			<span className="min-w-0 flex-1">
+				<span className="block text-base font-semibold leading-snug text-slate-900 dark:text-white">
+					{title}
+				</span>
+				<span className="mt-1 block text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+					{subtitle}
+				</span>
+			</span>
+			{selected && (
+				<span
+					className={clsx(
+						"absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full",
+						styles.check,
+					)}
+					aria-hidden
+				>
+					<CheckIcon className="h-3.5 w-3.5" strokeWidth={3} />
+				</span>
+			)}
+		</button>
 	);
 }
 

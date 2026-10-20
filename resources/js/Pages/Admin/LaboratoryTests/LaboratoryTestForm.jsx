@@ -36,6 +36,8 @@ export default function LaboratoryTestForm({
 		elements: laboratoryTest?.elements ?? "",
 		common_use: laboratoryTest?.common_use ?? "",
 		requires_appointment: laboratoryTest?.requires_appointment ?? false,
+		needs_gda_review: laboratoryTest?.needs_gda_review ?? false,
+		gda_review_note: laboratoryTest?.gda_review_note ?? "",
 		public_price: laboratoryTest?.public_price_cents
 			? (laboratoryTest.public_price_cents / 100).toFixed(2)
 			: "",
@@ -379,6 +381,48 @@ export default function LaboratoryTestForm({
 							</ErrorMessage>
 						)}
 					</SwitchField>
+
+					<SwitchField>
+						<Label>Revisar con GDA</Label>
+						<Description>
+							Marca estudios con problemas de convenio o que
+							requieren validación con GDA antes de venderse.
+						</Description>
+						<Switch
+							checked={data.needs_gda_review}
+							onChange={(value) =>
+								setData("needs_gda_review", value)
+							}
+						/>
+						{errors.needs_gda_review && (
+							<ErrorMessage>
+								{errors.needs_gda_review}
+							</ErrorMessage>
+						)}
+					</SwitchField>
+
+					{data.needs_gda_review && (
+						<Field>
+							<Label>Nota de revisión GDA</Label>
+							<Textarea
+								value={data.gda_review_note}
+								onChange={(e) =>
+									setData("gda_review_note", e.target.value)
+								}
+								placeholder="Ej: Los estudios de la orden no están en convenio"
+								rows={3}
+							/>
+							<Description>
+								Detalle opcional del problema (convenio, precio,
+								etc.).
+							</Description>
+							{errors.gda_review_note && (
+								<ErrorMessage>
+									{errors.gda_review_note}
+								</ErrorMessage>
+							)}
+						</Field>
+					)}
 				</FieldGroup>
 			</Fieldset>
 

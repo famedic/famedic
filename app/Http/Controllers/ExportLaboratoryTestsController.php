@@ -14,6 +14,7 @@ class ExportLaboratoryTestsController extends Controller
             'brand',
             'category',
             'requires_appointment',
+            'needs_gda_review',
         ]))->filter()->all();
 
         ProcessLaboratoryTestsSpreadsheetExport::dispatch(

@@ -133,6 +133,74 @@ class CouponApplicationService
         $this->assertCouponApplicable($coupon, $assignment, $purchaseTotalCents);
     }
 
+    /**
+     * Validación para recuperación admin de pedidos GDA: el saldo debe cubrir el total,
+     * aunque sea ligeramente mayor (p. ej. crédito de $2,915 en pedido de $2,913.23).
+     *
+     * @throws CouponApplicationException
+     */
+    public function validateApplicationForGdaRecovery(User $user, int $couponId, int $purchaseTotalCents): void
+    {
+        $coupon = Coupon::query()->findOrFail($couponId);
+
+        $assignment = CouponUser::query()
+            ->where('coupon_id', $coupon->id)
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+
+        $this->assertCouponApplicableForGdaRecovery($coupon, $assignment, $purchaseTotalCents);
+    }
+
+    /**
+     * Aplica saldo a favor en recuperación GDA: descuenta solo el total del pedido.
+     *
+     * @return int Monto descontado en centavos
+     */
+    public function applyForLaboratoryPurchaseGdaRecovery(
+        User $user,
+        LaboratoryPurchase $purchase,
+        int $couponId,
+    ): int {
+        return DB::transaction(function () use ($user, $purchase, $couponId) {
+            $coupon = Coupon::query()->whereKey($couponId)->lockForUpdate()->firstOrFail();
+
+            $assignment = CouponUser::query()
+                ->where('coupon_id', $coupon->id)
+                ->where('user_id', $user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $purchaseTotalCents = (int) $purchase->total_cents;
+
+            $this->assertCouponApplicableForGdaRecovery($coupon, $assignment, $purchaseTotalCents);
+
+            $discountCents = min((int) $coupon->remaining_cents, $purchaseTotalCents);
+            $coupon->remaining_cents = max(0, (int) $coupon->remaining_cents - $discountCents);
+            $coupon->save();
+
+            if ($coupon->remaining_cents === 0) {
+                $assignment->used_at = now();
+                $assignment->save();
+            }
+
+            $transaction = CouponTransaction::create([
+                'coupon_id' => $coupon->id,
+                'user_id' => $user->id,
+                'purchase_type' => CouponPurchaseType::Lab,
+                'purchase_id' => $purchase->id,
+                'amount_used_cents' => $discountCents,
+            ]);
+
+            $purchase->coupon_discount_cents = $discountCents;
+            $purchase->save();
+
+            app(\App\Services\ActiveCampaign\CouponActiveCampaignDispatcher::class)
+                ->creditRedeemed($coupon, $assignment, $transaction, $user, $purchase);
+
+            return $discountCents;
+        });
+    }
+
     public function resolveDiscountCents(Coupon $coupon, int $purchaseTotalCents): int
     {
         if ($coupon->type === CouponType::Coupon) {
@@ -193,6 +261,61 @@ class CouponApplicationService
 
             throw new CouponApplicationException(
                 "Para usar tu {$label} necesitas una compra mínima de ".$coupon->formatted_min_purchase.'.'
+            );
+        }
+    }
+
+    private function assertCouponApplicableForGdaRecovery(
+        Coupon $coupon,
+        CouponUser $assignment,
+        int $purchaseTotalCents,
+    ): void {
+        if ($coupon->type !== CouponType::Balance) {
+            throw new CouponApplicationException('Solo se puede usar saldo a favor en la recuperación GDA.');
+        }
+
+        if (! $coupon->is_active) {
+            throw new CouponApplicationException('El crédito no está activo.');
+        }
+
+        if ($coupon->approval_status !== CouponApprovalStatus::Active) {
+            throw new CouponApplicationException('El crédito no está autorizado.');
+        }
+
+        if ($assignment->used_at !== null) {
+            throw new CouponApplicationException('Este crédito ya fue utilizado.');
+        }
+
+        if ($coupon->remaining_cents <= 0) {
+            throw new CouponApplicationException('El crédito no tiene saldo disponible.');
+        }
+
+        if ($coupon->remaining_cents < $purchaseTotalCents) {
+            throw new CouponApplicationException(
+                'El saldo a favor ('.formattedCentsPrice((int) $coupon->remaining_cents)
+                .') no cubre el total del pedido ('.formattedCentsPrice($purchaseTotalCents).').'
+            );
+        }
+
+        if ($coupon->isNotYetValid()) {
+            $fecha = localizedDate($coupon->valid_from)?->isoFormat('D [de] MMMM [de] YYYY');
+
+            throw new CouponApplicationException(
+                "El saldo a favor estará disponible a partir del {$fecha}."
+            );
+        }
+
+        if ($coupon->isExpired()) {
+            $fecha = localizedDate($coupon->expires_at)?->isoFormat('D [de] MMMM [de] YYYY');
+
+            throw new CouponApplicationException(
+                "El saldo a favor venció el {$fecha}."
+            );
+        }
+
+        if (! $coupon->meetsMinimumPurchase($purchaseTotalCents)) {
+            throw new CouponApplicationException(
+                'Para usar este saldo necesitas una compra mínima de '.$coupon->formatted_min_purchase.'.'
             );
         }
     }

@@ -10,7 +10,10 @@ import {
 	toDatetimeLocalValue,
 	fromDatetimeLocalValue,
 } from "../Components/MarketingCampaignDateRangeFields";
-import { buildGalleryPayload } from "../Components/marketingCampaignLinkBrand";
+import {
+	buildGalleryPayload,
+	buildProductImagePayload,
+} from "../Components/marketingCampaignLinkBrand";
 
 function normalizeEnum(value, fallback = "") {
 	if (value == null) return fallback;
@@ -22,9 +25,12 @@ function normalizeEnum(value, fallback = "") {
 
 function normalizeLandingForm(form, primaryProducts, relatedProducts, relatedCategoryItems, galleryItems) {
 	const galleryPayload = buildGalleryPayload(galleryItems);
+	const primaryProductImagePayload = buildProductImagePayload(primaryProducts);
+	const relatedProductImagePayload = buildProductImagePayload(relatedProducts);
 
 	return {
 		...form,
+		_method: "put",
 		starts_at: fromDatetimeLocalValue(form.starts_at),
 		ends_at: fromDatetimeLocalValue(form.ends_at),
 		public_title: form.public_title || null,
@@ -54,6 +60,10 @@ function normalizeLandingForm(form, primaryProducts, relatedProducts, relatedCat
 			form.hero_image_source === "upload" ? form.hero_image || null : null,
 		primary_laboratory_test_ids: primaryProducts.map((item) => item.id),
 		related_laboratory_test_ids: relatedProducts.map((item) => item.id),
+		primary_product_images: JSON.stringify(primaryProductImagePayload.product_images),
+		primary_product_image_uploads: primaryProductImagePayload.product_image_uploads,
+		related_product_images: JSON.stringify(relatedProductImagePayload.product_images),
+		related_product_image_uploads: relatedProductImagePayload.product_image_uploads,
 		related_category_ids: relatedCategoryItems.map((item) => item.id),
 		gallery_items: JSON.stringify(galleryPayload.gallery_items),
 		gallery_uploads: galleryPayload.gallery_uploads,
@@ -104,7 +114,7 @@ export default function MarketingCampaignLinksEdit({
 		initialGalleryItems(link.gallery_images || []),
 	);
 
-	const { data, setData, put, processing, errors, transform } = useForm({
+	const { data, setData, post, processing, errors, transform } = useForm({
 		name: link.name || "",
 		slug: link.slug || "",
 		status: normalizeEnum(link.status, "draft"),
@@ -151,7 +161,7 @@ export default function MarketingCampaignLinksEdit({
 	const submit = (e) => {
 		e.preventDefault();
 		if (!processing) {
-			put(
+			post(
 				route("admin.marketing-campaigns.links.update", {
 					marketing_campaign: campaign.id,
 					marketing_campaign_link: link.id,
@@ -181,6 +191,11 @@ export default function MarketingCampaignLinksEdit({
 		.filter((item) => item.url);
 	const previewProducts = primaryProducts.map((product) => ({
 		...product,
+		image_url:
+			product.image_preview_url ||
+			product.image_url ||
+			product.image ||
+			null,
 		price_label: formatPrice(product),
 	}));
 

@@ -3,6 +3,7 @@ const FILE_KEYS = new Set([
 	"heroUpload",
 	"gallery_uploads",
 	"file",
+	"image_file",
 ]);
 
 function stripFiles(value) {

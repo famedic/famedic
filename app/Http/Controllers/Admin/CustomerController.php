@@ -2,13 +2,29 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Admin\Customers\BuildCustomerInteractionChartAction;
+use App\Actions\Admin\Customers\BuildCustomerMonitorExtrasAction;
 use App\Actions\BuildDailyCountChartDataAction;
+use App\Data\StatesMexico;
+use App\Enums\Gender;
+use App\Enums\MonitoringCartStatus;
+use App\Enums\MonitoringCartType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\Customers\IndexCustomerRequest;
 use App\Http\Requests\Admin\Customers\ShowCustomerRequest;
+use App\Models\ActiveCampaignDispatch;
+use App\Models\Cart;
+use App\Models\Contact;
 use App\Models\Customer;
+use App\Models\EfevooToken;
+use App\Models\EfevooTransaction;
 use App\Models\FamilyAccount;
+use App\Models\LaboratoryNotification;
 use App\Models\OdessaAfiliateAccount;
+use App\Models\PaymentAttempt;
+use App\Services\ActiveCampaign\ActiveCampaignContactsService;
+use App\Services\ActiveCampaign\ActiveCampaignMirrorService;
+use App\Services\UserPurchases\PendingPurchasesQuery;
 use Carbon\Carbon;
 use Inertia\Inertia;
 
@@ -74,26 +90,256 @@ class CustomerController extends Controller
         ]);
     }
 
-    public function show(ShowCustomerRequest $request, Customer $customer)
-    {
-        $customer->load(['user.referrer', 'customerable', 'familyMembers.customer.user']);
+    public function show(
+        ShowCustomerRequest $request,
+        Customer $customer,
+        PendingPurchasesQuery $pendingPurchasesQuery,
+        BuildCustomerInteractionChartAction $buildCustomerInteractionChartAction,
+        BuildCustomerMonitorExtrasAction $buildCustomerMonitorExtrasAction,
+        ActiveCampaignContactsService $activeCampaignContactsService,
+        ActiveCampaignMirrorService $activeCampaignMirrorService
+    ) {
+        $customer->load([
+            'user.referrer',
+            'customerable',
+            'familyMembers.customer.user',
+        ]);
 
-        // Load additional relationships based on account type
         if ($customer->customerable_type === 'App\\Models\\OdessaAfiliateAccount' && $customer->customerable) {
             $customer->customerable->load('odessaAfiliatedCompany');
         } elseif ($customer->customerable_type === 'App\\Models\\FamilyAccount' && $customer->customerable) {
             $customer->customerable->load('parentCustomer.user');
         }
 
-        // Add purchase counts for delete eligibility and statistics
+        $user = $customer->user;
+        $administrator = $request->user()->administrator;
+        $canViewCartDetails = $administrator->hasPermissionTo('view cart details');
+        $canViewPaymentAttempts = $administrator->hasPermissionTo('payment-attempts.manage');
+        $canViewTaxProfilesAdmin = $administrator->hasPermissionTo('tax-profiles.manage');
+        $canViewActiveCampaignHub = $administrator->hasPermissionTo('activecampaign.manage');
+        $canViewCarts = $administrator->hasPermissionTo('view carts');
+
+        return Inertia::render('Admin/Customer', [
+            'customer' => $customer,
+            'genders' => Gender::casesWithLabels(),
+            'states' => StatesMexico::todos(),
+            'canManageUser' => $user && $administrator->hasPermissionTo('users.manage'),
+            'canUpdatePassword' => $administrator && $administrator->hasRole('superadmin'),
+            'canViewTaxProfilesAdmin' => $canViewTaxProfilesAdmin,
+            'canViewPaymentAttempts' => $canViewPaymentAttempts,
+            'canViewCartDetails' => $canViewCartDetails,
+            'canViewActiveCampaignHub' => $canViewActiveCampaignHub,
+            'taxRegimes' => config('taxregimes.regimes'),
+            'monitorData' => Inertia::defer(fn () => $this->buildMonitorData(
+                $customer,
+                $pendingPurchasesQuery,
+                $buildCustomerInteractionChartAction,
+                $buildCustomerMonitorExtrasAction,
+                $activeCampaignContactsService,
+                $activeCampaignMirrorService,
+                $canViewCarts,
+                $canViewActiveCampaignHub,
+            )),
+        ]);
+    }
+
+    private function buildMonitorData(
+        Customer $customer,
+        PendingPurchasesQuery $pendingPurchasesQuery,
+        BuildCustomerInteractionChartAction $buildCustomerInteractionChartAction,
+        BuildCustomerMonitorExtrasAction $buildCustomerMonitorExtrasAction,
+        ActiveCampaignContactsService $activeCampaignContactsService,
+        ActiveCampaignMirrorService $activeCampaignMirrorService,
+        bool $canViewCarts,
+        bool $canViewActiveCampaignHub
+    ): array {
+        $customer->load([
+            'user.referrer',
+            'customerable',
+            'familyMembers.customer.user',
+            'addresses',
+            'contacts' => function ($query) {
+                $query->withTrashed();
+            },
+            'taxProfiles' => function ($query) {
+                $query->withTrashed()
+                    ->withExists([
+                        'invoiceRequests as used_invoice_requests_exist' => function ($relationQuery) {
+                            $relationQuery->withTrashed();
+                        },
+                    ]);
+            },
+            'laboratoryAppointments' => function ($query) {
+                $query->with([
+                    'laboratoryStore',
+                    'laboratoryPurchase',
+                    'interactions' => fn ($interactionQuery) => $interactionQuery->latest()->limit(5),
+                ])
+                    ->latest()
+                    ->limit(8);
+            },
+            'activeCampaignWebActivities' => function ($query) {
+                $query->latest('occurred_at')
+                    ->latest()
+                    ->limit(12);
+            },
+        ]);
+
+        if ($customer->customerable_type === 'App\\Models\\OdessaAfiliateAccount' && $customer->customerable) {
+            $customer->customerable->load('odessaAfiliatedCompany');
+        } elseif ($customer->customerable_type === 'App\\Models\\FamilyAccount' && $customer->customerable) {
+            $customer->customerable->load('parentCustomer.user');
+        }
+
+        $customer->taxProfiles->each(function ($profile) {
+            $needsUpdate = $profile->needsTaxProfileUpdate();
+
+            $profile->setAttribute('needs_update', $needsUpdate);
+            $profile->setAttribute(
+                'tax_update_status_label',
+                $needsUpdate
+                    ? 'Pendiente de actualización'
+                    : 'Información actualizada'
+            );
+        });
+
         $customer->loadCount([
             'laboratoryPurchases',
             'onlinePharmacyPurchases',
             'medicalAttentionSubscriptions',
+            'taxProfiles',
+            'addresses',
+            'laboratoryAppointments',
+            'activeCampaignWebActivities',
         ]);
 
-        return Inertia::render('Admin/Customer', [
+        $user = $customer->user;
+        $efevooTokens = EfevooToken::byCustomer($customer->id)
+            ->withCount('transactions')
+            ->get();
+        $efevooTransactions = $efevooTokens->isNotEmpty()
+            ? EfevooTransaction::whereIn('efevoo_token_id', $efevooTokens->pluck('id'))
+                ->latest()
+                ->limit(20)
+                ->get()
+            : collect();
+        $paymentAttempts = PaymentAttempt::query()
+            ->where('customer_id', $customer->id)
+            ->latest('processed_at')
+            ->latest()
+            ->limit(20)
+            ->get();
+
+        $labNotificationsQuery = LaboratoryNotification::query()
+            ->with(['laboratoryPurchase', 'laboratoryQuote'])
+            ->where(function ($query) use ($customer, $user) {
+                $query->whereHas('laboratoryPurchase', function ($purchase) use ($customer) {
+                    $purchase->where('customer_id', $customer->id);
+                });
+
+                if ($user) {
+                    $query->orWhere('user_id', $user->id)
+                        ->orWhere('email_recipient_id', $user->id);
+                }
+            })
+            ->latest();
+
+        $labNotifications = $labNotificationsQuery->limit(25)->get();
+        $unreadLabNotificationsCount = (clone $labNotificationsQuery)->whereNull('read_at')->count();
+
+        $monitoringCarts = null;
+        if ($user && $canViewCarts) {
+            $monitoringCarts = Cart::query()
+                ->with('items')
+                ->where('user_id', $user->id)
+                ->orderByDesc('updated_at')
+                ->get()
+                ->map(function (Cart $cart) {
+                    $labBrands = $cart->labBrands();
+                    $primaryBrand = $labBrands[0] ?? null;
+
+                    return [
+                        'id' => $cart->id,
+                        'type_label' => $cart->type === MonitoringCartType::Pharmacy ? 'Farmacia' : 'Laboratorio',
+                        'brand' => $primaryBrand,
+                        'display_status' => $cart->displayStatus(),
+                        'display_status_label' => $cart->displayStatusLabel(),
+                        'items_count' => $cart->items->count(),
+                        'total_formatted' => formattedPrice((float) $cart->total),
+                        'inactive_for_label' => $cart->inactiveForLabel(),
+                        'updated_at' => $cart->updated_at,
+                        'last_activity_at' => optional(localizedDate($cart->lastUserActivityAt()))->isoFormat('D MMM Y h:mm a'),
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
+        $pendingPurchasesReadModel = $pendingPurchasesQuery->forCustomer($customer);
+        $interactionMonitor = $buildCustomerInteractionChartAction($customer, $user);
+
+        $monitorExtras = $user
+            ? $buildCustomerMonitorExtrasAction(
+                $user,
+                $customer,
+                $pendingPurchasesReadModel['pendingPurchases'],
+                $monitoringCarts,
+            )
+            : [
+                'pendingActivity' => $pendingPurchasesReadModel['pendingPurchases'],
+                'notificationGroups' => [],
+                'platformAccess' => null,
+            ];
+
+        $recentActivity = $interactionMonitor['recentActivity'];
+        if ($monitorExtras['platformAccess']) {
+            array_unshift($recentActivity, [
+                'category' => 'access',
+                'category_label' => 'Acceso',
+                'label' => 'Último acceso a la plataforma',
+                'at' => $monitorExtras['platformAccess']['last_access_at'],
+                'detail' => $monitorExtras['platformAccess']['last_login_at']
+                    ? 'Login: '.$monitorExtras['platformAccess']['last_login_at']
+                    : 'Actividad de sesión',
+            ]);
+        }
+
+        $activeCampaignMirror = $activeCampaignContactsService->buildMirrorPayloadForCustomer(
+            $customer,
+            $activeCampaignMirrorService,
+        );
+        $activeCampaignDispatches = ActiveCampaignDispatch::query()
+            ->where('customer_id', $customer->id)
+            ->latest('updated_at')
+            ->latest()
+            ->limit(15)
+            ->get(['id', 'event_type', 'status', 'synced_at', 'last_error', 'updated_at', 'created_at']);
+        $activeCampaignContact = Contact::query()
+            ->where('customer_id', $customer->id)
+            ->latest('id')
+            ->first(['id']);
+        $activeCampaignContactUrl = $canViewActiveCampaignHub && $activeCampaignContact
+            ? route('admin.activecampaign.contacts', ['drawer_contact_id' => $activeCampaignContact->id])
+            : null;
+
+        return [
             'customer' => $customer,
+            'efevooTokens' => $efevooTokens,
+            'efevooTransactions' => $efevooTransactions,
+            'paymentAttempts' => $paymentAttempts,
+            'laboratoryNotifications' => $labNotifications,
+            'unreadLabNotificationsCount' => $unreadLabNotificationsCount,
+            'monitoringCarts' => $monitoringCarts,
+            'pendingPurchases' => $pendingPurchasesReadModel['pendingPurchases'],
+            'pendingPurchasesSummary' => $pendingPurchasesReadModel['summary'],
+            'pendingActivity' => $monitorExtras['pendingActivity'],
+            'notificationGroups' => $monitorExtras['notificationGroups'],
+            'platformAccess' => $monitorExtras['platformAccess'],
+            'interactionSummary' => $interactionMonitor['summary'],
+            'recentActivity' => $recentActivity,
+            'activeCampaignMirror' => $activeCampaignMirror,
+            'activeCampaignDispatches' => $activeCampaignDispatches,
+            'activeCampaignContactUrl' => $activeCampaignContactUrl,
             'laboratoryPurchases' => $customer->laboratoryPurchases()
                 ->with(['transactions', 'vendorPayments', 'laboratoryPurchaseItems', 'invoice', 'invoiceRequest', 'devAssistanceRequests'])
                 ->latest()
@@ -106,6 +352,6 @@ class CustomerController extends Controller
                 ->with(['transactions', 'customer'])
                 ->latest()
                 ->paginate(5, ['*'], 'medical_attention_subscriptions_page'),
-        ]);
+        ];
     }
 }

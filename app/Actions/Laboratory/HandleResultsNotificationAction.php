@@ -4,7 +4,9 @@
 
 namespace App\Actions\Laboratory;
 
+use App\Actions\InvoiceRequests\AttemptActivateLaboratoryInvoiceRequestForPurchaseAction;
 use App\Actions\Laboratories\StoreGdaResultsPdfToStorageAction;
+use App\Enums\InvoiceRequestStatusLogTrigger;
 use App\Jobs\Laboratory\SyncGdaResultPdfToStorageJob;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
@@ -12,6 +14,7 @@ use App\Models\LaboratoryQuote;
 use App\Models\User;
 use App\Services\Laboratory\LaboratoryResultsNotificationService;
 use App\Services\Laboratory\LabOrderNotificationGateService;
+use App\Services\InvoiceRequests\LaboratoryInvoiceRequestActivationEvaluator;
 use App\Services\LaboratoryResults\LaboratoryResultCompletionGate;
 use App\Support\GDA\GdaPayloadSanitizer;
 use App\Support\GDA\GdaWebhookPayloadResolver;
@@ -28,6 +31,8 @@ class HandleResultsNotificationAction
         protected StoreGdaResultsPdfToStorageAction $storeGdaResultsPdfToStorageAction,
         protected LaboratoryResultCompletionGate $resultCompletionGate,
         protected LaboratoryResultsNotificationService $resultsNotificationService,
+        protected LaboratoryInvoiceRequestActivationEvaluator $invoiceRequestActivationEvaluator,
+        protected AttemptActivateLaboratoryInvoiceRequestForPurchaseAction $attemptActivateLaboratoryInvoiceRequest,
     ) {}
 
     public function execute(LaboratoryNotification $notification, array $data, array $references): void
@@ -117,6 +122,13 @@ class HandleResultsNotificationAction
                 'is_new_event' => $gateResult['is_new_event'],
                 'completion_gate_mode' => $this->resultCompletionGate->mode(),
             ]);
+        }
+
+        if ($purchase && $this->invoiceRequestActivationEvaluator->shouldActivateByResultAvailable($purchase->fresh())) {
+            $this->attemptActivateLaboratoryInvoiceRequest->execute(
+                $purchase->fresh(['invoiceRequest']),
+                InvoiceRequestStatusLogTrigger::ResultAvailable,
+            );
         }
 
         // Marcar como procesada

@@ -29,6 +29,11 @@ class ExtractTaxProfileFromConstanciaAction
         $customerId = auth()->user()?->customer?->id;
         $tempPath = null;
         $lock = null;
+        $fileContext = [
+            'original_extension' => $file->getClientOriginalExtension(),
+            'mime_type' => $file->getMimeType(),
+            'size_bytes' => $file->getSize(),
+        ];
 
         try {
             $contents = $file->get();
@@ -37,6 +42,7 @@ class ExtractTaxProfileFromConstanciaAction
             }
 
             $fingerprint = hash('sha256', $contents);
+            $fileContext['sha256_prefix'] = substr($fingerprint, 0, 12);
             $lock = Cache::lock('tax-profile-extract:'.$userId.':'.$fingerprint, 60);
             if (! $lock->get()) {
                 throw ConstanciaExtractionException::alreadyProcessing();
@@ -50,6 +56,10 @@ class ExtractTaxProfileFromConstanciaAction
 
             $text = $this->constanciaFiscalService->extractText($workingFile);
             $localData = $this->constanciaFiscalService->extractDeterministicData($text);
+            $localFieldsPresent = array_keys(array_filter(
+                $localData,
+                fn ($value) => $value !== null && $value !== ''
+            ));
 
             $explicitMoral = $this->taxpayerValidator->detectExplicitPersonaMoral($text);
             $curpFromText = $this->taxpayerValidator->extractCurpFromText($text);
@@ -106,8 +116,9 @@ class ExtractTaxProfileFromConstanciaAction
                     'user_id' => $userId,
                     'customer_id' => $customerId,
                     'result' => 'ai_fallback',
-                    'exception_class' => $e::class,
-                ]);
+                    'file' => $fileContext,
+                    'local_fields_present' => $localFieldsPresent,
+                ] + $this->exceptionLogContext($e, 'openai_structured_extraction'));
             }
 
             $signals = [
@@ -154,12 +165,22 @@ class ExtractTaxProfileFromConstanciaAction
                 }
 
                 if (! $this->localExtractionIsSufficient($localData, $localValidation)) {
+                    Log::warning('Fallback local de constancia insuficiente tras fallo de IA', [
+                        'operation' => 'constancia_extract_pipeline',
+                        'user_id' => $userId,
+                        'customer_id' => $customerId,
+                        'result' => 'local_fallback_insufficient',
+                        'file' => $fileContext,
+                        'document_classification' => $documentClassification,
+                        'local_fields_present' => $localFieldsPresent,
+                        'validation_decision' => $localValidation['decision'] ?? null,
+                    ]);
+
                     throw ConstanciaExtractionException::extractionFailed();
                 }
 
                 $validation = $localValidation;
                 $documentClassification = $looksLikeCsf ? 'csf_individual' : $documentClassification;
-                $aiWarnings[] = 'Algunos datos se obtuvieron solo con lectura local del PDF. Revisa con cuidado antes de guardar.';
             }
 
             if ($documentClassification === 'unknown' && $looksLikeCsf && ($validation['decision'] ?? null) === 'accept') {
@@ -176,6 +197,20 @@ class ExtractTaxProfileFromConstanciaAction
             );
 
             if (! $result->isSuccess()) {
+                Log::warning('Normalización de constancia sin resultado confirmable', [
+                    'operation' => 'constancia_extract_pipeline',
+                    'user_id' => $userId,
+                    'customer_id' => $customerId,
+                    'result' => 'normalizer_not_confirmable',
+                    'file' => $fileContext,
+                    'normalizer_status' => $result->status,
+                    'document_classification' => $result->documentClassification,
+                    'taxpayer_type' => $result->taxpayerType,
+                    'missing_fields' => $result->missingFields,
+                    'warnings' => $result->warnings,
+                    'rejection_reason' => $result->rejectionReason,
+                ]);
+
                 if ($result->status === 'rejected_legal_entity') {
                     throw ConstanciaExtractionException::legalEntityNotAllowed();
                 }
@@ -215,8 +250,10 @@ class ExtractTaxProfileFromConstanciaAction
                 'user_id' => $userId,
                 'customer_id' => $customerId,
                 'result' => $e->errorCode,
+                'public_message' => $e->publicMessage(),
+                'file' => $fileContext,
                 'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
-            ]);
+            ] + $this->exceptionLogContext($e, 'controlled_extraction_exception'));
 
             throw $e;
         } catch (Throwable $e) {
@@ -225,9 +262,9 @@ class ExtractTaxProfileFromConstanciaAction
                 'user_id' => $userId,
                 'customer_id' => $customerId,
                 'result' => 'exception',
-                'exception_class' => $e::class,
+                'file' => $fileContext,
                 'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
-            ]);
+            ] + $this->exceptionLogContext($e, 'unexpected_pipeline_exception'));
 
             throw ConstanciaExtractionException::extractionFailed();
         } finally {
@@ -280,5 +317,25 @@ class ExtractTaxProfileFromConstanciaAction
             && is_string($name) && trim($name) !== ''
             && is_string($zip) && preg_match('/^\d{5}$/', $zip)
             && is_string($regime) && trim($regime) !== '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function exceptionLogContext(Throwable $e, string $stage): array
+    {
+        $previous = $e->getPrevious();
+
+        return [
+            'stage' => $stage,
+            'exception_class' => $e::class,
+            'exception_message' => $e->getMessage(),
+            'exception_file' => $e->getFile(),
+            'exception_line' => $e->getLine(),
+            'previous_exception_class' => $previous ? $previous::class : null,
+            'previous_exception_message' => $previous?->getMessage(),
+            'previous_exception_file' => $previous?->getFile(),
+            'previous_exception_line' => $previous?->getLine(),
+        ];
     }
 }

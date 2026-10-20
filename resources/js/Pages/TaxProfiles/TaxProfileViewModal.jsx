@@ -29,8 +29,8 @@ export default function TaxProfileViewModal({ isOpen, close, taxProfile }) {
 			<DialogTitle>Datos del perfil fiscal</DialogTitle>
 			{isUsed && (
 				<DialogDescription className="text-left">
-					Este perfil fiscal ya fue utilizado en una solicitud de factura
-					y no puede editarse.
+					Este perfil fiscal ya fue utilizado en una solicitud de
+					factura. Los cambios aplicarán para futuras solicitudes.
 				</DialogDescription>
 			)}
 			<DialogBody>
@@ -90,7 +90,10 @@ export default function TaxProfileViewModal({ isOpen, close, taxProfile }) {
 						<p className="mb-1 text-sm text-zinc-500 dark:text-slate-400">
 							Régimen fiscal
 						</p>
-						<Badge color="slate" className="w-full justify-center py-1.5 sm:w-auto">
+						<Badge
+							color="slate"
+							className="w-full justify-center py-1.5 sm:w-auto"
+						>
 							{taxProfile.formatted_tax_regime}
 						</Badge>
 					</div>
@@ -100,7 +103,10 @@ export default function TaxProfileViewModal({ isOpen, close, taxProfile }) {
 							<p className="mb-1 text-sm text-zinc-500 dark:text-slate-400">
 								Uso CFDI del perfil
 							</p>
-							<Badge color="slate" className="w-full justify-center py-1.5 sm:w-auto">
+							<Badge
+								color="slate"
+								className="w-full justify-center py-1.5 sm:w-auto"
+							>
 								{taxProfile.formatted_cfdi_use}
 							</Badge>
 						</div>
@@ -108,9 +114,9 @@ export default function TaxProfileViewModal({ isOpen, close, taxProfile }) {
 
 					{isUsed && (
 						<Text className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
-							<Strong>Importante:</Strong> si necesitas datos fiscales
-							distintos, crea otro perfil. Tus solicitudes y facturas
-							anteriores no se alteran.
+							<Strong>Importante:</Strong> si necesitas datos
+							fiscales distintos, crea otro perfil. Tus
+							solicitudes y facturas anteriores no se alteran.
 						</Text>
 					)}
 				</div>
@@ -127,7 +133,10 @@ export default function TaxProfileViewModal({ isOpen, close, taxProfile }) {
 					rel="noreferrer"
 				>
 					<Button type="button" outline>
-						<DocumentTextIcon data-slot="icon" className="h-4 w-4" />
+						<DocumentTextIcon
+							data-slot="icon"
+							className="h-4 w-4"
+						/>
 						Ver constancia
 					</Button>
 				</a>

@@ -6,6 +6,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationPresenter;
 use App\Support\FamedicPublicContactConfig;
+use App\Support\Laboratory\PatientEmailDetails;
 use Illuminate\Support\Facades\URL;
 
 /**
@@ -33,6 +34,8 @@ final class LaboratoryPurchaseConfirmationViewData
         $preparation = $preparationOverride ?? app(LaboratoryPreparationPresenter::class)->present($purchase);
         $studies = $preparation['studies'];
 
+        $patientDetails = PatientEmailDetails::fromPurchase($purchase);
+
         $famedicLogoUrl = self::assetUrl('images/logo.png', $forPdf);
         $laboratorioLogoUrl = self::assetUrl('images/gda/'.$purchase->brand->imageSrc(), $forPdf);
 
@@ -47,8 +50,10 @@ final class LaboratoryPurchaseConfirmationViewData
             'nombre_usuario' => $notifiable->full_name ?? trim((string) $notifiable->name),
             'consecutivo' => $purchase->gda_consecutivo !== null ? (string) $purchase->gda_consecutivo : '—',
             'folio_orden' => (string) $purchase->gda_order_id,
-            'nombre_paciente' => $purchase->full_name,
-            'fecha_nacimiento' => $purchase->formatted_birth_date ?? '—',
+            'nombre_paciente' => $patientDetails['name'],
+            'fecha_nacimiento' => $patientDetails['birth_date'],
+            'genero_paciente' => $patientDetails['gender'],
+            'telefono_paciente' => $patientDetails['phone'],
             'laboratorio_marca' => $purchase->brand->label(),
             'famedic_logo_url' => $famedicLogoUrl,
             'laboratorio_logo_url' => $laboratorioLogoUrl,

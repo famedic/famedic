@@ -65,7 +65,8 @@ class HandleStatusUpdateAction
 
         Log::info('Purchase status updated', [
             'purchase_id' => $purchase->id,
-            'new_status' => $data['status']
+            'external_gda_status' => $data['status'],
+            'updates' => array_keys($updates),
         ]);
     }
 

@@ -6,6 +6,7 @@ use App\Exceptions\TaxProfiles\ConstanciaExtractionException;
 use App\Models\Customer;
 use App\Models\TaxProfile;
 use App\Services\TaxProfiles\IndividualTaxpayerValidator;
+use App\Support\TaxProfiles\ConstanciaDateParser;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +28,8 @@ class CreateTaxProfileAction
         string $taxRegime,
         ?string $cfdiUse = null,
         ?UploadedFile $fiscalCertificate = null,
-        ?array $extractedData = null
+        ?array $extractedData = null,
+        ?int $customerId = null,
     ): TaxProfile {
         $rfc = Str::upper(trim($rfc));
         $tipoPersona = is_string($extractedData['tipo_persona'] ?? null)
@@ -84,16 +86,22 @@ class CreateTaxProfileAction
                 'tipo_persona_detectado_por' => $extractedData ? ($extractedData['tipo_persona_detectado_por'] ?? 'sistema') : null,
                 'verificado_automaticamente' => ! empty($extractedData),
                 'fecha_verificacion' => ! empty($extractedData) ? now() : null,
-                'fecha_inscripcion' => $extractedData['fecha_inscripcion'] ?? null,
+                'fecha_inscripcion' => ConstanciaDateParser::parseForStorage(
+                    $extractedData['fecha_inscripcion'] ?? null
+                ),
                 'domicilio_fiscal' => $extractedData['domicilio_fiscal'] ?? null,
                 'actividades_economicas' => $extractedData['actividades_economicas'] ?? null,
             ];
 
-            return DB::transaction(function () use ($taxProfileData) {
-                $customerId = Auth::user()->customer->id;
+            return DB::transaction(function () use ($taxProfileData, $customerId) {
+                $resolvedCustomerId = $customerId ?? Auth::user()?->customer?->id;
+
+                if ($resolvedCustomerId === null) {
+                    throw new InvalidArgumentException('No se pudo determinar el cliente para el perfil fiscal.');
+                }
 
                 $customer = Customer::query()
-                    ->whereKey($customerId)
+                    ->whereKey($resolvedCustomerId)
                     ->lockForUpdate()
                     ->firstOrFail();
 

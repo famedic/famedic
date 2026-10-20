@@ -24,6 +24,8 @@ class StoreGdaResultsPdfToStorageAction
         ?LaboratoryNotification $notification = null,
         bool $overwrite = false,
         bool $preserveExisting = false,
+        bool $updatePurchaseResults = true,
+        bool $strictClassification = false,
     ): string {
         $normalizedBase64 = GdaPayloadSanitizer::stripDataUriPrefix(trim($base64));
 
@@ -31,6 +33,11 @@ class StoreGdaResultsPdfToStorageAction
 
         if ($pdfBinary === false) {
             throw new DomainException('GDA results PDF base64 is invalid.');
+        }
+
+        $maxBytes = (int) config('laboratory-results.max_pdf_bytes', 25 * 1024 * 1024);
+        if ($maxBytes > 0 && strlen($pdfBinary) > $maxBytes) {
+            throw new DomainException('GDA results PDF exceeds the configured maximum size.');
         }
 
         if (! str_starts_with($pdfBinary, '%PDF')) {
@@ -44,6 +51,7 @@ class StoreGdaResultsPdfToStorageAction
                 'source' => 'gda',
                 'notification_id' => $notification?->id,
                 'preserve_existing' => $preserveExisting,
+                'update_purchase_results' => $updatePurchaseResults,
             ],
             $overwrite
         );
@@ -68,6 +76,10 @@ class StoreGdaResultsPdfToStorageAction
                 'exception' => $exception::class,
                 'message' => $exception->getMessage(),
             ]);
+
+            if ($strictClassification) {
+                throw $exception;
+            }
         }
 
         if ($notification) {

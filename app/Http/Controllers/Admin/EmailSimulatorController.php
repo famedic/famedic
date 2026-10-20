@@ -22,6 +22,7 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -145,6 +146,76 @@ class EmailSimulatorController extends Controller
         }
 
         return response((string) $mail->render(), 200)->header('Content-Type', 'text/html; charset=UTF-8');
+    }
+
+    public function send(Request $request, string $type)
+    {
+        $this->ensureSimulatorAccess($request);
+
+        if (! in_array($type, self::PREVIEW_TYPES, true)) {
+            return back()->withErrors([
+                'email_simulator' => 'Tipo de correo no reconocido.',
+            ]);
+        }
+
+        $recipient = $request->user();
+        if (blank($recipient?->email)) {
+            return back()->withErrors([
+                'email_simulator' => 'Tu usuario administrador no tiene correo registrado para recibir la prueba.',
+            ]);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'laboratory_purchase' => [
+                'required',
+                'integer',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! is_numeric($value)) {
+                        $fail('El identificador del pedido no es válido.');
+
+                        return;
+                    }
+                    if (! LaboratoryPurchase::withTrashed()->whereKey((int) $value)->exists()) {
+                        $fail('No existe un pedido de laboratorio con ese identificador.');
+                    }
+                },
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors([
+                'email_simulator' => 'Selecciona un pedido de laboratorio válido para enviar la prueba.',
+            ]);
+        }
+
+        $purchase = $this->loadPreviewPurchase((int) $validator->validated()['laboratory_purchase']);
+
+        $notifiable = $purchase->customer?->user;
+        if ($notifiable === null) {
+            return back()->withErrors([
+                'email_simulator' => 'Este pedido no tiene un usuario asociado para armar el correo de prueba.',
+            ]);
+        }
+
+        try {
+            $mail = $this->buildMailMessage($type, $purchase, $notifiable);
+
+            Mail::html((string) $mail->render(), function ($message) use ($mail, $recipient): void {
+                $message
+                    ->to($recipient->email, $recipient->full_name ?? $recipient->name)
+                    ->subject($mail->subject ?: 'Correo de prueba Famedic');
+            });
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withErrors([
+                'email_simulator' => 'No se pudo enviar el correo de prueba: '.$e->getMessage(),
+            ]);
+        }
+
+        return back()->flashMessage(
+            'Correo de prueba enviado a '.$recipient->email.'.'
+        );
     }
 
     /**
@@ -294,6 +365,20 @@ class EmailSimulatorController extends Controller
             ))->toMail($user),
             'referral_signup' => $this->referralSignupMail($user),
         };
+    }
+
+    private function loadPreviewPurchase(int $purchaseId): LaboratoryPurchase
+    {
+        return LaboratoryPurchase::query()
+            ->withTrashed()
+            ->with([
+                'customer.user',
+                'laboratoryPurchaseItems',
+                'laboratoryAppointment.laboratoryStore',
+                'laboratoryAppointment.customer.laboratoryCartItems.laboratoryTest',
+                'transactions',
+            ])
+            ->findOrFail($purchaseId);
     }
 
     private function purchaseCreatedWithoutAppointmentMail(LaboratoryPurchase $purchase, User $user): MailMessage

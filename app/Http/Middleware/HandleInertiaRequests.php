@@ -148,6 +148,7 @@ class HandleInertiaRequests extends Middleware
             },
             ...($request->user() ? ['laboratoryCarts' => $this->getLaboratoryCarts()] : []),
             'laboratoryBrands' => LaboratoryBrand::brandsData(),
+            'taxRegimes' => fn () => config('taxregimes.regimes'),
             ...($request->user() ? ['onlinePharmacyCart' => $this->getOnlinePharmacyCart()] : []),
             'inAppNotificationFeed' => fn () => $this->getInAppNotificationFeed($request),
         ];
@@ -246,6 +247,12 @@ class HandleInertiaRequests extends Middleware
                 'current' => Route::currentRouteName() === 'contacts.index' ||
                     Route::currentRouteName() === 'contacts.create' ||
                     Route::currentRouteName() === 'contacts.edit',
+            ],
+            [
+                'label' => 'Invita a tus amigos',
+                'url' => route('user.invitations'),
+                'icon' => 'UsersIcon',
+                'current' => Route::currentRouteName() === 'user.invitations',
             ],
             [
                 'label' => 'Soporte',

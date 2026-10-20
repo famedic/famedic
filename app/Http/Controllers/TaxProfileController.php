@@ -29,6 +29,8 @@ class TaxProfileController extends Controller
         return Inertia::render('TaxProfiles', [
             'taxProfiles' => $this->patientTaxProfiles($request),
             'invoices' => $this->patientInvoicesPaginator($request),
+            'showTaxProfileUpdateBanner' => $this->shouldShowTaxProfileUpdateBanner($request),
+            'taxProfileUpdateUrl' => $this->taxProfileUpdateUrl($request),
         ]);
     }
 
@@ -38,6 +40,8 @@ class TaxProfileController extends Controller
             'taxProfiles' => $this->patientTaxProfiles($request),
             'invoices' => $this->patientInvoicesPaginator($request),
             'taxRegimes' => config('taxregimes.regimes'),
+            'showTaxProfileUpdateBanner' => $this->shouldShowTaxProfileUpdateBanner($request),
+            'taxProfileUpdateUrl' => $this->taxProfileUpdateUrl($request),
         ]);
     }
 
@@ -234,6 +238,8 @@ class TaxProfileController extends Controller
             'invoices' => $this->patientInvoicesPaginator($request),
             'taxProfile' => $taxProfile->presentForPatient(),
             'taxRegimes' => config('taxregimes.regimes'),
+            'showTaxProfileUpdateBanner' => $this->shouldShowTaxProfileUpdateBanner($request),
+            'taxProfileUpdateUrl' => $this->taxProfileUpdateUrl($request),
         ]);
     }
 
@@ -308,6 +314,11 @@ class TaxProfileController extends Controller
                 'customer_id' => $request->user()->customer?->id,
                 'result' => 'exception',
                 'exception_class' => $e::class,
+                'exception_message' => $e->getMessage(),
+                'exception_file' => $e->getFile(),
+                'exception_line' => $e->getLine(),
+                'previous_exception_class' => $e->getPrevious() ? $e->getPrevious()::class : null,
+                'previous_exception_message' => $e->getPrevious()?->getMessage(),
             ]);
 
             return response()->json([
@@ -322,6 +333,29 @@ class TaxProfileController extends Controller
     private function patientTaxProfiles(Request $request)
     {
         return TaxProfile::presentCollectionForPatient($request->user()->customer);
+    }
+
+    private function shouldShowTaxProfileUpdateBanner(Request $request): bool
+    {
+        return $this->outdatedTaxProfile($request) !== null;
+    }
+
+    private function taxProfileUpdateUrl(Request $request): ?string
+    {
+        $taxProfile = $this->outdatedTaxProfile($request);
+
+        return $taxProfile
+            ? route('tax-profiles.edit', ['tax_profile' => $taxProfile->id])
+            : null;
+    }
+
+    private function outdatedTaxProfile(Request $request): ?TaxProfile
+    {
+        return $request->user()->customer
+            ->taxProfiles()
+            ->oldest('created_at')
+            ->get()
+            ->first(fn (TaxProfile $taxProfile) => $taxProfile->needsTaxProfileUpdate());
     }
 
     private function patientInvoicesPaginator(Request $request)

@@ -46,6 +46,7 @@ class User extends Authenticatable implements MustVerifyEmail, MustVerifyPhone
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'documentation_accepted_at' => 'datetime',
             'password' => 'hashed',
             'birth_date' => 'date',

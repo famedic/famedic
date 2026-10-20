@@ -6,20 +6,21 @@ import { Button } from "@/Components/Catalyst/button";
 import { Code } from "@/Components/Catalyst/text";
 import { Subheading } from "@/Components/Catalyst/heading";
 import {
+	ArrowRightIcon,
 	DocumentTextIcon,
 	PlusIcon,
 	QrCodeIcon,
 	CheckCircleIcon,
 	ClockIcon,
-	EyeIcon,
 	DocumentDuplicateIcon,
 	EllipsisHorizontalIcon,
 	CheckIcon,
+	InformationCircleIcon,
+	MegaphoneIcon,
 } from "@heroicons/react/24/outline";
 import { PencilIcon, TrashIcon, StarIcon } from "@heroicons/react/24/outline";
 import TaxProfileForm from "@/Pages/TaxProfiles/TaxProfileForm";
 import TaxProfileDeleteConfirmation from "@/Pages/TaxProfiles/TaxProfileDeleteConfirmation";
-import TaxProfileViewModal from "@/Pages/TaxProfiles/TaxProfileViewModal";
 import TaxProfilesInfoPanel from "@/Pages/TaxProfiles/TaxProfilesInfoPanel";
 import { useEffect, useState } from "react";
 import { router, useForm } from "@inertiajs/react";
@@ -48,13 +49,17 @@ import {
 	PaginationPrevious,
 } from "@/Components/Catalyst/pagination";
 
-export default function TaxProfiles({ taxProfiles, invoices }) {
+export default function TaxProfiles({
+	taxProfiles,
+	invoices,
+	showTaxProfileUpdateBanner = false,
+	taxProfileUpdateUrl = null,
+}) {
 	const taxProfileFormIsOpen =
 		route().current("tax-profiles.create") ||
 		route().current("tax-profiles.edit");
 
 	const [taxProfileToDelete, setTaxProfileToDelete] = useState(null);
-	const [taxProfileToView, setTaxProfileToView] = useState(null);
 
 	return (
 		<SettingsLayout title="Mis perfiles fiscales">
@@ -66,14 +71,18 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 								Mis perfiles fiscales
 							</GradientHeading>
 							{taxProfiles.length > 0 && (
-								<Badge color="blue" className="whitespace-nowrap">
+								<Badge
+									color="blue"
+									className="whitespace-nowrap"
+								>
 									{taxProfiles.length} perfil
 									{taxProfiles.length !== 1 ? "es" : ""}
 								</Badge>
 							)}
 						</div>
 						<p className="max-w-xl text-sm text-slate-500 dark:text-slate-400">
-							Administra los datos que utilizas para solicitar tus facturas.
+							Administra los datos que utilizas para solicitar tus
+							facturas.
 						</p>
 					</div>
 
@@ -89,6 +98,12 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 					</Button>
 				</div>
 
+				{showTaxProfileUpdateBanner && (
+					<TaxProfileUpdateBanner
+						taxProfileUpdateUrl={taxProfileUpdateUrl}
+					/>
+				)}
+
 				<TaxProfilesInfoPanel />
 
 				<Divider className="my-2" />
@@ -96,7 +111,6 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 				<TaxProfilesList
 					taxProfiles={taxProfiles}
 					setTaxProfileToDelete={setTaxProfileToDelete}
-					setTaxProfileToView={setTaxProfileToView}
 				/>
 
 				{invoices.data.length > 0 && (
@@ -183,7 +197,8 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 														href={
 															invoice.invoice_url ||
 															route("invoice", {
-																invoice: invoice,
+																invoice:
+																	invoice,
 															})
 														}
 														target="_blank"
@@ -259,22 +274,73 @@ export default function TaxProfiles({ taxProfiles, invoices }) {
 					close={() => setTaxProfileToDelete(null)}
 					taxProfile={taxProfileToDelete}
 				/>
-
-				<TaxProfileViewModal
-					isOpen={!!taxProfileToView}
-					close={() => setTaxProfileToView(null)}
-					taxProfile={taxProfileToView}
-				/>
 			</div>
 		</SettingsLayout>
 	);
 }
 
-function TaxProfilesList({
-	taxProfiles,
-	setTaxProfileToDelete,
-	setTaxProfileToView,
-}) {
+function TaxProfileUpdateBanner({ taxProfileUpdateUrl }) {
+	return (
+		<section className="relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-indigo-50 to-violet-100 px-5 py-6 shadow-sm sm:px-6 lg:px-8 dark:border-blue-900/60 dark:from-slate-950 dark:via-blue-950/50 dark:to-violet-950/50">
+			<div className="relative z-10 grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+				<div className="min-w-0">
+					<div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full bg-white/70 px-3 py-1.5 text-xs font-semibold text-blue-700 ring-1 ring-blue-100 dark:bg-white/10 dark:text-blue-200 dark:ring-white/10">
+						<MegaphoneIcon className="h-4 w-4 shrink-0" />
+						<span className="truncate">
+							Actualiza tus datos fiscales
+						</span>
+					</div>
+
+					<h2 className="max-w-2xl text-2xl font-bold leading-tight text-slate-950 sm:text-3xl dark:text-white">
+						Mantén tu información{" "}
+						<span className="text-blue-600 dark:text-blue-300">
+							fiscal al día
+						</span>
+					</h2>
+
+					<p className="mt-3 max-w-2xl text-sm leading-6 text-slate-700 dark:text-slate-300">
+						Si diste de alta tu perfil fiscal antes del 7 de octubre
+						de 2026, necesitamos que actualices tus datos y tu
+						Constancia de Situación Fiscal para continuar facturando
+						tus compras sin contratiempos.
+					</p>
+
+					<div className="mt-5 flex flex-col gap-3 sm:flex-row">
+						<Button
+							href={
+								taxProfileUpdateUrl ||
+								route("tax-profiles.create")
+							}
+							className="justify-center"
+						>
+							Actualizar información
+							<ArrowRightIcon className="h-4 w-4" />
+						</Button>
+					</div>
+
+					<div className="mt-4 flex items-start gap-2 text-xs text-blue-800/80 dark:text-blue-200/80">
+						<InformationCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
+						<span>
+							Esto ayuda a que tus facturas se emitan
+							correctamente.
+						</span>
+					</div>
+				</div>
+
+				<div className="relative mx-auto w-full max-w-[15rem] lg:max-w-none">
+					<img
+						src="/images/asset-tax-update.png"
+						alt=""
+						className="aspect-square mx-auto w-full object-contain drop-shadow-2xl"
+						loading="lazy"
+					/>
+				</div>
+			</div>
+		</section>
+	);
+}
+
+function TaxProfilesList({ taxProfiles, setTaxProfileToDelete }) {
 	if (taxProfiles.length === 0) {
 		return <TaxProfilesEmptyState />;
 	}
@@ -286,7 +352,6 @@ function TaxProfilesList({
 					key={taxProfile.id}
 					taxProfile={taxProfile}
 					onDelete={() => setTaxProfileToDelete(taxProfile)}
-					onView={() => setTaxProfileToView(taxProfile)}
 				/>
 			))}
 		</div>
@@ -303,7 +368,8 @@ function TaxProfilesEmptyState() {
 				Aún no tienes perfiles fiscales
 			</h3>
 			<p className="mx-auto mt-2 max-w-md text-sm text-slate-500 dark:text-slate-400">
-				Agrega tus datos fiscales para utilizarlos cuando solicites una factura.
+				Agrega tus datos fiscales para utilizarlos cuando solicites una
+				factura.
 			</p>
 			<Button
 				dusk="createFirstTaxProfile"
@@ -319,9 +385,10 @@ function TaxProfilesEmptyState() {
 	);
 }
 
-function TaxProfileCard({ taxProfile, onDelete, onView }) {
+function TaxProfileCard({ taxProfile, onDelete }) {
 	const isUsed = taxProfile.is_used === true;
 	const isDefault = taxProfile.is_default === true;
+	const needsUpdate = taxProfile.needs_update === true;
 	const certificateUrl = route("tax-profiles.fiscal-certificate", {
 		tax_profile: taxProfile,
 	});
@@ -331,8 +398,15 @@ function TaxProfileCard({ taxProfile, onDelete, onView }) {
 			<div className="flex h-full min-h-0 flex-col gap-4">
 				<div className="space-y-2">
 					<div className="flex flex-wrap gap-2">
-						{isDefault && <Badge color="emerald">Predeterminado</Badge>}
-						{isUsed && <Badge color="zinc">Utilizado en facturación</Badge>}
+						{needsUpdate && (
+							<Badge color="amber">Requiere actualización</Badge>
+						)}
+						{isDefault && (
+							<Badge color="emerald">Predeterminado</Badge>
+						)}
+						{isUsed && (
+							<Badge color="zinc">Utilizado en facturación</Badge>
+						)}
 					</div>
 
 					<h3 className="line-clamp-2 break-words text-base font-semibold leading-snug text-slate-900 dark:text-white">
@@ -344,7 +418,10 @@ function TaxProfileCard({ taxProfile, onDelete, onView }) {
 							RFC
 						</span>
 						<Code className="text-sm">{taxProfile.rfc}</Code>
-						<CopyRfcButton rfc={taxProfile.rfc} profileName={taxProfile.name} />
+						<CopyRfcButton
+							rfc={taxProfile.rfc}
+							profileName={taxProfile.name}
+						/>
 					</div>
 
 					{isUsed && (
@@ -352,8 +429,16 @@ function TaxProfileCard({ taxProfile, onDelete, onView }) {
 							id={`tax-profile-used-help-${taxProfile.id}`}
 							className="text-xs text-zinc-600 dark:text-slate-400"
 						>
-							Este perfil fiscal ya fue utilizado en una solicitud de factura y
-							no puede editarse.
+							Este perfil fiscal ya fue utilizado en una solicitud
+							de factura. Los cambios aplicarán para futuras
+							solicitudes.
+						</p>
+					)}
+
+					{needsUpdate && (
+						<p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
+							Este perfil necesita actualizar sus datos fiscales y
+							Constancia de Situación Fiscal.
 						</p>
 					)}
 				</div>
@@ -361,7 +446,11 @@ function TaxProfileCard({ taxProfile, onDelete, onView }) {
 				<dl className="space-y-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
 					<TaxProfileDetailRow
 						label="Código postal"
-						value={taxProfile.zipcode ? `CP ${taxProfile.zipcode}` : null}
+						value={
+							taxProfile.zipcode
+								? `CP ${taxProfile.zipcode}`
+								: null
+						}
 					/>
 					<TaxProfileDetailRow
 						label="Régimen fiscal"
@@ -384,53 +473,44 @@ function TaxProfileCard({ taxProfile, onDelete, onView }) {
 
 				{taxProfile.verificado_automaticamente && (
 					<div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-						<CheckCircleIcon className="h-4 w-4 shrink-0" aria-hidden />
+						<CheckCircleIcon
+							className="h-4 w-4 shrink-0"
+							aria-hidden
+						/>
 						<span className="text-xs font-medium">
 							Verificado automáticamente
 						</span>
 					</div>
 				)}
 
-				<div className="mt-auto flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+				<div className="mt-auto flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
 					<div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
 						{!isDefault && (
-							<SetDefaultTaxProfileButton taxProfile={taxProfile} />
+							<SetDefaultTaxProfileButton
+								taxProfile={taxProfile}
+							/>
 						)}
-						{isUsed ? (
-							<Button
-								outline
-								dusk={`viewTaxProfile-${taxProfile.id}`}
-								type="button"
-								onClick={onView}
-								className="justify-center sm:w-auto"
-								aria-label={`Ver datos del perfil fiscal ${taxProfile.name}`}
-							>
-								<EyeIcon className="h-4 w-4" />
-								Ver datos
-							</Button>
-						) : (
-							<Button
-								outline
-								type="button"
-								dusk={`editTaxProfile-${taxProfile.id}`}
-								className="justify-center sm:w-auto"
-								aria-label={`Editar perfil fiscal ${taxProfile.name}`}
-								onClick={() =>
-									router.visit(
-										route("tax-profiles.edit", {
-											tax_profile: taxProfile.id,
-										}),
-										{
-											preserveState: true,
-											preserveScroll: true,
-										},
-									)
-								}
-							>
-								<PencilIcon className="h-4 w-4" />
-								Editar
-							</Button>
-						)}
+						<Button
+							outline
+							type="button"
+							dusk={`editTaxProfile-${taxProfile.id}`}
+							className="justify-center sm:w-auto"
+							aria-label={`Editar perfil fiscal ${taxProfile.name}`}
+							onClick={() =>
+								router.visit(
+									route("tax-profiles.edit", {
+										tax_profile: taxProfile.id,
+									}),
+									{
+										preserveState: true,
+										preserveScroll: true,
+									},
+								)
+							}
+						>
+							<PencilIcon className="h-4 w-4" />
+							Editar
+						</Button>
 					</div>
 
 					<Dropdown>
@@ -443,7 +523,11 @@ function TaxProfileCard({ taxProfile, onDelete, onView }) {
 							<span className="sm:sr-only">Más acciones</span>
 						</DropdownButton>
 						<DropdownMenu anchor="bottom end">
-							<DropdownItem href={certificateUrl} target="_blank" rel="noreferrer">
+							<DropdownItem
+								href={certificateUrl}
+								target="_blank"
+								rel="noreferrer"
+							>
 								<DocumentTextIcon data-slot="icon" />
 								<DropdownLabel>Ver constancia</DropdownLabel>
 							</DropdownItem>
@@ -451,7 +535,10 @@ function TaxProfileCard({ taxProfile, onDelete, onView }) {
 								dusk={`deactivateTaxProfile-${taxProfile.id}`}
 								onClick={onDelete}
 							>
-								<TrashIcon data-slot="icon" className="stroke-red-500" />
+								<TrashIcon
+									data-slot="icon"
+									className="stroke-red-500"
+								/>
 								<DropdownLabel>Desactivar</DropdownLabel>
 							</DropdownItem>
 						</DropdownMenu>
@@ -469,11 +556,16 @@ function TaxProfileDetailRow({ label, value, icon: Icon }) {
 
 	return (
 		<div className="flex items-start justify-between gap-3 text-sm">
-			<dt className="shrink-0 text-slate-500 dark:text-slate-400">{label}</dt>
+			<dt className="shrink-0 text-slate-500 dark:text-slate-400">
+				{label}
+			</dt>
 			<dd className="min-w-0 text-right font-medium text-slate-900 dark:text-white">
 				{Icon ? (
 					<span className="inline-flex items-start justify-end gap-1.5">
-						<Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+						<Icon
+							className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400"
+							aria-hidden
+						/>
 						<span className="break-words">{value}</span>
 					</span>
 				) : (
@@ -512,7 +604,10 @@ function CopyRfcButton({ rfc, profileName }) {
 				className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
 			>
 				{copied ? (
-					<CheckIcon className="h-4 w-4 text-emerald-500" aria-hidden />
+					<CheckIcon
+						className="h-4 w-4 text-emerald-500"
+						aria-hidden
+					/>
 				) : (
 					<DocumentDuplicateIcon className="h-4 w-4" aria-hidden />
 				)}
@@ -521,7 +616,10 @@ function CopyRfcButton({ rfc, profileName }) {
 				{copied ? "RFC copiado" : ""}
 			</span>
 			{copied && (
-				<span className="text-xs font-medium text-emerald-600 dark:text-emerald-400" aria-hidden>
+				<span
+					className="text-xs font-medium text-emerald-600 dark:text-emerald-400"
+					aria-hidden
+				>
 					Copiado
 				</span>
 			)}

@@ -2,12 +2,18 @@
 
 namespace App\Actions;
 
+use App\Actions\InvoiceRequests\AttemptActivateLaboratoryInvoiceRequestForPurchaseAction;
+use App\Actions\InvoiceRequests\RecordInvoiceRequestStatusLogAction;
+use App\Enums\InvoiceRequestStatusLogTrigger;
+use App\Enums\InvoiceRequestWorkflowStatus;
 use App\Exceptions\TaxProfiles\ConstanciaExtractionException;
 use App\Models\InvoiceRequest;
+use App\Models\LaboratoryPurchase;
 use App\Models\TaxProfile;
 use App\Services\TaxProfiles\IndividualTaxpayerValidator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -15,6 +21,8 @@ class CreateInvoiceRequestAction
 {
     public function __construct(
         private readonly IndividualTaxpayerValidator $taxpayerValidator,
+        private readonly RecordInvoiceRequestStatusLogAction $recordInvoiceRequestStatusLog,
+        private readonly AttemptActivateLaboratoryInvoiceRequestForPurchaseAction $attemptActivateLaboratoryInvoiceRequest,
     ) {}
 
     public function __invoke(
@@ -82,11 +90,37 @@ class CreateInvoiceRequestAction
                     return $existingInvoiceRequest->fresh();
                 }
 
-                return $model->invoiceRequest()->create($invoiceRequestData);
+                if ($this->supportsWorkflowFields()) {
+                    $invoiceRequestData = array_merge(
+                        $invoiceRequestData,
+                        $this->initialWorkflowAttributesFor($model),
+                    );
+                }
+
+                $invoiceRequest = $model->invoiceRequest()->create($invoiceRequestData);
+
+                if ($this->shouldRecordCreatedStatusLog($model)) {
+                    ($this->recordInvoiceRequestStatusLog)(
+                        invoiceRequest: $invoiceRequest,
+                        fromStatus: null,
+                        toStatus: InvoiceRequestWorkflowStatus::AwaitingSampleCollection,
+                        trigger: InvoiceRequestStatusLogTrigger::Created,
+                    );
+                }
+
+                return $invoiceRequest;
             });
 
             if ($oldCertificate && $oldCertificate !== $fiscalCertificatePath && Storage::exists($oldCertificate)) {
                 Storage::delete($oldCertificate);
+            }
+
+            if ($model instanceof LaboratoryPurchase) {
+                ($this->attemptActivateLaboratoryInvoiceRequest)->execute(
+                    $model->fresh(['invoiceRequest']),
+                );
+
+                return $invoiceRequest->fresh();
             }
 
             return $invoiceRequest;
@@ -97,5 +131,33 @@ class CreateInvoiceRequestAction
 
             throw $e;
         }
+    }
+
+    private function supportsWorkflowFields(): bool
+    {
+        return Schema::hasColumn('invoice_requests', 'workflow_status');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function initialWorkflowAttributesFor(Model $model): array
+    {
+        if ($model instanceof LaboratoryPurchase) {
+            return [
+                'workflow_status' => InvoiceRequestWorkflowStatus::AwaitingSampleCollection->value,
+            ];
+        }
+
+        return [
+            'workflow_status' => InvoiceRequestWorkflowStatus::SubmittedToBilling->value,
+            'submitted_to_billing_at' => now(),
+        ];
+    }
+
+    private function shouldRecordCreatedStatusLog(Model $model): bool
+    {
+        return $model instanceof LaboratoryPurchase
+            && Schema::hasTable('invoice_request_status_logs');
     }
 }

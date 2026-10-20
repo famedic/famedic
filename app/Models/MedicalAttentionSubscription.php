@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\MedicalSubscriptionType;
+use App\Support\Database\PersonNameSearch;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -87,10 +88,7 @@ class MedicalAttentionSubscription extends Model
                 $query->where(function ($query) use ($search) {
                     $query->whereHas('customer', function ($query) use ($search) {
                         $query->whereHas('user', function ($query) use ($search) {
-                            $query->where('name', 'like', '%' . $search . '%')
-                                ->orWhere('email', 'like', '%' . $search . '%')
-                                ->orWhere('paternal_lastname', 'like', '%' . $search . '%')
-                                ->orWhere('maternal_lastname', 'like', '%' . $search . '%');
+                            PersonNameSearch::apply($query, $search, 'users', ['email']);
                         });
                     })
                         ->orWhereHas('customer', function ($query) use ($search) {

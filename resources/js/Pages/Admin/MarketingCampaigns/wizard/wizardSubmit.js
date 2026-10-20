@@ -1,5 +1,8 @@
 import { fromDatetimeLocalValue } from "../Components/MarketingCampaignDateRangeFields";
-import { buildGalleryPayload } from "../Components/marketingCampaignLinkBrand";
+import {
+	buildGalleryPayload,
+	buildProductImagePayload,
+} from "../Components/marketingCampaignLinkBrand";
 import { applySmartDefaults } from "./wizardDefaults";
 
 function nullIfEmpty(value) {
@@ -10,6 +13,12 @@ export function buildLinkPayload(state, context) {
 	const prepared = applySmartDefaults(state, context);
 	const link = prepared.link;
 	const galleryPayload = buildGalleryPayload(prepared.galleryItems || []);
+	const primaryProductImagePayload = buildProductImagePayload(
+		prepared.primaryProducts || [],
+	);
+	const relatedProductImagePayload = buildProductImagePayload(
+		prepared.relatedProducts || [],
+	);
 
 	return {
 		name: link.name,
@@ -47,12 +56,18 @@ export function buildLinkPayload(state, context) {
 		utm_content: nullIfEmpty(link.utm_content),
 		starts_at: fromDatetimeLocalValue(link.starts_at),
 		ends_at: fromDatetimeLocalValue(link.ends_at),
+		source_link_id: link.source_link_id || null,
+		reuse_source_media: Boolean(link.reuse_source_media),
 		primary_laboratory_test_ids: (prepared.primaryProducts || []).map(
 			(item) => item.id,
 		),
 		related_laboratory_test_ids: (prepared.relatedProducts || []).map(
 			(item) => item.id,
 		),
+		primary_product_images: JSON.stringify(primaryProductImagePayload.product_images),
+		primary_product_image_uploads: primaryProductImagePayload.product_image_uploads,
+		related_product_images: JSON.stringify(relatedProductImagePayload.product_images),
+		related_product_image_uploads: relatedProductImagePayload.product_image_uploads,
 		related_category_ids: (prepared.relatedCategories || []).map(
 			(item) => item.id,
 		),

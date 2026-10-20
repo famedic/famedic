@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Support\Database\PersonNameSearch;
 use Illuminate\Support\Facades\Storage;
 use Propaganistas\LaravelPhone\Casts\RawPhoneNumberCast;
 
@@ -50,12 +51,12 @@ class LaboratoryPurchase extends Model
         return [
             'brand' => LaboratoryBrand::class,
             'gda_status' => GdaOrderStatus::class,
-            'gda_response' => 'array',
             'birth_date' => 'date',
             'gender' => Gender::class,
             'phone' => RawPhoneNumberCast::class.':country_field',
             'temporarily_hide_gda_order_id' => 'boolean',
             'gda_consecutivo' => 'integer',
+            'gda_response' => 'array',
             'ready_at' => 'datetime',
             'results_downloaded_at' => 'datetime',
             'completed_at' => 'datetime',
@@ -105,33 +106,34 @@ class LaboratoryPurchase extends Model
 
         return $query
             ->when($filters['search'] ?? null, function ($query, $search) use ($table) {
+                $search = trim((string) $search);
+
+                if ($search === '') {
+                    return;
+                }
+
                 $query->where(function ($query) use ($search, $table) {
-                    $query->orWhere("{$table}.gda_order_id", 'LIKE', "%$search%")
-                        ->orWhere("{$table}.name", 'LIKE', "%$search%")
-                        ->orWhere("{$table}.paternal_lastname", 'LIKE', "%$search%")
-                        ->orWhere("{$table}.maternal_lastname", 'LIKE', "%$search%");
+                    $query->orWhere("{$table}.gda_order_id", 'LIKE', "%{$search}%");
+
+                    PersonNameSearch::orApply($query, $search, $table);
 
                     $query->orWhereHas('customer.user', function ($query) use ($search) {
-                        $query->where('name', 'LIKE', "%$search%")
-                            ->orWhere('email', 'LIKE', "%$search%")
-                            ->orWhere('phone', 'LIKE', "%$search%")
-                            ->orWhere('maternal_lastname', 'LIKE', "%$search%")
-                            ->orWhere('paternal_lastname', 'LIKE', "%$search%");
+                        PersonNameSearch::apply($query, $search, 'users', ['email', 'phone']);
                     });
 
                     $query->orWhereHas('transactions', function ($query) use ($search) {
-                        $query->where('reference_id', 'LIKE', "%$search%");
+                        $query->where('reference_id', 'LIKE', "%{$search}%");
                     });
 
                     $query->orWhereHas('laboratoryPurchaseItems', function ($query) use ($search) {
-                        $query->where('name', 'LIKE', "%$search%");
+                        $query->where('name', 'LIKE', "%{$search}%");
                     });
                 });
             })
             ->when(isset($filters['patient']) && trim((string) $filters['patient']) !== '', function ($query) use ($filters, $table) {
                 $patient = trim((string) $filters['patient']);
                 $query->whereRaw(
-                    "TRIM(CONCAT(COALESCE({$table}.name,''),' ',COALESCE({$table}.paternal_lastname,''),' ',COALESCE({$table}.maternal_lastname,''))) LIKE ?",
+                    PersonNameSearch::fullNameSql($table).' LIKE ?',
                     ['%'.$patient.'%']
                 );
             })
@@ -329,6 +331,16 @@ class LaboratoryPurchase extends Model
     public function laboratoryAppointment()
     {
         return $this->hasOne(LaboratoryAppointment::class)->withTrashed();
+    }
+
+    public function replacedLaboratoryPurchase()
+    {
+        return $this->belongsTo(self::class, 'replaces_laboratory_purchase_id')->withTrashed();
+    }
+
+    public function replacementLaboratoryPurchase()
+    {
+        return $this->belongsTo(self::class, 'replacement_laboratory_purchase_id')->withTrashed();
     }
 
     public function devAssistanceRequests()
@@ -859,4 +871,5 @@ class LaboratoryPurchase extends Model
             default => $query,
         };
     }
+
 }

@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\LaboratoryBilling\LaboratoryBillingDateRangeRequest;
 use App\Models\TaxProfile;
 use App\Services\LaboratoryBilling\LaboratoryBillingAccess;
 use App\Services\LaboratoryBilling\LaboratoryBillingDateRange;
+use App\Services\LaboratoryBilling\LaboratoryBillingNavCounts;
 use App\Services\LaboratoryBilling\LaboratoryBillingTaxProfilesQuery;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,6 +19,7 @@ class TaxProfilesController extends Controller
         IndexLaboratoryBillingTaxProfilesRequest $request,
         LaboratoryBillingTaxProfilesQuery $query,
         LaboratoryBillingAccess $access,
+        LaboratoryBillingNavCounts $navCounts,
     ): Response {
         $range = LaboratoryBillingDateRange::fromInput($request->input('from'), $request->input('to'));
         $filters = collect($request->only([
@@ -39,6 +41,7 @@ class TaxProfilesController extends Controller
             'filters' => $filters,
             'metrics' => $query->metrics($range),
             'canManageAutomaticReports' => $access->allowsReports($request->user()),
+            'navCounts' => $navCounts->toArray(),
         ]);
     }
 
@@ -47,6 +50,7 @@ class TaxProfilesController extends Controller
         LaboratoryBillingDateRangeRequest $request,
         LaboratoryBillingTaxProfilesQuery $query,
         LaboratoryBillingAccess $access,
+        LaboratoryBillingNavCounts $navCounts,
     ): Response {
         $access->authorize($request->user());
 
@@ -59,6 +63,7 @@ class TaxProfilesController extends Controller
                 $request->input('to')
             )->toFilterArray(),
             'canManageAutomaticReports' => $access->allowsReports($request->user()),
+            'navCounts' => $navCounts->toArray(),
         ]);
     }
 }

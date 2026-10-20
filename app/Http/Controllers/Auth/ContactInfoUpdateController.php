@@ -29,6 +29,6 @@ class ContactInfoUpdateController extends Controller
             $request->user()->save();
         }
 
-        return Redirect::route('user.edit')->flashMessage('Tu información de contacto ha sido actualizada.');
+        return Redirect::route('user.edit', ['tab' => 'contacto'])->flashMessage('Tu información de contacto ha sido actualizada.');
     }
 }

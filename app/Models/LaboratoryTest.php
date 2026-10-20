@@ -27,6 +27,7 @@ class LaboratoryTest extends Model
     {
         return [
             'requires_appointment' => 'boolean',
+            'needs_gda_review' => 'boolean',
             'brand' => LaboratoryBrand::class,
             'feature_list' => 'array',
         ];
@@ -129,6 +130,15 @@ class LaboratoryTest extends Model
 
                 if ($filters['requires_appointment'] === 'not_required') {
                     $query->where('requires_appointment', false);
+                }
+            })
+            ->when(isset($filters['needs_gda_review']) && $filters['needs_gda_review'] !== '', function ($query) use ($filters) {
+                if ($filters['needs_gda_review'] === 'flagged') {
+                    $query->where('needs_gda_review', true);
+                }
+
+                if ($filters['needs_gda_review'] === 'not_flagged') {
+                    $query->where('needs_gda_review', false);
                 }
             });
     }

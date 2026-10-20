@@ -1022,6 +1022,7 @@ export default function AutomaticReports({
 	options = {},
 	config = {},
 	canManageAutomaticReports = true,
+	navCounts = {},
 }) {
 	const [activeTab, setActiveTab] = useState(filters.tab || "configurations");
 	const [editing, setEditing] = useState(null);
@@ -1355,6 +1356,7 @@ export default function AutomaticReports({
 				<BillingNav
 					active="automatic-reports"
 					canManageAutomaticReports={canManageAutomaticReports}
+					navCounts={navCounts}
 				/>
 
 				<section className="grid gap-3 md:grid-cols-3">

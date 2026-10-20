@@ -767,3 +767,56 @@ test('Odessa response persistence failure retains a cart barrier without refundi
         ->toThrow(\App\Exceptions\LaboratoryPaymentInProgressException::class);
     Http::assertSentCount(1);
 });
+
+test('gda status migration backfills confirmed only for legacy purchases with folio and consecutivo evidence', function () {
+    if (Schema::hasColumn('laboratory_purchases', 'gda_status')) {
+        Schema::table('laboratory_purchases', function ($table) {
+            try {
+                $table->dropIndex('laboratory_purchases_gda_status_idx');
+            } catch (Throwable) {
+            }
+            $table->dropColumn('gda_status');
+        });
+    }
+
+    $customer = gdaP0Customer();
+    $base = [
+        'brand' => LaboratoryBrand::OLAB->value,
+        'name' => 'Legacy',
+        'paternal_lastname' => 'Backfill',
+        'maternal_lastname' => 'Test',
+        'phone' => '8180000000',
+        'phone_country' => 'MX',
+        'birth_date' => '1990-01-01',
+        'gender' => 1,
+        'street' => 'Calle',
+        'number' => '1',
+        'neighborhood' => 'Centro',
+        'state' => 'Nuevo León',
+        'city' => 'Monterrey',
+        'zipcode' => '64000',
+        'total_cents' => 39900,
+        'customer_id' => $customer->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ];
+
+    DB::table('laboratory_purchases')->insert([
+        $base + ['id' => 900001, 'gda_order_id' => 'GZ0L000671', 'gda_consecutivo' => 25273571],
+        $base + ['id' => 900002, 'gda_order_id' => '', 'gda_consecutivo' => null],
+        $base + ['id' => 900003, 'gda_order_id' => '0', 'gda_consecutivo' => 25273572],
+        $base + ['id' => 900004, 'gda_order_id' => 'HD0L001631', 'gda_consecutivo' => null],
+    ]);
+
+    $migration = require database_path('migrations/2026_09_22_000000_add_gda_status_to_laboratory_purchases_table.php');
+    $migration->up();
+
+    expect(DB::table('laboratory_purchases')->where('id', 900001)->value('gda_status'))->toBe(GdaOrderStatus::Confirmed->value)
+        ->and(DB::table('laboratory_purchases')->where('id', 900002)->value('gda_status'))->toBeNull()
+        ->and(DB::table('laboratory_purchases')->where('id', 900003)->value('gda_status'))->toBeNull()
+        ->and(DB::table('laboratory_purchases')->where('id', 900004)->value('gda_status'))->toBeNull();
+
+    $newPurchase = gdaP0Purchase($customer, LaboratoryBrand::OLAB, GdaOrderStatus::Pending);
+
+    expect($newPurchase->fresh()->gda_status)->toBe(GdaOrderStatus::Pending);
+});

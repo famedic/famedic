@@ -13,7 +13,11 @@ use App\Models\LaboratoryTest;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+use League\Flysystem\UnableToCheckFileExistence;
+use Mockery;
+use RuntimeException;
 
 beforeEach(function () {
     Queue::fake();
@@ -290,5 +294,84 @@ test('completed laboratory purchase without operational items is not shown', fun
         ->assertInertia(fn (Assert $page) => $page
             ->where('pendingPurchases', [])
             ->where('summary.total', 0)
+        );
+});
+
+test('laboratory purchase order pdf downloads without storage access', function () {
+    $user = pendingPurchasesUser();
+
+    $purchase = LaboratoryPurchase::query()->create([
+        'customer_id' => $user->customer->id,
+        'brand' => LaboratoryBrand::SWISSLAB,
+        'gda_order_id' => 123458,
+        'name' => 'Juan',
+        'paternal_lastname' => 'Perez',
+        'maternal_lastname' => 'Lopez',
+        'phone' => '8112345678',
+        'phone_country' => 'MX',
+        'birth_date' => '1990-01-01',
+        'gender' => Gender::MALE,
+        'street' => 'Calle 1',
+        'number' => '100',
+        'neighborhood' => 'Centro',
+        'state' => 'Nuevo Leon',
+        'city' => 'Monterrey',
+        'zipcode' => '64000',
+        'total_cents' => 10000,
+    ]);
+
+    $disk = Mockery::mock();
+    $disk->shouldReceive('put')->andThrow(new RuntimeException('S3 unavailable'));
+
+    $storage = Storage::partialMock();
+    $storage->shouldReceive('exists')
+        ->andThrow(UnableToCheckFileExistence::createForLocation('pdfs/laboratory-purchases/test.pdf', ''));
+    $storage->shouldReceive('get')
+        ->andThrow(new RuntimeException('S3 unavailable'));
+    $storage->shouldReceive('disk')
+        ->andReturn($disk);
+
+    $this->actingAs($user)
+        ->get(route('laboratory-purchases.download-pdf', ['laboratory_purchase' => $purchase->id]))
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf')
+        ->assertDownload('orden-laboratorio-123458.pdf');
+});
+
+test('laboratory purchases index survives storage existence check failure', function () {
+    $user = pendingPurchasesUser();
+
+    LaboratoryPurchase::query()->create([
+        'customer_id' => $user->customer->id,
+        'brand' => LaboratoryBrand::SWISSLAB,
+        'gda_order_id' => 123457,
+        'name' => 'Juan',
+        'paternal_lastname' => 'Perez',
+        'maternal_lastname' => 'Lopez',
+        'phone' => '8112345678',
+        'phone_country' => 'MX',
+        'birth_date' => '1990-01-01',
+        'gender' => Gender::MALE,
+        'street' => 'Calle 1',
+        'number' => '100',
+        'neighborhood' => 'Centro',
+        'state' => 'Nuevo Leon',
+        'city' => 'Monterrey',
+        'zipcode' => '64000',
+        'total_cents' => 10000,
+        'results' => 'results/rM0N1WHmO5RbfD2Qr8RMgFTCmxKS9vCiU7bm2bxd.pdf',
+    ]);
+
+    Storage::partialMock()
+        ->shouldReceive('exists')
+        ->andThrow(UnableToCheckFileExistence::createForLocation('results/rM0N1WHmO5RbfD2Qr8RMgFTCmxKS9vCiU7bm2bxd.pdf', ''));
+
+    $this->actingAs($user)
+        ->get(route('laboratory-purchases.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('purchaseCards', 1)
+            ->where('purchaseCards.0.has_results', false)
+            ->where('purchaseCards.0.pdf_url', null)
         );
 });

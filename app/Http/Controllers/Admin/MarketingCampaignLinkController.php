@@ -30,11 +30,14 @@ class MarketingCampaignLinkController extends Controller
         $this->authorize('view', $marketingCampaign);
         abort_if($marketingCampaign->isArchived(), 403);
 
+        $sourceLink = $this->sourceLinkForNewLink($marketingCampaign);
+
         return Inertia::render('Admin/MarketingCampaigns/Links/Create', [
             'campaign' => [
                 'id' => $marketingCampaign->id,
                 'name' => $marketingCampaign->name,
             ],
+            'sourceLink' => $sourceLink ? $this->linkFormPayload($sourceLink) : null,
             'wizardMode' => 'link',
             'utmPresets' => $this->utmPresets(),
             'promotionOptions' => $this->promotionOptions(),
@@ -51,11 +54,19 @@ class MarketingCampaignLinkController extends Controller
 
         $action(
             array_merge(
-                $request->safe()->except(['marketing_campaign_id', 'hero_image', 'gallery_uploads']),
+                $request->safe()->except([
+                    'marketing_campaign_id',
+                    'hero_image',
+                    'gallery_uploads',
+                    'primary_product_image_uploads',
+                    'related_product_image_uploads',
+                ]),
                 ['marketing_campaign_id' => $marketingCampaign->id],
                 [
                     'gallery_items' => $request->input('gallery_items', []),
                     'gallery_uploads' => $request->file('gallery_uploads', []),
+                    'primary_product_image_uploads' => $request->file('primary_product_image_uploads', []),
+                    'related_product_image_uploads' => $request->file('related_product_image_uploads', []),
                 ],
             ),
             $request->user()->administrator,
@@ -89,84 +100,12 @@ class MarketingCampaignLinkController extends Controller
                 'id' => $marketingCampaign->id,
                 'name' => $marketingCampaign->name,
             ],
-            'link' => [
-                'id' => $marketingCampaignLink->id,
-                'name' => $marketingCampaignLink->name,
-                'slug' => $marketingCampaignLink->slug,
-                'status' => $marketingCampaignLink->status?->value ?? $marketingCampaignLink->status,
-                'target_type' => $marketingCampaignLink->target_type?->value ?? $marketingCampaignLink->target_type,
-                'target_payload' => $marketingCampaignLink->target_payload ?? [],
-                'public_title' => $marketingCampaignLink->public_title,
-                'public_subtitle' => $marketingCampaignLink->public_subtitle,
-                'public_description' => $marketingCampaignLink->public_description,
-                'eyebrow' => $marketingCampaignLink->eyebrow,
-                'primary_cta_label' => $marketingCampaignLink->primary_cta_label,
-                'secondary_cta_label' => $marketingCampaignLink->secondary_cta_label,
-                'show_prices' => (bool) $marketingCampaignLink->show_prices,
-                'show_brand_logo' => (bool) $marketingCampaignLink->show_brand_logo,
-                'show_campaign_dates' => (bool) $marketingCampaignLink->show_campaign_dates,
-                'landing_layout' => $marketingCampaignLink->landing_layout ?: 'default',
-                'landing_template' => $marketingCampaignLink->landing_template?->value
-                    ?? $marketingCampaignLink->landing_template
-                    ?? MarketingCampaignLandingTemplate::Conversion->value,
-                'editorial_eyebrow' => $marketingCampaignLink->editorial_eyebrow,
-                'editorial_title' => $marketingCampaignLink->editorial_title,
-                'editorial_body' => $marketingCampaignLink->editorial_body,
-                'editorial_items' => $marketingCampaignLink->editorial_items ?? [],
-                'hero_image_source' => $marketingCampaignLink->hero_image_source?->value
-                    ?? $marketingCampaignLink->hero_image_source
-                    ?? 'none',
-                'hero_image_url' => $marketingCampaignLink->hero_image_url,
-                'hero_image_alt' => $marketingCampaignLink->hero_image_alt,
-                'hero_image_preview_url' => $marketingCampaignLink->resolvedHeroImageUrl(),
-                'utm_source' => $marketingCampaignLink->utm_source,
-                'utm_medium' => $marketingCampaignLink->utm_medium,
-                'utm_campaign' => $marketingCampaignLink->utm_campaign,
-                'utm_term' => $marketingCampaignLink->utm_term,
-                'utm_content' => $marketingCampaignLink->utm_content,
-                'starts_at' => $marketingCampaignLink->starts_at,
-                'ends_at' => $marketingCampaignLink->ends_at,
-                'aliases' => $marketingCampaignLink->aliases->map(fn ($alias) => [
-                    'id' => $alias->id,
-                    'slug' => $alias->slug,
-                    'created_at' => $alias->created_at,
-                ]),
-                'primary_laboratory_test_ids' => $marketingCampaignLink->primaryLandingProducts
-                    ->pluck('laboratory_test_id')
-                    ->values(),
-                'related_laboratory_test_ids' => $marketingCampaignLink->relatedLandingProducts
-                    ->pluck('laboratory_test_id')
-                    ->values(),
-                'related_category_ids' => $marketingCampaignLink->landingCategories
-                    ->pluck('laboratory_test_category_id')
-                    ->values(),
-                'primary_products' => $marketingCampaignLink->primaryLandingProducts
-                    ->map(fn ($item) => $this->productLabel($item))
-                    ->filter()
-                    ->values(),
-                'related_products' => $marketingCampaignLink->relatedLandingProducts
-                    ->map(fn ($item) => $this->productLabel($item))
-                    ->filter()
-                    ->values(),
-                'related_categories' => $marketingCampaignLink->landingCategories
-                    ->map(fn ($item) => $item->category
-                        ? ['id' => $item->category->id, 'name' => $item->category->name]
-                        : null)
-                    ->filter()
-                    ->values(),
-                'gallery_images' => $marketingCampaignLink->landingImages
-                    ->map(fn ($image) => [
-                        'id' => $image->id,
-                        'url' => $image->resolvedUrl(),
-                        'alt' => $image->alt_text,
-                        'source' => $image->source,
-                    ])
-                    ->values(),
+            'link' => array_merge($this->linkFormPayload($marketingCampaignLink), [
                 'preview_url' => route('admin.marketing-campaigns.links.preview', [
                     $marketingCampaign,
                     $marketingCampaignLink,
                 ]),
-            ],
+            ]),
             ...$this->formOptions($marketingCampaign),
         ]);
     }
@@ -182,10 +121,17 @@ class MarketingCampaignLinkController extends Controller
         $action(
             $marketingCampaignLink,
             array_merge(
-                $request->safe()->except(['hero_image', 'gallery_uploads']),
+                $request->safe()->except([
+                    'hero_image',
+                    'gallery_uploads',
+                    'primary_product_image_uploads',
+                    'related_product_image_uploads',
+                ]),
                 [
                     'gallery_items' => $request->input('gallery_items', []),
                     'gallery_uploads' => $request->file('gallery_uploads', []),
+                    'primary_product_image_uploads' => $request->file('primary_product_image_uploads', []),
+                    'related_product_image_uploads' => $request->file('related_product_image_uploads', []),
                 ],
             ),
             $request->user()->administrator,
@@ -272,6 +218,114 @@ class MarketingCampaignLinkController extends Controller
             'category_name' => $test->laboratoryTestCategory?->name,
             'public_price_cents' => (int) $test->public_price_cents,
             'famedic_price_cents' => (int) $test->famedic_price_cents,
+            'image_url' => $item->resolvedImageUrl(),
+            'image_alt' => $item->image_alt,
+            'image_source' => $item->image_source ?? 'none',
+        ];
+    }
+
+    private function sourceLinkForNewLink(MarketingCampaign $campaign): ?MarketingCampaignLink
+    {
+        $link = $campaign->links()
+            ->withCount('primaryLandingProducts')
+            ->orderByDesc('primary_landing_products_count')
+            ->orderBy('id')
+            ->first();
+
+        if (! $link) {
+            return null;
+        }
+
+        $link->load([
+            'primaryLandingProducts.laboratoryTest:id,name,other_name,brand,public_price_cents,famedic_price_cents,laboratory_test_category_id',
+            'primaryLandingProducts.laboratoryTest.laboratoryTestCategory:id,name',
+            'relatedLandingProducts.laboratoryTest:id,name,other_name,brand,public_price_cents,famedic_price_cents,laboratory_test_category_id',
+            'relatedLandingProducts.laboratoryTest.laboratoryTestCategory:id,name',
+            'landingCategories.category:id,name',
+            'landingImages' => fn ($query) => $query->where('type', 'gallery')->orderBy('position')->orderBy('id'),
+        ]);
+
+        return $link;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function linkFormPayload(MarketingCampaignLink $link): array
+    {
+        return [
+            'id' => $link->id,
+            'name' => $link->name,
+            'slug' => $link->slug,
+            'status' => $link->status?->value ?? $link->status,
+            'target_type' => $link->target_type?->value ?? $link->target_type,
+            'target_payload' => $link->target_payload ?? [],
+            'public_title' => $link->public_title,
+            'public_subtitle' => $link->public_subtitle,
+            'public_description' => $link->public_description,
+            'eyebrow' => $link->eyebrow,
+            'primary_cta_label' => $link->primary_cta_label,
+            'secondary_cta_label' => $link->secondary_cta_label,
+            'show_prices' => (bool) $link->show_prices,
+            'show_brand_logo' => (bool) $link->show_brand_logo,
+            'show_campaign_dates' => (bool) $link->show_campaign_dates,
+            'landing_layout' => $link->landing_layout ?: 'default',
+            'landing_template' => $link->landing_template?->value
+                ?? $link->landing_template
+                ?? MarketingCampaignLandingTemplate::Conversion->value,
+            'editorial_eyebrow' => $link->editorial_eyebrow,
+            'editorial_title' => $link->editorial_title,
+            'editorial_body' => $link->editorial_body,
+            'editorial_items' => $link->editorial_items ?? [],
+            'hero_image_source' => $link->hero_image_source?->value
+                ?? $link->hero_image_source
+                ?? 'none',
+            'hero_image_url' => $link->hero_image_url,
+            'hero_image_alt' => $link->hero_image_alt,
+            'hero_image_preview_url' => $link->resolvedHeroImageUrl(),
+            'utm_source' => $link->utm_source,
+            'utm_medium' => $link->utm_medium,
+            'utm_campaign' => $link->utm_campaign,
+            'utm_term' => $link->utm_term,
+            'utm_content' => $link->utm_content,
+            'starts_at' => $link->starts_at,
+            'ends_at' => $link->ends_at,
+            'aliases' => $link->aliases?->map(fn ($alias) => [
+                'id' => $alias->id,
+                'slug' => $alias->slug,
+                'created_at' => $alias->created_at,
+            ]) ?? [],
+            'primary_laboratory_test_ids' => $link->primaryLandingProducts
+                ->pluck('laboratory_test_id')
+                ->values(),
+            'related_laboratory_test_ids' => $link->relatedLandingProducts
+                ->pluck('laboratory_test_id')
+                ->values(),
+            'related_category_ids' => $link->landingCategories
+                ->pluck('laboratory_test_category_id')
+                ->values(),
+            'primary_products' => $link->primaryLandingProducts
+                ->map(fn ($item) => $this->productLabel($item))
+                ->filter()
+                ->values(),
+            'related_products' => $link->relatedLandingProducts
+                ->map(fn ($item) => $this->productLabel($item))
+                ->filter()
+                ->values(),
+            'related_categories' => $link->landingCategories
+                ->map(fn ($item) => $item->category
+                    ? ['id' => $item->category->id, 'name' => $item->category->name]
+                    : null)
+                ->filter()
+                ->values(),
+            'gallery_images' => $link->landingImages
+                ->map(fn ($image) => [
+                    'id' => $image->id,
+                    'url' => $image->resolvedUrl(),
+                    'alt' => $image->alt_text,
+                    'source' => $image->source,
+                ])
+                ->values(),
         ];
     }
 

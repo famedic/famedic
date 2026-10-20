@@ -30,9 +30,20 @@ class Account extends Page
             ->press('@updateBasicInfo');
     }
 
+    public function openContactTab(Browser $browser): void
+    {
+        $browser->click('@accountTab-contacto');
+    }
+
+    public function openPasswordTab(Browser $browser): void
+    {
+        $browser->click('@accountTab-seguridad');
+    }
+
     public function updateContactInfo(Browser $browser, string $phone, string $email): void
     {
         $browser
+            ->click('@accountTab-contacto')
             ->type('@phone', $phone)
             ->type('@email', $email)
             ->press('@updateContactInfo');
@@ -41,6 +52,7 @@ class Account extends Page
     public function updatePassword(Browser $browser, string $currentPassword, string $password, string $passwordConfirmation): void
     {
         $browser
+            ->click('@accountTab-seguridad')
             ->type('@currentPassword', $currentPassword)
             ->type('@password', $password)
             ->type('@passwordConfirmation', $passwordConfirmation)
@@ -57,13 +69,15 @@ class Account extends Page
 
     public function clearContactInfo(Browser $browser): void
     {
-        $browser->clearInput('@phone')
+        $browser->click('@accountTab-contacto')
+            ->clearInput('@phone')
             ->clearInput('@email');
     }
 
     public function clearPassword(Browser $browser): void
     {
-        $browser->clearInput('@currentPassword')
+        $browser->click('@accountTab-seguridad')
+            ->clearInput('@currentPassword')
             ->clearInput('@password')
             ->clearInput('@passwordConfirmation');
     }

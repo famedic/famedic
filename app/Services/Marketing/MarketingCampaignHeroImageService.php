@@ -130,10 +130,7 @@ class MarketingCampaignHeroImageService
 
         $extension = strtolower($upload->getClientOriginalExtension() ?: 'jpg');
         $filename = Str::uuid()->toString().'.'.$extension;
-        $path = $upload->storeAs($directory, $filename, [
-            'disk' => $disk,
-            'visibility' => 'public',
-        ]);
+        $path = $upload->storeAs($directory, $filename, $this->uploadOptions());
 
         if (! is_string($path) || $path === '') {
             throw ValidationException::withMessages([
@@ -192,7 +189,27 @@ class MarketingCampaignHeroImageService
 
     public function uploadDisk(): string
     {
-        return 'public';
+        return (string) config('marketing-campaigns.media.disk', 'public');
+    }
+
+    public function uploadVisibility(): string
+    {
+        return trim((string) config('marketing-campaigns.media.visibility', 'public'));
+    }
+
+    /**
+     * @return array{disk: string, visibility?: string}
+     */
+    public function uploadOptions(): array
+    {
+        $options = ['disk' => $this->uploadDisk()];
+        $visibility = $this->uploadVisibility();
+
+        if ($visibility !== '') {
+            $options['visibility'] = $visibility;
+        }
+
+        return $options;
     }
 
     public function assertSafeExternalUrl(string $url): void

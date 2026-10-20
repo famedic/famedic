@@ -91,6 +91,9 @@ export function SidebarLayout({ navbar, sidebar, children }) {
 					collapsed ? "lg:pl-16" : "lg:pl-64",
 				)}
 			>
+				<header className="mb-2 hidden items-center rounded-lg bg-white px-4 shadow-sm ring-1 ring-zinc-950/5 lg:flex dark:bg-slate-950 dark:ring-slate-800">
+					{navbar}
+				</header>
 				<div className="grow p-6 lg:rounded-lg lg:bg-white lg:p-10 lg:shadow-sm lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-slate-950 dark:lg:ring-slate-800">
 					<div className="mx-auto max-w-6xl">{children}</div>
 				</div>

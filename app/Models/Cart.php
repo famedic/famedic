@@ -6,6 +6,7 @@ use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Services\Carts\CartUserActivityResolver;
+use App\Support\Database\PersonNameSearch;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -219,13 +220,7 @@ class Cart extends Model
         return $query
             ->when($filters['search'] ?? null, function (Builder $q, string $search) {
                 $q->whereHas('user', function (Builder $uq) use ($search) {
-                    $uq->where(function (Builder $inner) use ($search) {
-                        $inner->where('name', 'like', '%'.$search.'%')
-                            ->orWhere('paternal_lastname', 'like', '%'.$search.'%')
-                            ->orWhere('maternal_lastname', 'like', '%'.$search.'%')
-                            ->orWhere('email', 'like', '%'.$search.'%')
-                            ->orWhere('phone', 'like', '%'.$search.'%');
-                    });
+                    PersonNameSearch::apply($uq, $search, 'users', ['email', 'phone']);
                 });
             })
             ->when($filters['type'] ?? null, fn (Builder $q, string $type) => $q->where('type', $type))

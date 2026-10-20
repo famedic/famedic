@@ -5,6 +5,7 @@ namespace App\Actions\TaxProfiles;
 use App\Exceptions\TaxProfiles\ConstanciaExtractionException;
 use App\Models\TaxProfile;
 use App\Services\TaxProfiles\IndividualTaxpayerValidator;
+use App\Support\TaxProfiles\ConstanciaDateParser;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -26,12 +27,6 @@ class UpdateTaxProfileAction
         ?UploadedFile $fiscalCertificate = null,
         ?array $extractedData = null
     ): TaxProfile {
-        if ($taxProfile->isUsed()) {
-            throw new InvalidArgumentException(
-                'Este perfil ya no se puede modificar porque fue utilizado en una solicitud de factura. Puedes usarlo en nuevas solicitudes o crear otro perfil con datos distintos.'
-            );
-        }
-
         $rfc = Str::upper(trim($rfc));
         $tipoPersona = is_string($extractedData['tipo_persona'] ?? null)
             ? $extractedData['tipo_persona']
@@ -96,7 +91,9 @@ class UpdateTaxProfileAction
                 'tipo_persona_detectado_por' => $extractedData['tipo_persona_detectado_por'] ?? 'sistema',
                 'verificado_automaticamente' => true,
                 'fecha_verificacion' => now(),
-                'fecha_inscripcion' => $extractedData['fecha_inscripcion'] ?? $taxProfile->fecha_inscripcion,
+                'fecha_inscripcion' => ConstanciaDateParser::parseForStorage(
+                    $extractedData['fecha_inscripcion'] ?? $taxProfile->fecha_inscripcion
+                ) ?? $taxProfile->fecha_inscripcion,
                 'domicilio_fiscal' => $extractedData['domicilio_fiscal'] ?? $taxProfile->domicilio_fiscal,
                 'actividades_economicas' => $extractedData['actividades_economicas'] ?? $taxProfile->actividades_economicas,
             ]);

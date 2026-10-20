@@ -29,6 +29,7 @@ export default function Invoices({
 	invoices,
 	filters = {},
 	canManageAutomaticReports = false,
+	navCounts = {},
 }) {
 	const [rangeProcessing, setRangeProcessing] = useState(false);
 	const onProcessingChange = useCallback(
@@ -83,6 +84,7 @@ export default function Invoices({
 					active="invoices"
 					query={filters}
 					canManageAutomaticReports={canManageAutomaticReports}
+					navCounts={navCounts}
 				/>
 
 				<BillingDateRangeFilter
