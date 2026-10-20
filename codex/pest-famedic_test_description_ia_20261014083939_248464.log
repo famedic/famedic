@@ -1,0 +1,130 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Unit\LaboratoryNotificationPdfRefreshTest
+  ⨯ it refreshes cached pdf when a newer results notification exists f… 82.86s  
+  ⨯ it does not refresh when results are stored on purchase              0.04s  
+  ⨯ it refreshes pdf that came from webhook payload instead of consult…  0.03s  
+  ⨯ it shows updated results badge when a newer notification arrives af… 0.02s  
+  ⨯ it hides updated results badge after patient accessed the latest no… 0.02s  
+  ⨯ it does not mark results updated when only the purchase pdf hash ch… 0.04s  
+
+   PASS  Tests\Unit\ResolveLaboratoryPurchasePdfPathHashTest
+  ✓ it keeps purchase pdf hash stable when only preparation metadata ch… 0.08s  
+  ✓ it rotates purchase pdf hash when visible preparation content chang… 0.04s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_test_description_ia_20261014083939_248464`.`laboratory_notifications`, CONSTRAINT `laboratory_notifications_laboratory_purchase_id_foreign` FOREIGN KEY (`laboratory_purchase_id`) REFE) (Connection: mysql, SQL: insert into `laboratory_notifications` (`notification_type`, `lineanegocio`, `gda_order_id`, `gda_consecutivo`, `laboratory_purchase_id`, `status`, `gda_status`, `results_received_at`, `payload`, `results_pdf_base64`, `gda_message`, `updated_at`, `created_at`) values (Notificaion-Resultados, Notificaion-Resultados, GDA-ORDER-1, 1, 100, processed, completed, 2026-10-11 14:41:02, {"header":{"marca":5},"requisition":{"convenio":99999,"value":"REQ-1"},"id":"GDA-ORDER-1"}, b2xkLXBkZg==, {"results_source":"gda_api","results_fetched_at":"2026-10-11T14:41:02.794034Z"}, 2026-10-14 14:41:02, 2026-10-14 14:41:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+13 vendor frames [22m
+  14  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:10
+  15  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:28
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[HY000]: General error: 1364 Field 'gda_order_id' doesn't have a default value (Connection: mysql, SQL: insert into `laboratory_purchases` (`results`, `updated_at`, `created_at`) values (results/gda-1-abc.pdf, 2026-10-14 14:41:02, 2026-10-14 14:41:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+15 vendor frames [22m
+  16  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_test_description_ia_20261014083939_248464`.`laboratory_notifications`, CONSTRAINT `laboratory_notifications_laboratory_purchase_id_foreign` FOREIGN KEY (`laboratory_purchase_id`) REFE) (Connection: mysql, SQL: insert into `laboratory_notifications` (`notification_type`, `lineanegocio`, `gda_order_id`, `gda_consecutivo`, `laboratory_purchase_id`, `status`, `gda_status`, `results_received_at`, `payload`, `results_pdf_base64`, `gda_message`, `updated_at`, `created_at`) values (Notificaion-Resultados, Notificaion-Resultados, GDA-ORDER-1, 1, 100, processed, completed, 2026-10-11 14:41:02, {"header":{"marca":5},"requisition":{"convenio":99999,"value":"REQ-1"},"id":"GDA-ORDER-1"}, d2ViaG9vay1wZGY=, ?, 2026-10-14 14:41:02, 2026-10-14 14:41:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+13 vendor frames [22m
+  14  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:10
+  15  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:66
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_test_description_ia_20261014083939_248464`.`laboratory_notifications`, CONSTRAINT `laboratory_notifications_laboratory_purchase_id_foreign` FOREIGN KEY (`laboratory_purchase_id`) REFE) (Connection: mysql, SQL: insert into `laboratory_notifications` (`notification_type`, `lineanegocio`, `gda_order_id`, `gda_consecutivo`, `laboratory_purchase_id`, `status`, `gda_status`, `results_received_at`, `payload`, `results_pdf_base64`, `read_at`, `gda_message`, `updated_at`, `created_at`) values (Notificaion-Resultados, Notificaion-Resultados, GDA-ORDER-1, 1, 100, processed, completed, 2026-10-11 14:41:02, {"header":{"marca":5},"requisition":{"convenio":99999,"value":"REQ-1"},"id":"GDA-ORDER-1"}, b2xkLXBkZg==, 2026-10-11 14:41:02, {"results_source":"gda_api","results_fetched_at":"2026-10-11T14:41:02.899859Z"}, 2026-10-14 14:41:02, 2026-10-14 14:41:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+13 vendor frames [22m
+  14  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:10
+  15  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:75
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_test_description_ia_20261014083939_248464`.`laboratory_notifications`, CONSTRAINT `laboratory_notifications_laboratory_purchase_id_foreign` FOREIGN KEY (`laboratory_purchase_id`) REFE) (Connection: mysql, SQL: insert into `laboratory_notifications` (`notification_type`, `lineanegocio`, `gda_order_id`, `gda_consecutivo`, `laboratory_purchase_id`, `status`, `gda_status`, `results_received_at`, `payload`, `results_pdf_base64`, `read_at`, `updated_at`, `created_at`) values (Notificaion-Resultados, Notificaion-Resultados, GDA-ORDER-1, 1, 100, processed, completed, 2026-10-11 14:41:02, {"header":{"marca":5},"requisition":{"convenio":99999,"value":"REQ-1"},"id":"GDA-ORDER-1"}, b2xkLXBkZg==, 2026-10-11 14:41:02, 2026-10-14 14:41:02, 2026-10-14 14:41:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+13 vendor frames [22m
+  14  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:10
+  15  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:95
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`famedic_test_description_ia_20261014083939_248464`.`laboratory_notifications`, CONSTRAINT `laboratory_notifications_laboratory_purchase_id_foreign` FOREIGN KEY (`laboratory_purchase_id`) REFE) (Connection: mysql, SQL: insert into `laboratory_notifications` (`notification_type`, `lineanegocio`, `gda_order_id`, `gda_consecutivo`, `laboratory_purchase_id`, `status`, `gda_status`, `results_received_at`, `payload`, `read_at`, `updated_at`, `created_at`) values (Notificaion-Resultados, Notificaion-Resultados, GDA-ORDER-1, 1, 100, processed, completed, 2026-10-14 14:40:02, {"header":{"marca":5},"requisition":{"convenio":99999,"value":"REQ-1"},"id":"GDA-ORDER-1"}, 2026-10-14 14:41:02, 2026-10-14 14:41:02, 2026-10-14 14:41:02))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+13 vendor frames [22m
+  14  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:10
+  15  tests/Unit/LaboratoryNotificationPdfRefreshTest.php:116
+
+
+  Tests:    6 failed, 2 passed (2 assertions)
+  Duration: 83.20s
+

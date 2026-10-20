@@ -10,7 +10,14 @@ use App\Models\User;
 use App\Services\Laboratory\LaboratoryGdaFailureLogService;
 
 test('gda failure log service persists uncertain exception', function () {
-    $purchase = LaboratoryPurchase::factory()->create();
+    $customer = User::factory()->withCompleteProfile()->withRegularCustomer()->create()->customer;
+    $purchase = $customer->laboratoryPurchases()->create([
+        'brand' => 'olab', 'gda_order_id' => '0', 'name' => 'Paciente',
+        'paternal_lastname' => 'Prueba', 'maternal_lastname' => 'GDA',
+        'phone' => '8180000000', 'phone_country' => 'MX', 'birth_date' => '1990-01-01',
+        'gender' => 1, 'street' => 'Calle', 'number' => '1', 'neighborhood' => 'Centro',
+        'state' => 'Nuevo León', 'city' => 'Monterrey', 'zipcode' => '64000', 'total_cents' => 39900,
+    ]);
 
     $log = app(LaboratoryGdaFailureLogService::class)->recordUncertain(
         GdaOrderResultUncertainException::forResponse(

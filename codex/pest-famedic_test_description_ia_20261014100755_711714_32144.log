@@ -1,0 +1,38 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\Admin\CouponAuthorizationInboxTest
+  ✓ it permite al autorizador ver la bandeja de autorizaciones          74.50s  
+  ✓ it bloquea la bandeja a usuarios sin rol autorizador                 0.05s  
+  ✓ it comparte navegación de autorizador solo para autorizadores        0.19s  
+  ✓ it muestra detalle de solicitud pendiente                            0.12s  
+  ✓ it impide al creador aprobar su propia solicitud                     0.10s  
+  ✓ it aprueba un maestro pendiente con OTP válido                       0.08s  
+  ✓ it rechaza un maestro pendiente con motivo obligatorio               0.08s  
+  ✓ it exige motivo mínimo al rechazar                                   0.07s  
+  ✓ it no permite doble aprobación del mismo autorizador en asignación   0.12s  
+  ⨯ it bloquea promo codes cuyo maestro está pendiente en checkout       0.04s  
+  ✓ it rechaza OTP inválido al verificar aprobación                      0.08s  
+  ✓ it lista códigos promocionales pendientes en la bandeja              0.15s  
+  ✓ it envía notificación al aprobar maestro pendiente                   0.08s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\CouponAuthorizationInboxTest…   QueryException   
+  SQLSTATE[HY000]: General error: 1364 Field 'customerable_type' doesn't have a default value (Connection: mysql, SQL: insert into `customers` (`medical_attention_identifier`, `user_id`, `updated_at`, `created_at`) values (155662, 18, 2026-10-14 16:09:11, 2026-10-14 16:09:11))
+
+  at vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php:53
+     49▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+     50▕ 
+     51▕             $this->recordsHaveBeenModified();
+     52▕ 
+  ➜  53▕             $result = $statement->execute();
+     54▕ 
+     55▕             $this->lastInsertId = $this->getPdo()->lastInsertId($sequence);
+     56▕ 
+     57▕             return $result;
+
+      [2m+15 vendor frames [22m
+  16  tests/Feature/Admin/CouponAuthorizationInboxTest.php:269
+
+
+  Tests:    1 failed, 12 passed (94 assertions)
+  Duration: 75.74s
+

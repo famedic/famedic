@@ -40,6 +40,9 @@ class PaymentAutomationService
 
     private function runHandler(string $handler, PaymentAttempt $attempt, string $expectedStatus): PaymentAutomationResult
     {
+        if (\App\Support\LocalCheckoutQa::enabled()) {
+            return new PaymentAutomationResult($handler, (string) $attempt->status, false, 'local_qa_automation_skipped', [], false, PaymentAutomationResult::emptyActiveCampaignPayload('local_qa'));
+        }
         $context = $this->buildContext($attempt);
 
         Log::info('[PaymentAutomation] '.$handler.' prepared', [

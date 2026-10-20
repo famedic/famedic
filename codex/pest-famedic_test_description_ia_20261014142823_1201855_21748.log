@@ -1,0 +1,118 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\LaboratoryPreparationGenerationDispatchTest
+  ✓ it does not dispatch when v3 and shadow are off                     77.91s  
+  ✓ it does not call OpenAI during the purchase fulfillment request      0.11s  
+  ✓ it does not dispatch v3 for fulfillment without a GDA consecutivo    0.12s  
+  ✓ it shadow-only dispatch evaluates deterministically without legacy…  0.06s  
+  ✓ it does not run shadow twice when the same legacy job is handled ag… 0.04s  
+  ✓ it gives active deterministic v3 precedence over shadow when both f… 0.06s  
+  ✓ it does not break purchase fulfillment when queueing the preparatio… 0.11s  
+  ⨯ it the preparation job supports bounded retries and records failed…  0.05s  
+  ✓ it the preparation job does not retry fidelity validation failures   0.10s  
+  ⨯ it the preparation job keeps retry behavior for transient provider…  0.06s  
+  ✓ it the preparation job reuses an unchanged source hash without dupl… 0.06s  
+  ✓ it skips stale deterministic v3 jobs when indications changed befor… 0.04s  
+  ✓ it skips queued deterministic v3 jobs after rollback to flag off     0.04s  
+  ✓ it a missing purchase does not create a generation execution         0.02s  
+  ⨯ it allows only explicit positive payment evidence for supported pay… 0.04s  
+  ⨯ it rejects pending failed refunded and unresolved payment evidence   0.04s  
+  ⨯ it requires a valid GDA folio and positive consecutivo               0.04s  
+  ✓ it revalidates payment and GDA eligibility when a generation job st… 0.03s  
+  ✓ it a changed source hash can be queued for regeneration              0.05s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\LaboratoryPreparationGenerationDispatchTest > it th…   
+  Exception "RuntimeException" not thrown.
+
+  at tests/Feature/LaboratoryPreparationGenerationDispatchTest.php:390
+    386▕         ->and($job->backoff)->toBe([60, 300, 900])
+    387▕         ->and($job->afterCommit)->toBeTrue();
+    388▕ 
+    389▕     expect(fn () => handlePreparationDispatchJob($job))
+  ➜ 390▕         ->toThrow(RuntimeException::class);
+    391▕ 
+    392▕     expect(LaboratoryPurchasePreparationSummary::query()->where('laboratory_purchase_id', $purchase->id)->count())->toBe(0)
+    393▕         ->and($purchase->fresh()->gda_order_id)->toBe($purchase->gda_order_id);
+    394▕ });
+
+  1   tests/Feature/LaboratoryPreparationGenerationDispatchTest.php:390
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\LaboratoryPreparationGenerationDispatchTest > it th…   
+  Exception "RuntimeException" not thrown.
+
+  at tests/Feature/LaboratoryPreparationGenerationDispatchTest.php:439
+    435▕     expect($job->tries)->toBe(3)
+    436▕         ->and($job->backoff)->toBe([60, 300, 900]);
+    437▕ 
+    438▕     expect(fn () => handlePreparationDispatchJob($job))
+  ➜ 439▕         ->toThrow(RuntimeException::class);
+    440▕ 
+    441▕     expect(LaboratoryPurchasePreparationSummary::query()->where('laboratory_purchase_id', $purchase->id)->count())->toBe(0);
+    442▕ });
+    443▕
+
+  1   tests/Feature/LaboratoryPreparationGenerationDispatchTest.php:439
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\LaboratoryPreparationGenerationDisp…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'status' in 'field list' (Connection: mysql, SQL: update `transactions` set `reference_id` = ODS-123, `status` = ?, `transactions`.`updated_at` = 2026-10-14 20:29:42 where `id` = 14)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:592
+    588▕ 
+    589▕             // For update or delete statements, we want to get the number of rows affected
+    590▕             // by the statement and return that back to the developer. We'll first need
+    591▕             // to execute the statement and then we'll use PDO to fetch the affected.
+  ➜ 592▕             $statement = $this->getPdo()->prepare($query);
+    593▕ 
+    594▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    595▕ 
+    596▕             $statement->execute();
+
+      [2m+10 vendor frames [22m
+  11  tests/Feature/LaboratoryPreparationGenerationDispatchTest.php:541
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\LaboratoryPreparationGenerationDispatchTest > it re…   
+  Failed asserting that two strings are identical.
+  -'payment_pending'
+  +'laboratory_items_missing'
+  
+
+  at tests/Feature/LaboratoryPreparationGenerationDispatchTest.php:575
+    571▕             'gateway_status' => null,
+    572▕             'reference_id' => 'ODS-123',
+    573▕         ], $case));
+    574▕ 
+  ➜ 575▕         expect($eligibility->evaluate($purchase->fresh())->reason)->toBe($expectedReason);
+    576▕     }
+    577▕ });
+    578▕ 
+    579▕ it('requires a valid GDA folio and positive consecutivo', function () {
+
+  1   tests/Feature/LaboratoryPreparationGenerationDispatchTest.php:575
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\LaboratoryPreparationGenerationDispatchTest > it re…   
+  Failed asserting that two strings are identical.
+  -'gda_folio_invalid'
+  +'laboratory_items_missing'
+  
+
+  at tests/Feature/LaboratoryPreparationGenerationDispatchTest.php:594
+    590▕             'gda_order_id' => $case['gda_order_id'],
+    591▕             'gda_consecutivo' => $case['gda_consecutivo'],
+    592▕         ]);
+    593▕ 
+  ➜ 594▕         expect($eligibility->evaluate($purchase->fresh())->reason)->toBe($case['reason']);
+    595▕     }
+    596▕ });
+    597▕ 
+    598▕ it('revalidates payment and GDA eligibility when a generation job starts', function () {
+
+  1   tests/Feature/LaboratoryPreparationGenerationDispatchTest.php:594
+
+
+  Tests:    5 failed, 14 passed (51 assertions)
+  Duration: 79.06s
+

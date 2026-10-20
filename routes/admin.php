@@ -25,16 +25,17 @@ use App\Http\Controllers\Admin\FailedJobsController;
 use App\Http\Controllers\Admin\GdaNotificationSimulatorController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentController;
 use App\Http\Controllers\Admin\LaboratoryAppointmentMetricsController;
+use App\Http\Controllers\Admin\LaboratoryBilling\AutomaticReportsController as LaboratoryBillingAutomaticReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\AwaitingSampleController;
 use App\Http\Controllers\Admin\LaboratoryBilling\DashboardController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ExportController as LaboratoryBillingExportController;
 use App\Http\Controllers\Admin\LaboratoryBilling\InvoicesController;
-use App\Http\Controllers\Admin\LaboratoryBilling\AutomaticReportsController as LaboratoryBillingAutomaticReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\ReportsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\RequestsController;
 use App\Http\Controllers\Admin\LaboratoryBilling\TaxProfilesController as TaxProfilesBillingController;
 use App\Http\Controllers\Admin\LaboratoryNotificationController;
 use App\Http\Controllers\Admin\LaboratoryNotificationMonitorController;
+use App\Http\Controllers\Admin\LaboratoryPreparationMonitorController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseChartController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseController;
 use App\Http\Controllers\Admin\LaboratoryPurchaseResultControlController;
@@ -45,12 +46,13 @@ use App\Http\Controllers\Admin\LaboratoryPurchases\ResultsController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\UnresolvedDevAssistanceRequestController as LaboratoryUnresolvedDevAssistanceRequestController;
 use App\Http\Controllers\Admin\LaboratoryPurchases\VendorPaymentsController as LaboratoryVendorPaymentsController;
 use App\Http\Controllers\Admin\LaboratoryResultController;
+use App\Http\Controllers\Admin\LaboratoryResults\LaboratoryResultsCenterController;
 use App\Http\Controllers\Admin\LaboratoryStoreController as AdminLaboratoryStoreController;
 use App\Http\Controllers\Admin\LaboratoryTestController;
 use App\Http\Controllers\Admin\LogsGeneralController;
-use App\Http\Controllers\Admin\MarketingCampaignCollectionController;
-use App\Http\Controllers\Admin\MarketingCampaignAttributedUsersExportController;
 use App\Http\Controllers\Admin\MarketingCampaignAiSuggestionController;
+use App\Http\Controllers\Admin\MarketingCampaignAttributedUsersExportController;
+use App\Http\Controllers\Admin\MarketingCampaignCollectionController;
 use App\Http\Controllers\Admin\MarketingCampaignController;
 use App\Http\Controllers\Admin\MarketingCampaignLinkController;
 use App\Http\Controllers\Admin\MarketingCampaignProductSearchController;
@@ -236,6 +238,10 @@ Route::prefix('admin')->middleware([
         ]);
         Route::get('laboratory-purchases/chart', [LaboratoryPurchaseChartController::class, 'index'])
             ->name('laboratory-purchases.chart');
+        Route::get('laboratory-preparation/monitor', [LaboratoryPreparationMonitorController::class, 'index'])
+            ->name('laboratory-preparation.monitor.index');
+        Route::get('laboratory-preparation/monitor/{laboratory_purchase}', [LaboratoryPreparationMonitorController::class, 'show'])->withTrashed()
+            ->name('laboratory-preparation.monitor.show');
         Route::resource('laboratory-purchases', LaboratoryPurchaseController::class)->only(['index', 'show', 'destroy']);
         Route::post(
             'laboratory-purchases/{laboratory_purchase}/resend-confirmation-email',
@@ -371,6 +377,20 @@ Route::prefix('admin')->middleware([
         Route::resource('payment-attempts', AdminPaymentAttemptController::class)->only(['index', 'show']);
 
         // Monitoreo de notificaciones de laboratorio (toma de muestra vs resultados)
+        Route::get('laboratory-results/shadow-qa', \App\Http\Controllers\Admin\LaboratoryResults\StructuredQaDashboardController::class)
+            ->name('laboratory-results.shadow-qa');
+        Route::post('laboratory-results/shadow-qa/reports/{report}/approve', [\App\Http\Controllers\Admin\LaboratoryResults\StructuredQaApprovalController::class, 'approve'])
+            ->name('laboratory-results.shadow-qa.approve');
+        Route::post('laboratory-results/shadow-qa/reports/{report}/reject', [\App\Http\Controllers\Admin\LaboratoryResults\StructuredQaApprovalController::class, 'reject'])
+            ->name('laboratory-results.shadow-qa.reject');
+        Route::post('laboratory-results/shadow-qa/reports/{report}/publish', [\App\Http\Controllers\Admin\LaboratoryResults\StructuredQaPublicationController::class, 'publish'])
+            ->name('laboratory-results.shadow-qa.publish');
+
+        Route::get('laboratory-results-center', [LaboratoryResultsCenterController::class, 'index'])
+            ->name('laboratory-results-center.index');
+        Route::get('laboratory-results-center/{laboratory_purchase}', [LaboratoryResultsCenterController::class, 'show'])
+            ->name('laboratory-results-center.show');
+
         Route::get('laboratory-notifications-monitor', [LaboratoryNotificationMonitorController::class, 'index'])
             ->name('laboratory-notifications-monitor.index');
         Route::get('laboratory-notifications-monitor/order/{orderKey}/details', [LaboratoryNotificationMonitorController::class, 'orderDetails'])

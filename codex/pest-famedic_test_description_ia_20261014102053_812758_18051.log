@@ -1,0 +1,39 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\LaboratoryCheckoutResumeLinkTest
+  ✓ it generates an opaque resume url without customer cart contact or… 80.07s  
+  ✓ it redirects the owner to protected checkout with the saved step an… 0.14s  
+  ✓ it keeps the laboratory brand from the cart when resuming checkout   0.12s  
+  ✓ it preserves the intended resume destination when the user is not a… 0.09s  
+  ✓ it rejects expired tokens safely                                     0.10s  
+  ✓ it rejects random tokens safely                                      0.05s  
+  ✓ it rejects manipulated tokens safely                                 0.10s  
+  ✓ it prevents another customer from using a valid resume token         0.11s  
+  ✓ it allows the same valid link to be opened more than once while the… 0.12s  
+  ⨯ it resumes a pending cart instead of redirecting to an unrelated hi… 0.12s  
+  ✓ it prefers the explicitly associated purchase over a newer unrelate… 0.12s  
+  ✓ it does not reopen checkout when the cart already has a purchase     0.12s  
+  ✓ it reuses the same database row for repeated generations of the sam… 0.13s  
+  ✓ it uses the secure resume url when preparing pending checkout links… 0.25s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\LaboratoryCheckoutResumeLinkTest > it resumes a pen…   
+  Failed asserting that two strings are equal.
+  -'http://localhost/laboratory/olab/checkout?step=payment'
+  +'http://localhost/laboratory-purchases/1'
+  
+
+  at tests/Feature/LaboratoryCheckoutResumeLinkTest.php:222
+    218▕     $url = app(GenerateLaboratoryCheckoutResumeLinkAction::class)->forCart($cart);
+    219▕ 
+    220▕     $this->actingAs($user)
+    221▕         ->get($url)
+  ➜ 222▕         ->assertRedirect(route('laboratory.checkout', [
+    223▕             'laboratory_brand' => LaboratoryBrand::OLAB,
+    224▕             'step' => 'payment',
+    225▕         ]));
+    226▕ });
+
+
+  Tests:    1 failed, 13 passed (48 assertions)
+  Duration: 81.71s
+

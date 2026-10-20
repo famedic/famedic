@@ -1,0 +1,25 @@
+
+   FAIL  Tests\Feature\BackfillAppointmentCartLinksCommandTest
+  ⨯ it runs only against testing sqlite database
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\BackfillAppointmentCartLinksCommand…  QueryException   
+  Database file at path [/var/www/html/storage/framework/testing/famedic_test_20261014105126_833022_27939.sqlite] does not exist. Ensure this is an absolute path to the database. (Connection: sqlite, SQL: select exists (select 1 from sqlite_master where name = 'migrations' and type = 'table') as "exists")
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connectors/SQLiteConnector.php:37
+     33▕         // Here we'll verify that the SQLite database exists before going any further
+     34▕         // as the developer probably wants to know if the database exists and this
+     35▕         // SQLite driver will not throw any exception if it does not by default.
+     36▕         if ($path === false) {
+  ➜  37▕             throw new SQLiteDatabaseDoesNotExistException($config['database']);
+     38▕         }
+     39▕ 
+     40▕         return $this->createConnection("sqlite:{$path}", $config, $options);
+     41▕     }
+
+      [2m+30 vendor frames [22m
+  31  tests/TestCase.php:95
+
+
+  Tests:    1 failed (0 assertions)
+  Duration: 0.23s
+

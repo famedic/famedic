@@ -1,0 +1,138 @@
+{
+    "phase": "8C-17D-TEST",
+    "candidate_count": 4,
+    "candidates": [
+        {
+            "physical_pdf": "gda-test-one.pdf",
+            "laboratory_result_version_id": 1,
+            "analyte_code": "FAMEDIC_CBC_HGB",
+            "analyte_name_raw": "FAMEDIC_CBC_HGB",
+            "analyte": "FAMEDIC_CBC_HGB",
+            "value": 14.4,
+            "unit_raw": "g\/dL",
+            "catalog_default_unit": null,
+            "reference_text": "11.7 - 16.3",
+            "reference_low": 11.7,
+            "reference_high": 16.3,
+            "reference_class": "complete_numeric",
+            "value_type": "numeric",
+            "source_page": 1,
+            "confidence": 1,
+            "purchase_item_id": 1,
+            "purchase_association_method": "smalot_panel_deterministic",
+            "is_cbc": true,
+            "identity": {
+                "confirmed": true,
+                "evidence": "test"
+            },
+            "purchase_item_association": {
+                "status": "confirmed",
+                "laboratory_purchase_item_id": 1,
+                "purchase_item_name": "BIOMETRIA HEMATICA COMPLETA"
+            },
+            "version_association": {
+                "confirmed": true
+            },
+            "structured_readiness": "READY_FOR_STRUCTURED_CANDIDATE"
+        },
+        {
+            "physical_pdf": "gda-test-one.pdf",
+            "laboratory_result_version_id": 1,
+            "analyte_code": "FAMEDIC_CBC_RBC",
+            "analyte_name_raw": "FAMEDIC_CBC_RBC",
+            "analyte": "FAMEDIC_CBC_RBC",
+            "value": 4.6,
+            "unit_raw": "mill\/mm3",
+            "catalog_default_unit": null,
+            "reference_text": "3.9 - 5.4",
+            "reference_low": 3.9,
+            "reference_high": 5.4,
+            "reference_class": "complete_numeric",
+            "value_type": "numeric",
+            "source_page": 1,
+            "confidence": 1,
+            "purchase_item_id": 1,
+            "purchase_association_method": "smalot_panel_deterministic",
+            "is_cbc": true,
+            "identity": {
+                "confirmed": true,
+                "evidence": "test"
+            },
+            "purchase_item_association": {
+                "status": "confirmed",
+                "laboratory_purchase_item_id": 1,
+                "purchase_item_name": "BIOMETRIA HEMATICA COMPLETA"
+            },
+            "version_association": {
+                "confirmed": true
+            },
+            "structured_readiness": "READY_FOR_STRUCTURED_CANDIDATE"
+        },
+        {
+            "physical_pdf": "gda-test-two.pdf",
+            "laboratory_result_version_id": 2,
+            "analyte_code": "FAMEDIC_CHEM_CHOL",
+            "analyte_name_raw": "FAMEDIC_CHEM_CHOL",
+            "analyte": "FAMEDIC_CHEM_CHOL",
+            "value": 207,
+            "unit_raw": "mg\/dL",
+            "catalog_default_unit": null,
+            "reference_text": "<200",
+            "reference_low": null,
+            "reference_high": 200,
+            "reference_class": "partial_numeric",
+            "value_type": "numeric",
+            "source_page": 2,
+            "confidence": 1,
+            "purchase_item_id": 2,
+            "purchase_association_method": "result_status_confirmed",
+            "is_cbc": false,
+            "identity": {
+                "confirmed": true,
+                "evidence": "test"
+            },
+            "purchase_item_association": {
+                "status": "confirmed",
+                "laboratory_purchase_item_id": 2,
+                "purchase_item_name": "BIOMETRIA HEMATICA COMPLETA"
+            },
+            "version_association": {
+                "confirmed": true
+            },
+            "structured_readiness": "READY_FOR_STRUCTURED_CANDIDATE"
+        },
+        {
+            "physical_pdf": "gda-test-two.pdf",
+            "laboratory_result_version_id": 99999,
+            "analyte_code": "FAMEDIC_CBC_PLT",
+            "analyte_name_raw": "FAMEDIC_CBC_PLT",
+            "analyte": "FAMEDIC_CBC_PLT",
+            "value": 300,
+            "unit_raw": "miles\/uL",
+            "catalog_default_unit": null,
+            "reference_text": "167 - 431",
+            "reference_low": 167,
+            "reference_high": 431,
+            "reference_class": "complete_numeric",
+            "value_type": "numeric",
+            "source_page": 1,
+            "confidence": 1,
+            "purchase_item_id": 2,
+            "purchase_association_method": null,
+            "is_cbc": true,
+            "identity": {
+                "confirmed": true,
+                "evidence": "test"
+            },
+            "purchase_item_association": {
+                "status": "confirmed",
+                "laboratory_purchase_item_id": 2,
+                "purchase_item_name": "BIOMETRIA HEMATICA COMPLETA"
+            },
+            "version_association": {
+                "confirmed": true
+            },
+            "structured_readiness": "READY_FOR_STRUCTURED_CANDIDATE"
+        }
+    ]
+}

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\CouponAuthorizationInboxService;
+use App\Services\LaboratoryPreparation\Admin\LaboratoryPreparationMonitorAccess;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,7 @@ class EnsureUserHasAdminAccount
         }
 
         $administrator = $request->user()->administrator;
+        $canViewPreparationMonitor = app(LaboratoryPreparationMonitorAccess::class)->allows($request->user());
         $isAuthorizer = $administrator->hasRole('autorizador');
         $pendingAuthorizationsCount = 0;
 
@@ -59,6 +61,11 @@ class EnsureUserHasAdminAccount
                         'current' => Route::currentRouteName() === 'admin.laboratory-purchases.index' ||
                             Route::currentRouteName() === 'admin.laboratory-purchases.chart' ||
                             Route::currentRouteName() === 'admin.laboratory-purchases.show',
+                    ] : null,
+                    $canViewPreparationMonitor ? [
+                        'label' => 'Indicaciones IA',
+                        'url' => route('admin.laboratory-preparation.monitor.index'),
+                        'current' => str_starts_with((string) Route::currentRouteName(), 'admin.laboratory-preparation.monitor'),
                     ] : null,
                     $request->user()->administrator->laboratoryConcierge ? [
                         'label' => 'Citas',
@@ -342,6 +349,11 @@ class EnsureUserHasAdminAccount
                 'url' => route('admin.carts.index'),
                 'current' => Route::currentRouteName() === 'admin.carts.index'
                     || Route::currentRouteName() === 'admin.carts.show',
+            ] : null,
+            $this->adminHasPermission($administrator, 'laboratory-notifications.monitor') ? [
+                'label' => 'Shadow QA resultados',
+                'url' => route('admin.laboratory-results.shadow-qa'),
+                'current' => Route::currentRouteName() === 'admin.laboratory-results.shadow-qa',
             ] : null,
         ]));
 

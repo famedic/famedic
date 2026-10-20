@@ -3,6 +3,7 @@
 use App\Actions\Laboratories\SyncLaboratoryAppointmentFromContactAction;
 use App\Actions\Laboratories\SyncLaboratoryCheckoutDraftAction;
 use App\Enums\CartEventType;
+use App\Enums\Gender;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
@@ -19,12 +20,11 @@ use App\Models\LaboratoryTest;
 use App\Models\PaymentAttempt;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Enums\Gender;
-use App\Services\Carts\CartAppointmentContactSignalService;
 use App\Services\Carts\AppointmentPendingDetectionService;
+use App\Services\Carts\CartAppointmentContactSignalService;
 use App\Services\Monitoring\SyncMonitoringCartService;
-use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\Config;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 function journeyFlowAdmin(): User
@@ -459,12 +459,6 @@ it('does not use historical appointment without cart_id in current cart journey'
 
     expect($response->json('data.journey.3.detail'))->toBe('No iniciada')
         ->and($response->json('data.appointment'))->toBeNull();
-});
-
-it('confirms tests run only against testing sqlite database', function () {
-    expect(app()->environment())->toBe('testing')
-        ->and(config('database.default'))->toBe('sqlite')
-        ->and(strtolower((string) config('database.connections.sqlite.database')))->toContain('test');
 });
 
 it('records checkout_started once across multiple draft sync steps', function () {

@@ -1,0 +1,20 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Admin\CouponAuthorizationInboxTest
+  ✓ it permite al autorizador ver la bandeja de autorizaciones          80.33s  
+  ✓ it bloquea la bandeja a usuarios sin rol autorizador                 0.06s  
+  ✓ it comparte navegación de autorizador solo para autorizadores        0.25s  
+  ✓ it muestra detalle de solicitud pendiente                            0.13s  
+  ✓ it impide al creador aprobar su propia solicitud                     0.12s  
+  ✓ it aprueba un maestro pendiente con OTP válido                       0.09s  
+  ✓ it rechaza un maestro pendiente con motivo obligatorio               0.08s  
+  ✓ it exige motivo mínimo al rechazar                                   0.08s  
+  ✓ it no permite doble aprobación del mismo autorizador en asignación   0.11s  
+  ✓ it bloquea promo codes cuyo maestro está pendiente en checkout       0.05s  
+  ✓ it rechaza OTP inválido al verificar aprobación                      0.08s  
+  ✓ it lista códigos promocionales pendientes en la bandeja              0.14s  
+  ✓ it envía notificación al aprobar maestro pendiente                   0.09s  
+
+  Tests:    13 passed (95 assertions)
+  Duration: 81.69s
+

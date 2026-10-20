@@ -5,10 +5,7 @@ namespace App\Actions\PayPal;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\Transaction;
-use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\PayPalService;
-use App\Services\Laboratory\UncertainGdaPaymentGuard;
-use App\Exceptions\LaboratoryPaymentAlreadyReceivedException;
 use Illuminate\Support\Facades\Log;
 
 class CapturePayPalOrderAction
@@ -16,8 +13,6 @@ class CapturePayPalOrderAction
     public function __construct(
         private PayPalService $payPalService,
         private FinalizeLaboratoryPayPalPaymentAction $finalizeLaboratoryPayPalPaymentAction,
-        private SyncMonitoringCartService $syncMonitoringCartService,
-        private UncertainGdaPaymentGuard $uncertainGdaPaymentGuard,
     ) {
     }
 
@@ -51,33 +46,61 @@ class CapturePayPalOrderAction
             return ['purchase' => null, 'status' => 'forbidden', 'message' => 'La orden no pertenece al usuario.'];
         }
 
-        if ($transaction->laboratoryPurchases()->exists()) {
-            return [
-                'purchase' => $transaction->laboratoryPurchases()->first(),
-                'status' => 'already_processed',
-            ];
+        $guard = app(\App\Services\Laboratory\UncertainGdaPaymentGuard::class);
+        try {
+            return $guard->withTransactionLock($transaction, fn () => $this->capture($transaction->fresh(), $paypalOrderId, $clientContext));
+        } catch (\Throwable) {
+            try {
+                if ($transaction->fresh()?->refunded_at !== null) {
+                    return ['purchase' => null, 'status' => 'failed', 'message' => 'El pedido no pudo completarse y se procesó el reembolso.'];
+                }
+            } catch (\Throwable) { /* Keep the uncertain outcome if storage is unavailable. */ }
+            \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'paypal_capture_requires_review', ['transaction_id' => $transaction->id]);
+            return ['purchase' => null, 'status' => 'payment_uncertain', 'message' => (new \App\Exceptions\LaboratoryPaymentInProgressException)->getMessage()];
+        }
+    }
+
+    private function capture(Transaction $transaction, string $paypalOrderId, ?array $clientContext): array
+    {
+        if ($existing = $transaction->laboratoryPurchases()->useWritePdo()->first()) {
+            $purchase = app(\App\Services\Laboratory\UncertainGdaPaymentGuard::class)->existingPurchaseResult($existing);
+            return ['purchase' => $purchase, 'status' => match ($purchase->gda_status) {
+                \App\Enums\GdaOrderStatus::Pending, \App\Enums\GdaOrderStatus::Uncertain => 'gda_uncertain',
+                \App\Enums\GdaOrderStatus::Failed => 'failed',
+                default => 'already_processed',
+            }];
         }
 
         if (($transaction->payment_status ?? '') === 'failed') {
             return ['purchase' => null, 'status' => 'failed', 'message' => 'El pago fue rechazado.'];
         }
 
-        try {
-            $brandValue = $details['laboratory_brand'] ?? null;
-            if (is_string($brandValue) && $brandValue !== '') {
-                $brand = \App\Enums\LaboratoryBrand::from($brandValue);
-                $this->syncMonitoringCartService->syncLaboratory($customer, $clientContext);
-                $cart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $brand);
-                $this->uncertainGdaPaymentGuard->withCartLock($cart, fn () => null);
-            }
-        } catch (LaboratoryPaymentAlreadyReceivedException $e) {
-            return [
-                'purchase' => $e->purchase(),
-                'status' => 'gda_uncertain',
-                'message' => $e->getMessage(),
-            ];
+        $guard = app(\App\Services\Laboratory\UncertainGdaPaymentGuard::class);
+        $cart = $guard->cartForTransaction($transaction);
+        if (! $cart) {
+            return ['purchase' => null, 'status' => 'error', 'message' => 'No se pudo verificar el carrito de este pago.'];
         }
-
+        if ($other = $guard->capturedUncertainPurchaseForCart($cart)) {
+            return ['purchase' => $other, 'status' => 'gda_uncertain', 'message' => 'Tu pago ya fue recibido; revisa tu orden.'];
+        }
+        // Recover an already captured order before issuing another capture request.
+        $guard->ensureNoUnresolvedCapture($cart, $transaction->id);
+        try {
+            $observed = $transaction->payment_status === 'captured' && is_array($transaction->raw_response)
+                ? $transaction->raw_response : $this->payPalService->getOrder($paypalOrderId);
+            $observedInfo = $this->payPalService->extractCaptureInfo($observed);
+            if (($observedInfo['capture_id'] ?? null) !== null && in_array(strtoupper((string) ($observedInfo['status'] ?? '')), ['COMPLETED', 'CAPTURED'], true)) {
+                $purchase = ($this->finalizeLaboratoryPayPalPaymentAction)($transaction, $observed, $clientContext);
+                return ['purchase' => $purchase, 'status' => $purchase?->gda_status === \App\Enums\GdaOrderStatus::Uncertain ? 'gda_uncertain' : ($purchase ? 'captured' : 'error')];
+            }
+        } catch (\Throwable) {
+            return ['purchase' => null, 'status' => isset($transaction->details['laboratory_capture_started_at']) ? 'payment_uncertain' : 'error',
+                'message' => (new \App\Exceptions\LaboratoryPaymentInProgressException)->getMessage()];
+        }
+        if (isset($transaction->details['laboratory_capture_started_at'])) {
+            return ['purchase' => null, 'status' => 'payment_uncertain', 'message' => (new \App\Exceptions\LaboratoryPaymentInProgressException)->getMessage()];
+        }
+        $transaction->update(['details' => [...($transaction->details ?? []), 'laboratory_capture_started_at' => now()->toIso8601String()]]);
         try {
             $capturePayload = $this->payPalService->captureOrder($paypalOrderId);
         } catch (\Throwable $e) {
@@ -108,10 +131,7 @@ class CapturePayPalOrderAction
 
         return [
             'purchase' => $purchase,
-            'status' => $purchase?->gda_status?->value === 'uncertain' ? 'gda_uncertain' : ($purchase ? 'captured' : 'error'),
-            'message' => $purchase?->gda_status?->value === 'uncertain'
-                ? 'Pago recibido; estamos validando la creación de tu orden de laboratorio.'
-                : null,
+            'status' => $purchase?->gda_status === \App\Enums\GdaOrderStatus::Uncertain ? 'gda_uncertain' : ($purchase ? 'captured' : 'error'),
         ];
     }
 }

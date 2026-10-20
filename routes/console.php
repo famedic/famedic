@@ -51,3 +51,6 @@ if (config('services.gda.result_refresh.enabled', false)) {
         ->everyFiveMinutes()
         ->withoutOverlapping(4);
 }
+
+// The reconciler owns recovery; enabling it requires an explicit activation timestamp.
+Schedule::command('laboratory-confirmations:reconcile')->everyMinute()->withoutOverlapping(2);

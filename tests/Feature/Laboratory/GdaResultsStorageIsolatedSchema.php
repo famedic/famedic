@@ -12,6 +12,15 @@ trait GdaResultsStorageIsolatedSchema
         Schema::disableForeignKeyConstraints();
 
         foreach ([
+            'laboratory_result_ai_explanations',
+            'customer_laboratory_ai_explanation_consents',
+            'laboratory_result_observations',
+            'laboratory_result_reports',
+            'laboratory_result_extraction_qa_metrics',
+            'laboratory_analyte_aliases',
+            'laboratory_analytes',
+            'ai_executions',
+            'ai_prompts',
             'laboratory_result_events',
             'laboratory_result_versions',
             'laboratory_result_statuses',
@@ -175,7 +184,7 @@ trait GdaResultsStorageIsolatedSchema
         Schema::create('laboratory_result_events', function (Blueprint $table) {
             $table->id();
             $table->foreignId('laboratory_result_status_id')->constrained('laboratory_result_statuses')->cascadeOnDelete();
-            $table->foreignId('laboratory_result_version_id')->nullable()->constrained('laboratory_result_versions')->nullOnDelete();
+            $table->unsignedBigInteger('laboratory_result_version_id')->nullable();
             $table->string('event_type');
             $table->string('from_status')->nullable();
             $table->string('to_status')->nullable();
@@ -186,6 +195,10 @@ trait GdaResultsStorageIsolatedSchema
 
             $table->index(['laboratory_result_status_id', 'event_type'], 'lab_result_event_status_type_index');
             $table->index('created_at', 'lab_result_event_created_at_index');
+            $table->foreign('laboratory_result_version_id', 'lab_result_event_version_fk')
+                ->references('id')
+                ->on('laboratory_result_versions')
+                ->nullOnDelete();
         });
 
         Schema::create('lab_order_event_states', function (Blueprint $table) {
@@ -250,6 +263,15 @@ trait GdaResultsStorageIsolatedSchema
         Schema::disableForeignKeyConstraints();
 
         foreach ([
+            'laboratory_result_ai_explanations',
+            'customer_laboratory_ai_explanation_consents',
+            'laboratory_result_observations',
+            'laboratory_result_reports',
+            'laboratory_result_extraction_qa_metrics',
+            'laboratory_analyte_aliases',
+            'laboratory_analytes',
+            'ai_executions',
+            'ai_prompts',
             'laboratory_result_events',
             'laboratory_result_versions',
             'laboratory_result_statuses',

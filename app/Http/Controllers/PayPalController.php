@@ -106,12 +106,10 @@ class PayPalController extends Controller
             throw ValidationException::withMessages(['coupon_id' => $e->getMessage()]);
         } catch (PromoCodeException $e) {
             throw ValidationException::withMessages(['promo_validation_token' => $e->getMessage()]);
-        } catch (LaboratoryPaymentAlreadyReceivedException $e) {
-            return response()->json([
-                'status' => 'gda_uncertain',
-                'laboratory_purchase_id' => $e->purchase()->id,
-                'message' => $e->getMessage(),
-            ]);
+        } catch (\App\Exceptions\LaboratoryPaymentInProgressException $e) {
+            return response()->json(['status' => 'payment_uncertain', 'message' => $e->getMessage()], 409);
+        } catch (\App\Exceptions\LaboratoryPaymentAlreadyReceivedException $e) {
+            return response()->json(['status' => 'gda_uncertain', 'laboratory_purchase_id' => $e->purchase()->id, 'message' => $e->getMessage()]);
         } catch (PayPalPaymentException $e) {
             Log::warning('[PayPal] create-order rechazado por API', ['message' => $e->getMessage()]);
 
@@ -158,14 +156,14 @@ class PayPalController extends Controller
             ], 422);
         }
 
-        if ($status !== 'gda_uncertain') {
+        if (! in_array($status, ['gda_uncertain', 'payment_uncertain'], true)) {
             session()->flash('confetti', true);
         }
 
         return response()->json([
             'status' => $status,
             'laboratory_purchase_id' => $purchase?->id,
-            'message' => $result['message'] ?? null,
+            'message' => $result['message'] ?? ($status === 'gda_uncertain' ? 'Pago recibido; estamos validando tu orden.' : null),
         ]);
     }
 

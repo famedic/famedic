@@ -6,6 +6,7 @@ use App\Enums\CouponPurchaseType;
 use App\Enums\Gender;
 use App\Enums\GdaOrderStatus;
 use App\Enums\LaboratoryBrand;
+use App\Support\Laboratory\GdaResultsPdfStatus;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -14,7 +15,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Support\Database\PersonNameSearch;
-use App\Support\Laboratory\GdaResultsPdfStatus;
 use Illuminate\Support\Facades\Storage;
 use Propaganistas\LaravelPhone\Casts\RawPhoneNumberCast;
 
@@ -230,6 +230,16 @@ class LaboratoryPurchase extends Model
         return $this->hasMany(LaboratoryResultStatus::class);
     }
 
+    public function resultReports()
+    {
+        return $this->hasMany(LaboratoryResultReport::class);
+    }
+
+    public function preparationSummary()
+    {
+        return $this->hasOne(LaboratoryPurchasePreparationSummary::class);
+    }
+
     /**
      * Resumen del reverso de saldo a favor, si el pedido tuvo cupón restaurado al cancelarse.
      *
@@ -355,7 +365,7 @@ class LaboratoryPurchase extends Model
     protected function formattedCouponDiscount(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->coupon_discount_cents
+            get: fn () => $this->coupon_discount_cents
                 ? formattedCentsPrice($this->coupon_discount_cents)
                 : null,
         );

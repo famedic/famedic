@@ -1,0 +1,25 @@
+
+   PASS  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest
+  ✓ monitor muestra archivo en storage si cuando purchase results exist… 2.74s  
+  ✓ monitor marca stale si pdf gda en storage y notificacion mas nueva   1.82s  
+  ✓ monitor muestra base64 legacy en bd si cuando results pdf base64 ex… 1.79s  
+  ✓ boton descargar usa storage si purchase results existe               1.81s  
+  ✓ forzar actualizacion desde gda guarda en storage no en base64        1.83s  
+  ✓ forzar actualizacion desde gda con error http devuelve json control… 1.76s  
+  ✓ forzar actualizacion desde gda con html en lugar de pdf devuelve js… 3.75s  
+  ✓ forzar actualizacion desde gda con falla de storage no marca sincro… 1.74s  
+  ✓ sincronizar desde gda con excepcion interna devuelve json controlad… 1.78s  
+  ✓ detalle ajax para orden inexistente devuelve json controlado         1.73s  
+  ✓ resultado manual no se sobrescribe por gda automatico                1.78s  
+  ✓ paciente descarga resultado automatico desde storage                 1.75s  
+  ✓ paciente descarga resultado manual desde storage                     1.73s  
+  ✓ paciente con historico base64 sigue funcionando                      1.71s  
+  ✓ fallback lazy funciona si job no corrio                              1.77s  
+  ✓ gabinete descarga correctamente con gda order id alfanumerico        1.73s  
+  ✓ laboratorio normal descarga correctamente con gda order id numerico  1.75s  
+  ✓ en qa safe mode correos a pacientes no autorizados se bloquean       1.66s  
+  ✓ monitor incluye sync logs con datos de sincronizacion                1.83s  
+
+  Tests:    19 passed (95 assertions)
+  Duration: 36.50s
+

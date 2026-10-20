@@ -1,0 +1,246 @@
+
+   FAIL  Tests\Feature\Admin\LaboratoryResultsCenterTest
+  ⨯ admin autorizado puede acceder
+  ⨯ usuario sin permiso no puede acceder
+  ⨯ listado y paginacion funcionan
+  ⨯ filtros funcionan
+  ⨯ purchase sin resultado es not available
+  ⨯ purchase con pdf sin report es received
+  ⨯ extraction pending es processing
+  ⨯ report estructurado es structured
+  ⨯ validation manual review es review
+  ⨯ report publicado es published
+  ⨯ extraction failed es failed
+  ⨯ errores se sanitizan y no exponen pii ni secretos ni raw payload
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\LaboratoryResultsCenterTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 1059 Identifier name 'laboratory_result_ai_explanations_laboratory_result_observation_id_foreign' is too long (Connection: mysql, SQL: alter table `laboratory_result_ai_explanations` add constraint `laboratory_result_ai_explanations_laboratory_result_observation_id_foreign` foreign key (`laboratory_result_observation_id`) references `laboratory_result_observations` (`id`) on delete cascade)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:565
+    561▕             if ($this->pretending()) {
+    562▕                 return true;
+    563▕             }
+    564▕ 
+  ➜ 565▕             $statement = $this->getPdo()->prepare($query);
+    566▕ 
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Admin/LaboratoryResultsCenterTest.php:472
+  10  tests/Feature/Admin/LaboratoryResultsCenterTest.php:47
+
+
+  Tests:    12 failed (0 assertions)
+  Duration: 46.46s
+

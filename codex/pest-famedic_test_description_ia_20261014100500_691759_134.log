@@ -1,0 +1,14 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Admin\CouponAssignCreditTypesTest
+  ✓ assign puede crear código promocional compartido                    81.31s  
+  ✓ assign normaliza código promocional                                  0.08s  
+  ✓ assign rechaza código promocional duplicado                          0.09s  
+  ✓ assign exige max_redemptions para código promocional                 0.07s  
+  ✓ saldo a favor no exige vigencia en assign                            0.09s  
+  ✓ endpoint check-code indica disponibilidad                            0.09s  
+  ✓ generador backend produce código legible único                       0.03s  
+
+  Tests:    7 passed (24 assertions)
+  Duration: 81.82s
+

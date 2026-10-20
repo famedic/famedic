@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Head, usePage } from "@inertiajs/react";
 import ApplicationLogo from "@/Components/ApplicationLogo";
 import { WhatsAppIcon } from "@/Components/Checkout/CheckoutWhatsAppHelp";
@@ -9,18 +9,31 @@ import {
 	CheckCircleIcon,
 	ChevronDownIcon,
 	ClipboardDocumentCheckIcon,
+	ClipboardDocumentListIcon,
 	ClockIcon,
 	CurrencyDollarIcon,
+	DocumentTextIcon,
+	ExclamationTriangleIcon,
 	IdentificationIcon,
 	MapPinIcon,
 	PhoneIcon,
 	QueueListIcon,
+	SparklesIcon,
 	UserCircleIcon,
 } from "@heroicons/react/24/outline";
 
+const PREPARATION_STATUS = {
+	AI_READY: "AI_READY",
+	AI_PENDING: "AI_PENDING",
+	AI_FAILED: "AI_FAILED",
+	FALLBACK: "FALLBACK",
+};
+
 function Section({ title, icon: Icon, action, children, className = "" }) {
 	return (
-		<section className={`rounded-lg border border-zinc-200 bg-white p-5 shadow-sm ${className}`}>
+		<section
+			className={`rounded-lg border border-zinc-200 bg-white p-5 shadow-sm ${className}`}
+		>
 			<div className="flex min-w-0 flex-col items-start justify-between gap-4 sm:flex-row">
 				<div className="flex min-w-0 items-center gap-3">
 					{Icon && (
@@ -28,7 +41,9 @@ function Section({ title, icon: Icon, action, children, className = "" }) {
 							<Icon className="size-5" aria-hidden />
 						</span>
 					)}
-					<h2 className="min-w-0 break-words text-lg font-semibold text-[#171f45]">{title}</h2>
+					<h2 className="min-w-0 break-words text-lg font-semibold text-[#171f45]">
+						{title}
+					</h2>
 				</div>
 				{action}
 			</div>
@@ -38,16 +53,24 @@ function Section({ title, icon: Icon, action, children, className = "" }) {
 }
 
 function Detail({ icon: Icon, label, children, emphasized = false }) {
-	if (children === null || children === undefined || children === "") return null;
+	if (children === null || children === undefined || children === "")
+		return null;
 
 	return (
 		<div className="flex min-w-0 gap-3">
-			<Icon className="mt-0.5 size-5 shrink-0 text-[#005e96]" aria-hidden />
+			<Icon
+				className="mt-0.5 size-5 shrink-0 text-[#005e96]"
+				aria-hidden
+			/>
 			<div className="min-w-0">
-				<p className="text-sm font-semibold uppercase text-zinc-500">{label}</p>
+				<p className="text-sm font-semibold uppercase text-zinc-500">
+					{label}
+				</p>
 				<div
 					className={`mt-1 break-words text-base ${
-						emphasized ? "text-lg font-semibold text-[#171f45]" : "text-zinc-900"
+						emphasized
+							? "text-lg font-semibold text-[#171f45]"
+							: "text-zinc-900"
 					}`}
 				>
 					{children}
@@ -62,10 +85,20 @@ function Row({ label, value, strong = false, negative = false }) {
 
 	return (
 		<div className="flex min-w-0 items-baseline justify-between gap-4 py-2 text-base">
-			<span className={strong ? "font-semibold text-[#171f45]" : "text-zinc-600"}>{label}</span>
+			<span
+				className={
+					strong ? "font-semibold text-[#171f45]" : "text-zinc-600"
+				}
+			>
+				{label}
+			</span>
 			<span
 				className={`min-w-0 text-right tabular-nums ${
-					strong ? "text-lg font-bold text-[#171f45]" : negative ? "font-medium text-emerald-700" : "text-zinc-900"
+					strong
+						? "text-lg font-bold text-[#171f45]"
+						: negative
+							? "font-medium text-emerald-700"
+							: "text-zinc-900"
 				}`}
 			>
 				{negative ? "-" : ""}
@@ -78,17 +111,33 @@ function Row({ label, value, strong = false, negative = false }) {
 function StatusBadge({ appointment }) {
 	const requiresAppointment = Boolean(appointment?.requires_appointment);
 	const hasAppointment = Boolean(appointment?.has_appointment);
-	const text = hasAppointment ? "Cita programada" : requiresAppointment ? "Cita pendiente" : "No requiere cita";
+	const text = hasAppointment
+		? "Cita programada"
+		: requiresAppointment
+			? "Cita pendiente"
+			: "No requiere cita";
 	const tone = hasAppointment
 		? "bg-lime-100 text-lime-950"
 		: requiresAppointment
 			? "bg-amber-100 text-amber-900"
 			: "bg-emerald-100 text-emerald-900";
 
-	return <span className={`inline-flex rounded-md px-2.5 py-1 text-sm font-semibold ${tone}`}>{text}</span>;
+	return (
+		<span
+			className={`inline-flex rounded-md px-2.5 py-1 text-sm font-semibold ${tone}`}
+		>
+			{text}
+		</span>
+	);
 }
 
-function PrimaryLink({ href, children, outline = false, external = false, icon: Icon = null }) {
+function PrimaryLink({
+	href,
+	children,
+	outline = false,
+	external = false,
+	icon: Icon = null,
+}) {
 	if (!href) return null;
 
 	const className = outline
@@ -96,7 +145,12 @@ function PrimaryLink({ href, children, outline = false, external = false, icon: 
 		: "inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[#005e96] px-4 py-2 text-base font-semibold text-white transition hover:bg-[#004d7c] sm:w-auto";
 
 	return (
-		<a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined} className={className}>
+		<a
+			href={href}
+			target={external ? "_blank" : undefined}
+			rel={external ? "noreferrer noopener" : undefined}
+			className={className}
+		>
 			{Icon && <Icon className="mr-2 size-4 shrink-0" aria-hidden />}
 			{children}
 		</a>
@@ -114,7 +168,10 @@ function formatStoresCount(count) {
 }
 
 function normalizePersonName(value) {
-	return String(value || "").trim().replace(/\s+/gu, " ").toLowerCase();
+	return String(value || "")
+		.trim()
+		.replace(/\s+/gu, " ")
+		.toLowerCase();
 }
 
 function buildSupportWhatsAppUrl() {
@@ -128,9 +185,323 @@ function buildAbsoluteUrl(path, currentUrl) {
 	return new URL(path, currentUrl).toString();
 }
 
+function resolvePreparationStatus(preparation) {
+	if (!preparation) return null;
+
+	return (
+		preparation.ai_status ||
+		(preparation.has_ai_summary
+			? PREPARATION_STATUS.AI_READY
+			: PREPARATION_STATUS.FALLBACK)
+	);
+}
+
+function studyInstructions(study) {
+	return (study?.indications || study?.instructions || "").trim();
+}
+
+function studyHasInstructions(study) {
+	const instructions = studyInstructions(study);
+
+	return Boolean(instructions) && instructions !== "—";
+}
+
+function studiesWithInstructions(studies) {
+	return (studies || []).filter(studyHasInstructions);
+}
+
+function SharedPreparationSectionBlock({ section }) {
+	const title = section?.title || "Indicaciones";
+	const content = section?.content || "";
+
+	if (!content.trim()) return null;
+
+	return (
+		<div className="min-w-0 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+			<div className="mb-3 flex min-w-0 items-start gap-3">
+				<span className="grid size-8 shrink-0 place-items-center rounded-full bg-sky-50 text-[#005e96]">
+					<DocumentTextIcon className="size-4" aria-hidden />
+				</span>
+				<h3 className="min-w-0 break-words pt-0.5 text-base font-semibold leading-snug text-[#171f45]">
+					{title}
+				</h3>
+			</div>
+			<div className="whitespace-pre-wrap break-words text-base leading-7 text-zinc-800">
+				{content}
+			</div>
+		</div>
+	);
+}
+
+function SharedSpecialInstructionsBlock({ instructions }) {
+	if (!instructions.length) return null;
+
+	return (
+		<div className="min-w-0 rounded-lg border border-amber-200 bg-amber-50 p-4">
+			<div className="mb-3 flex min-w-0 items-center gap-2">
+				<span className="grid size-8 shrink-0 place-items-center rounded-full bg-amber-100 text-amber-800">
+					<ExclamationTriangleIcon className="size-4" aria-hidden />
+				</span>
+				<h3 className="min-w-0 text-base font-semibold text-amber-950">
+					Importante
+				</h3>
+			</div>
+			<div className="space-y-3 text-base leading-7 text-amber-950">
+				{instructions.map((instruction, index) => (
+					<p
+						key={`${instruction.content}-${index}`}
+						className="whitespace-pre-wrap break-words"
+					>
+						{instruction.content}
+					</p>
+				))}
+			</div>
+		</div>
+	);
+}
+
+function SharedIndividualInstructionsBlock({ instructions }) {
+	if (!instructions.length) return null;
+
+	return (
+		<div className="min-w-0 space-y-3">
+			<h3 className="text-base font-semibold text-[#171f45]">
+				Indicaciones específicas
+			</h3>
+			{instructions.map((instruction, index) => (
+				<div
+					key={`${instruction.study_name}-${index}`}
+					className="min-w-0 rounded-lg border border-zinc-200 bg-white p-4"
+				>
+					<p className="mb-2 flex min-w-0 items-start gap-2 font-semibold text-zinc-950">
+						<BeakerIcon
+							className="mt-0.5 size-4 shrink-0 text-[#005e96]"
+							aria-hidden
+						/>
+						<span className="min-w-0 break-words">
+							{instruction.study_name || "Estudio"}
+						</span>
+					</p>
+					<p className="whitespace-pre-wrap break-words text-base leading-7 text-zinc-800">
+						{instruction.content}
+					</p>
+				</div>
+			))}
+		</div>
+	);
+}
+
+function SharedPreparationSummary({ summary }) {
+	const sections = Array.isArray(summary?.sections) ? summary.sections : [];
+	const specialInstructions = Array.isArray(summary?.special_instructions)
+		? summary.special_instructions.filter((instruction) =>
+				String(instruction?.content || "").trim(),
+			)
+		: [];
+	const individualInstructions = Array.isArray(
+		summary?.individual_instructions,
+	)
+		? summary.individual_instructions.filter(
+				(instruction) =>
+					String(instruction?.content || "").trim() &&
+					String(instruction?.study_name || "").trim(),
+			)
+		: [];
+
+	return (
+		<div className="min-w-0 space-y-4">
+			{sections.map((section, index) => (
+				<SharedPreparationSectionBlock
+					key={section.key || `${section.title}-${index}`}
+					section={section}
+				/>
+			))}
+			<SharedSpecialInstructionsBlock
+				instructions={specialInstructions}
+			/>
+			<SharedIndividualInstructionsBlock
+				instructions={individualInstructions}
+			/>
+		</div>
+	);
+}
+
+function SharedOriginalStudiesList({ studies }) {
+	const visibleStudies = studiesWithInstructions(studies);
+
+	if (!visibleStudies.length) {
+		return (
+			<p className="text-base text-zinc-600">
+				No hay estudios con indicaciones de preparación para esta orden.
+			</p>
+		);
+	}
+
+	return (
+		<div className="min-w-0 space-y-3">
+			{visibleStudies.map((study, index) => {
+				const instructions = studyInstructions(study);
+				const featureList = Array.isArray(study.feature_list)
+					? study.feature_list
+					: [];
+
+				return (
+					<div
+						key={`${study.name}-${index}`}
+						className="min-w-0 rounded-lg border border-zinc-200 bg-white p-4"
+					>
+						<p className="mb-2 flex min-w-0 items-start gap-2 font-semibold text-zinc-950">
+							<BeakerIcon
+								className="mt-0.5 size-4 shrink-0 text-[#005e96]"
+								aria-hidden
+							/>
+							<span className="min-w-0 break-words">
+								{study.name || study.study_name || "Estudio"}
+							</span>
+						</p>
+						{featureList.length > 0 && (
+							<ul className="mb-3 flex min-w-0 flex-wrap gap-2 text-sm text-zinc-700">
+								{featureList.map((feature) => (
+									<li
+										key={feature}
+										className="rounded-md bg-zinc-100 px-3 py-2"
+									>
+										{feature}
+									</li>
+								))}
+							</ul>
+						)}
+						<p className="whitespace-pre-wrap break-words text-base leading-7 text-zinc-800">
+							{instructions}
+						</p>
+					</div>
+				);
+			})}
+		</div>
+	);
+}
+
+function SharedOriginalInstructionsDisclosure({ studies }) {
+	const [open, setOpen] = useState(false);
+	const reactId = useId();
+	const contentId = `shared-original-preparation-${reactId.replace(/:/g, "")}`;
+	const triggerId = `shared-original-preparation-trigger-${reactId.replace(/:/g, "")}`;
+	const visibleStudies = studiesWithInstructions(studies);
+
+	if (!visibleStudies.length) return null;
+
+	return (
+		<div className="border-t border-zinc-200 pt-4">
+			<button
+				id={triggerId}
+				type="button"
+				aria-expanded={open}
+				aria-controls={contentId}
+				onClick={() => setOpen((current) => !current)}
+				className="flex min-h-12 w-full min-w-0 items-center justify-between gap-3 rounded-lg border border-zinc-200 px-4 py-3 text-left transition hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-[#005e96] focus:ring-offset-2"
+			>
+				<span className="flex min-w-0 items-start gap-3">
+					<ClipboardDocumentListIcon
+						className="mt-0.5 size-5 shrink-0 text-zinc-500"
+						aria-hidden
+					/>
+					<span className="min-w-0">
+						<span className="block text-base font-semibold text-zinc-950">
+							Ver indicaciones originales
+						</span>
+						<span className="mt-0.5 block text-sm leading-relaxed text-zinc-600">
+							Consulta las instrucciones específicas de cada
+							estudio
+						</span>
+					</span>
+				</span>
+				<ChevronDownIcon
+					className={`size-5 shrink-0 text-zinc-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+					aria-hidden
+				/>
+			</button>
+			<div
+				id={contentId}
+				role="region"
+				aria-labelledby={triggerId}
+				hidden={!open}
+				className={open ? "mt-3" : undefined}
+			>
+				<SharedOriginalStudiesList studies={studies} />
+			</div>
+		</div>
+	);
+}
+
+function SharedPreparationContent({ preparation, legacyStudies }) {
+	const aiStatus = resolvePreparationStatus(preparation);
+	const preparationStudies =
+		preparation?.studies?.length > 0
+			? preparation.studies
+			: legacyStudies || [];
+	const hasSummary = aiStatus === PREPARATION_STATUS.AI_READY;
+	const isPending = aiStatus === PREPARATION_STATUS.AI_PENDING;
+	const summary = preparation?.summary || {};
+
+	if (!preparation) {
+		return <IndicationsAccordion studies={legacyStudies || []} />;
+	}
+
+	const introCopy = hasSummary
+		? "Hemos simplificado las indicaciones para que sea más fácil prepararte."
+		: isPending
+			? "Revisa las indicaciones de tus estudios antes de acudir al laboratorio."
+			: "Consulta las indicaciones de cada estudio antes de acudir al laboratorio.";
+
+	return (
+		<div className="min-w-0 space-y-4">
+			<div className="flex min-w-0 gap-3">
+				<span className="grid size-9 shrink-0 place-items-center rounded-md bg-sky-50 text-[#005e96]">
+					{hasSummary ? (
+						<SparklesIcon className="size-5" aria-hidden />
+					) : (
+						<DocumentTextIcon className="size-5" aria-hidden />
+					)}
+				</span>
+				<div className="min-w-0">
+					<h3 className="break-words text-lg font-semibold text-[#171f45]">
+						Preparación para tus estudios
+					</h3>
+					<p className="mt-2 break-words text-base leading-7 text-zinc-700">
+						{introCopy}
+					</p>
+				</div>
+			</div>
+
+			{hasSummary ? (
+				<>
+					<SharedPreparationSummary summary={summary} />
+					<SharedOriginalInstructionsDisclosure
+						studies={preparationStudies}
+					/>
+				</>
+			) : (
+				<>
+					<SharedOriginalStudiesList studies={preparationStudies} />
+					{isPending && (
+						<p className="text-base leading-7 text-zinc-600">
+							Estamos preparando un resumen más sencillo de estas
+							indicaciones.
+						</p>
+					)}
+				</>
+			)}
+		</div>
+	);
+}
+
 function IndicationsAccordion({ studies }) {
-	const firstWithIndications = studies.findIndex((study) => Boolean(study.indications));
-	const [openIndexes, setOpenIndexes] = useState(firstWithIndications >= 0 ? [firstWithIndications] : []);
+	const firstWithIndications = studies.findIndex((study) =>
+		Boolean(study.indications),
+	);
+	const [openIndexes, setOpenIndexes] = useState(
+		firstWithIndications >= 0 ? [firstWithIndications] : [],
+	);
 	const indicationIndexes = studies
 		.map((study, index) => (study.indications ? index : null))
 		.filter((index) => index !== null);
@@ -170,7 +541,10 @@ function IndicationsAccordion({ studies }) {
 					const panelId = `study-indications-${index}`;
 
 					return (
-						<div key={`indications-${study.name}-${index}`} className="bg-white">
+						<div
+							key={`indications-${study.name}-${index}`}
+							className="bg-white"
+						>
 							<button
 								type="button"
 								className="flex min-h-12 w-full min-w-0 flex-col gap-2 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between"
@@ -178,18 +552,33 @@ function IndicationsAccordion({ studies }) {
 								aria-controls={panelId}
 								onClick={() => toggleIndex(index)}
 							>
-								<span className="min-w-0 break-words text-base font-semibold text-zinc-950">{study.name}</span>
+								<span className="min-w-0 break-words text-base font-semibold text-zinc-950">
+									{study.name}
+								</span>
 								<span className="inline-flex shrink-0 items-center gap-2 text-base font-semibold text-sky-700">
-									{isOpen ? "Ocultar indicaciones" : "Ver indicaciones"}
-									<ChevronDownIcon className={`size-5 text-zinc-500 transition ${isOpen ? "rotate-180" : ""}`} aria-hidden />
+									{isOpen
+										? "Ocultar indicaciones"
+										: "Ver indicaciones"}
+									<ChevronDownIcon
+										className={`size-5 text-zinc-500 transition ${isOpen ? "rotate-180" : ""}`}
+										aria-hidden
+									/>
 								</span>
 							</button>
 							{isOpen && (
-								<div id={panelId} className="border-t border-zinc-100 px-4 py-4">
+								<div
+									id={panelId}
+									className="border-t border-zinc-100 px-4 py-4"
+								>
 									{study.indications ? (
-										<p className="whitespace-pre-line break-words text-base leading-7 text-zinc-800">{study.indications}</p>
+										<p className="whitespace-pre-line break-words text-base leading-7 text-zinc-800">
+											{study.indications}
+										</p>
 									) : (
-										<p className="text-base text-zinc-600">Sin indicaciones registradas para este estudio.</p>
+										<p className="text-base text-zinc-600">
+											Sin indicaciones registradas para
+											este estudio.
+										</p>
 									)}
 								</div>
 							)}
@@ -204,7 +593,10 @@ function IndicationsAccordion({ studies }) {
 function CheckLine({ children }) {
 	return (
 		<li className="flex gap-2">
-			<CheckCircleIcon className="mt-0.5 size-5 shrink-0 text-lime-600" aria-hidden />
+			<CheckCircleIcon
+				className="mt-0.5 size-5 shrink-0 text-lime-600"
+				aria-hidden
+			/>
 			<span>{children}</span>
 		</li>
 	);
@@ -215,55 +607,100 @@ function OperationalDatum({ label, value }) {
 
 	return (
 		<div className="rounded-md bg-zinc-50 px-3 py-2">
-			<p className="text-sm font-semibold uppercase text-zinc-500">{label}</p>
-			<p className={`mt-1 break-words font-semibold text-zinc-950 ${["Folio", "Consecutivo"].includes(label) ? "text-xl" : "text-lg"}`}>{value}</p>
+			<p className="text-sm font-semibold uppercase text-zinc-500">
+				{label}
+			</p>
+			<p
+				className={`mt-1 break-words font-semibold text-zinc-950 ${["Folio", "Consecutivo"].includes(label) ? "text-xl" : "text-lg"}`}
+			>
+				{value}
+			</p>
 		</div>
 	);
 }
 
-function AppointmentBoardingPass({ appointment, brand, store, share, storeDirectoryUrl }) {
+function AppointmentBoardingPass({
+	appointment,
+	brand,
+	store,
+	share,
+	storeDirectoryUrl,
+}) {
 	return (
 		<Section title="Tu cita" icon={CalendarDaysIcon}>
 			<div className="grid gap-5 lg:grid-cols-[0.7fr_1.3fr]">
-				<div className="rounded-lg border border-[#e6e1f7] border-l-4 border-l-[#5944b5] bg-[#f7f5ff] p-4">
-					<p className="text-sm font-semibold uppercase text-[#5944b5]">Tu cita está programada en esta sucursal</p>
-					<p className="mt-3 break-words text-2xl font-semibold text-[#171f45]">{appointment.formatted_date}</p>
+				<div className="rounded-lg border border-l-4 border-[#e6e1f7] border-l-[#5944b5] bg-[#f7f5ff] p-4">
+					<p className="text-sm font-semibold uppercase text-[#5944b5]">
+						Tu cita está programada en esta sucursal
+					</p>
+					<p className="mt-3 break-words text-2xl font-semibold text-[#171f45]">
+						{appointment.formatted_date}
+					</p>
 					{appointment.formatted_time && (
 						<p className="mt-2 flex items-center gap-2 text-xl font-semibold text-[#5944b5]">
-							<ClockIcon className="size-6 text-[#5944b5]" aria-hidden />
+							<ClockIcon
+								className="size-6 text-[#5944b5]"
+								aria-hidden
+							/>
 							{appointment.formatted_time}
 						</p>
 					)}
 					{share?.formatted_expires_at && (
-						<p className="mt-4 text-sm leading-6 text-zinc-600">Enlace válido hasta {share.formatted_expires_at}.</p>
+						<p className="mt-4 text-sm leading-6 text-zinc-600">
+							Enlace válido hasta {share.formatted_expires_at}.
+						</p>
 					)}
 				</div>
 				<div className="space-y-4">
 					<div>
-						<p className="text-sm font-semibold uppercase text-zinc-500">{brand.label || "Laboratorio"}</p>
-						<h3 className="mt-1 break-words text-xl font-semibold text-[#171f45]">{store?.name}</h3>
-						{store?.address && <p className="mt-2 break-words text-base leading-7 text-zinc-700">{store.address}</p>}
+						<p className="text-sm font-semibold uppercase text-zinc-500">
+							{brand.label || "Laboratorio"}
+						</p>
+						<h3 className="mt-1 break-words text-xl font-semibold text-[#171f45]">
+							{store?.name}
+						</h3>
+						{store?.address && (
+							<p className="mt-2 break-words text-base leading-7 text-zinc-700">
+								{store.address}
+							</p>
+						)}
 					</div>
 					<div className="grid gap-3 text-base text-zinc-700 sm:grid-cols-3">
-						{store?.weekly_hours && <p>Lun-vie: {store.weekly_hours}</p>}
-						{store?.saturday_hours && <p>Sábado: {store.saturday_hours}</p>}
-						{store?.sunday_hours && <p>Domingo: {store.sunday_hours}</p>}
+						{store?.weekly_hours && (
+							<p>Lun-vie: {store.weekly_hours}</p>
+						)}
+						{store?.saturday_hours && (
+							<p>Sábado: {store.saturday_hours}</p>
+						)}
+						{store?.sunday_hours && (
+							<p>Domingo: {store.sunday_hours}</p>
+						)}
 					</div>
 					{store?.phone && (
 						<p className="flex gap-2 text-base text-zinc-500">
-							<PhoneIcon className="mt-0.5 size-4 shrink-0 text-zinc-400" aria-hidden />
+							<PhoneIcon
+								className="mt-0.5 size-4 shrink-0 text-zinc-400"
+								aria-hidden
+							/>
 							<span className="break-all">{store.phone}</span>
 						</p>
 					)}
 					<div className="flex flex-wrap gap-3">
-						<PrimaryLink href={store?.google_maps_url} external icon={MapPinIcon}>
+						<PrimaryLink
+							href={store?.google_maps_url}
+							external
+							icon={MapPinIcon}
+						>
 							Cómo llegar
 						</PrimaryLink>
 						<PrimaryLink href={storeDirectoryUrl} outline>
 							Ver otras sucursales
 						</PrimaryLink>
 					</div>
-					<p className="text-sm leading-6 text-zinc-500">Para acudir a otra sucursal, confirma primero el cambio de cita.</p>
+					<p className="text-sm leading-6 text-zinc-500">
+						Para acudir a otra sucursal, confirma primero el cambio
+						de cita.
+					</p>
 				</div>
 			</div>
 		</Section>
@@ -285,7 +722,9 @@ function NoAppointmentStores({ brand, storeDirectoryUrl }) {
 				<div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 					<div className="min-w-0">
 						<p className="break-words text-base text-zinc-700">
-							Puedes acudir a cualquiera de las sucursales disponibles de {brand.label || "tu laboratorio"} dentro de su horario de atención.
+							Puedes acudir a cualquiera de las sucursales
+							disponibles de {brand.label || "tu laboratorio"}{" "}
+							dentro de su horario de atención.
 						</p>
 					</div>
 				</div>
@@ -297,13 +736,22 @@ function NoAppointmentStores({ brand, storeDirectoryUrl }) {
 function GuideStep({ number, icon: Icon, title, children }) {
 	return (
 		<div className="flex min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4">
-			<span className="grid size-8 shrink-0 place-items-center rounded-md bg-zinc-950 text-base font-semibold text-white">{number}</span>
+			<span className="grid size-8 shrink-0 place-items-center rounded-md bg-zinc-950 text-base font-semibold text-white">
+				{number}
+			</span>
 			<div className="min-w-0">
 				<div className="flex min-w-0 items-center gap-2">
-					<Icon className="size-5 shrink-0 text-sky-700" aria-hidden />
-					<h3 className="min-w-0 break-words text-base font-semibold text-zinc-950">{title}</h3>
+					<Icon
+						className="size-5 shrink-0 text-sky-700"
+						aria-hidden
+					/>
+					<h3 className="min-w-0 break-words text-base font-semibold text-zinc-950">
+						{title}
+					</h3>
 				</div>
-				<div className="mt-2 break-words text-base leading-7 text-zinc-700">{children}</div>
+				<div className="mt-2 break-words text-base leading-7 text-zinc-700">
+					{children}
+				</div>
 			</div>
 		</div>
 	);
@@ -314,6 +762,7 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 	const appointment = laboratoryOrder?.appointment || {};
 	const store = laboratoryOrder?.store;
 	const studies = laboratoryOrder?.studies || [];
+	const preparation = laboratoryOrder?.preparation ?? null;
 	const brand = laboratoryOrder?.order?.brand || {};
 	const patient = laboratoryOrder?.patient || {};
 	const purchaser = laboratoryOrder?.purchaser || {};
@@ -325,8 +774,11 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 	const storeDirectoryUrl = brand.stores_url;
 	const samePurchaserAndPatient =
 		normalizePersonName(purchaser.name) !== "" &&
-		normalizePersonName(purchaser.name) === normalizePersonName(patient.full_name);
-	const showSecondFolio = order.laboratory_order_folio && order.laboratory_order_folio !== order.famedic_folio;
+		normalizePersonName(purchaser.name) ===
+			normalizePersonName(patient.full_name);
+	const showSecondFolio =
+		order.laboratory_order_folio &&
+		order.laboratory_order_folio !== order.famedic_folio;
 	const appointmentCard = hasAppointment ? (
 		<AppointmentBoardingPass
 			appointment={appointment}
@@ -340,11 +792,16 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 			<div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<div className="min-w-0">
 					<p className="break-words text-base text-zinc-700">
-						Tus estudios requieren cita. Revisa las sucursales de {brand.label || "tu laboratorio"} para continuar.
+						Tus estudios requieren cita. Revisa las sucursales de{" "}
+						{brand.label || "tu laboratorio"} para continuar.
 					</p>
-					<p className="mt-2 text-base font-semibold text-zinc-950">{formatStoresCount(brand.stores_count)}</p>
+					<p className="mt-2 text-base font-semibold text-zinc-950">
+						{formatStoresCount(brand.stores_count)}
+					</p>
 				</div>
-				<PrimaryLink href={storeDirectoryUrl}>Ver sucursales</PrimaryLink>
+				<PrimaryLink href={storeDirectoryUrl}>
+					Ver sucursales
+				</PrimaryLink>
 			</div>
 		</Section>
 	) : null;
@@ -352,11 +809,17 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 		<div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
 			<Section title="Paciente y titular" icon={UserCircleIcon}>
 				<div className="grid gap-4 sm:grid-cols-2">
-					<Detail icon={IdentificationIcon} label="Paciente" emphasized>
+					<Detail
+						icon={IdentificationIcon}
+						label="Paciente"
+						emphasized
+					>
 						{patient.full_name || "Paciente"}
 					</Detail>
 					<Detail icon={UserCircleIcon} label="Titular de la compra">
-						{samePurchaserAndPatient ? "Mismo paciente" : purchaser.name}
+						{samePurchaserAndPatient
+							? "Mismo paciente"
+							: purchaser.name}
 					</Detail>
 					<Detail icon={CalendarDaysIcon} label="Fecha de nacimiento">
 						{patient.formatted_birth_date}
@@ -373,7 +836,10 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 						{order.famedic_folio || order.folio}
 					</Detail>
 					{showSecondFolio && (
-						<Detail icon={QueueListIcon} label="Folio de laboratorio">
+						<Detail
+							icon={QueueListIcon}
+							label="Folio de laboratorio"
+						>
 							{order.laboratory_order_folio}
 						</Detail>
 					)}
@@ -392,17 +858,27 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 			<Section title="Estudios solicitados" icon={BeakerIcon}>
 				<div className="divide-y divide-zinc-200">
 					{studies.map((study, index) => (
-						<article key={`${study.name}-${index}`} className="py-4 first:pt-0 last:pb-0">
+						<article
+							key={`${study.name}-${index}`}
+							className="py-4 first:pt-0 last:pb-0"
+						>
 							<div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
 								<div className="min-w-0">
-									<h3 className="break-words text-base font-semibold text-zinc-950">{study.name}</h3>
+									<h3 className="break-words text-base font-semibold text-zinc-950">
+										{study.name}
+									</h3>
 									{study.feature_list?.length > 0 && (
 										<ul className="mt-3 flex min-w-0 flex-wrap gap-2 text-sm text-zinc-700">
-											{study.feature_list.map((feature) => (
-												<li key={feature} className="rounded-md bg-zinc-100 px-3 py-2">
-													{feature}
-												</li>
-											))}
+											{study.feature_list.map(
+												(feature) => (
+													<li
+														key={feature}
+														className="rounded-md bg-zinc-100 px-3 py-2"
+													>
+														{feature}
+													</li>
+												),
+											)}
 										</ul>
 									)}
 								</div>
@@ -420,7 +896,11 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 			<Section title="Resumen de orden" icon={CurrencyDollarIcon}>
 				<div className="divide-y divide-zinc-100">
 					<Row label="Subtotal" value={pricing.subtotal} />
-					<Row label="Cupón aplicado" value={pricing.coupon_discount} negative />
+					<Row
+						label="Cupón aplicado"
+						value={pricing.coupon_discount}
+						negative
+					/>
 					<div className="mt-3 rounded-lg border border-sky-100 bg-sky-50 px-4 py-3">
 						<Row label="Total" value={pricing.total} strong />
 					</div>
@@ -429,13 +909,23 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 		</div>
 	);
 	const preparationCard = (
-		<Section title="Indicaciones de preparación" icon={ClipboardDocumentCheckIcon}>
-			<IndicationsAccordion studies={studies} />
+		<Section
+			title="Indicaciones de preparación"
+			icon={ClipboardDocumentCheckIcon}
+		>
+			<SharedPreparationContent
+				preparation={preparation}
+				legacyStudies={studies}
+			/>
 		</Section>
 	);
 	const visitGuideCards = (
 		<section className="grid gap-4 lg:grid-cols-3">
-			<GuideStep number="1" icon={ClipboardDocumentCheckIcon} title="Antes de ir">
+			<GuideStep
+				number="1"
+				icon={ClipboardDocumentCheckIcon}
+				title="Antes de ir"
+			>
 				<ul className="space-y-2">
 					<CheckLine>
 						<strong>Revisa</strong> las indicaciones de preparación.
@@ -455,10 +945,22 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 			</GuideStep>
 			<GuideStep number="2" icon={IdentificationIcon} title="En sucursal">
 				<div className="grid gap-2">
-					<OperationalDatum label="Folio" value={order.laboratory_order_folio || order.folio} />
-					<OperationalDatum label="Consecutivo" value={order.consecutive} />
-					<OperationalDatum label="Paciente" value={patient.full_name || "Paciente"} />
-					<OperationalDatum label="Fecha de nacimiento" value={patient.formatted_birth_date} />
+					<OperationalDatum
+						label="Folio"
+						value={order.laboratory_order_folio || order.folio}
+					/>
+					<OperationalDatum
+						label="Consecutivo"
+						value={order.consecutive}
+					/>
+					<OperationalDatum
+						label="Paciente"
+						value={patient.full_name || "Paciente"}
+					/>
+					<OperationalDatum
+						label="Fecha de nacimiento"
+						value={patient.formatted_birth_date}
+					/>
 				</div>
 			</GuideStep>
 			<GuideStep number="3" icon={CheckCircleIcon} title="Al llegar">
@@ -469,23 +971,37 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 					</li>
 					<li className="flex gap-2">
 						<span className="font-semibold text-zinc-950">2.</span>
-						<span>Comparte tu folio{hasConsecutive ? " y consecutivo" : ""}.</span>
+						<span>
+							Comparte tu folio
+							{hasConsecutive ? " y consecutivo" : ""}.
+						</span>
 					</li>
 					<li className="flex gap-2">
 						<span className="font-semibold text-zinc-950">3.</span>
-						<span>Indica que vienes por estudios de laboratorio.</span>
+						<span>
+							Indica que vienes por estudios de laboratorio.
+						</span>
 					</li>
 				</ol>
 			</GuideStep>
 		</section>
 	);
 	const noAppointmentStoresCard = !requiresAppointment ? (
-		<NoAppointmentStores brand={brand} storeDirectoryUrl={storeDirectoryUrl} />
+		<NoAppointmentStores
+			brand={brand}
+			storeDirectoryUrl={storeDirectoryUrl}
+		/>
 	) : null;
-	const currentUrl = props?.ziggy?.location || (typeof window !== "undefined" ? window.location.href : "");
+	const currentUrl =
+		props?.ziggy?.location ||
+		(typeof window !== "undefined" ? window.location.href : "");
 	const metaTitle = "Orden de compra de laboratorio | FAMEDIC";
-	const metaDescription = "Consulta la información de tu orden de laboratorio, estudios solicitados, cita e indicaciones de preparación.";
-	const metaImageUrl = buildAbsoluteUrl("/images/og/famedic-og.png", currentUrl);
+	const metaDescription =
+		"Consulta la información de tu orden de laboratorio, estudios solicitados, cita e indicaciones de preparación.";
+	const metaImageUrl = buildAbsoluteUrl(
+		"/images/og/famedic-og.png",
+		currentUrl,
+	);
 
 	return (
 		<>
@@ -496,7 +1012,10 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 				<meta property="og:title" content={metaTitle} />
 				<meta property="og:description" content={metaDescription} />
 				<meta property="og:image" content={metaImageUrl} />
-				<meta property="og:image:alt" content="FAMEDIC, salud al alcance de todos" />
+				<meta
+					property="og:image:alt"
+					content="FAMEDIC, salud al alcance de todos"
+				/>
 				<meta property="og:url" content={currentUrl} />
 				<meta name="twitter:card" content="summary_large_image" />
 				<meta name="twitter:title" content={metaTitle} />
@@ -518,7 +1037,11 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 							{brand.logo_url && (
 								<div className="flex shrink-0 items-center justify-start lg:justify-end">
 									<div className="rounded-lg border border-zinc-200 bg-white p-3">
-										<img src={brand.logo_url} alt={brand.label || "Laboratorio"} className="h-12 w-auto" />
+										<img
+											src={brand.logo_url}
+											alt={brand.label || "Laboratorio"}
+											className="h-12 w-auto"
+										/>
 									</div>
 								</div>
 							)}
@@ -527,7 +1050,9 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 						<div className="bg-[#171f45] px-5 py-7 text-white">
 							<div className="flex min-w-0 flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
 								<div className="min-w-0">
-									<p className="text-base font-semibold uppercase text-lime-300">Orden de compra de laboratorio</p>
+									<p className="text-base font-semibold uppercase text-lime-300">
+										Orden de compra de laboratorio
+									</p>
 									<h1 className="mt-3 break-words text-3xl font-semibold tracking-normal text-white sm:text-4xl">
 										{patient.full_name || "Paciente"}
 									</h1>
@@ -542,12 +1067,16 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 												Folio {order.folio}
 											</span>
 										)}
-										<StatusBadge appointment={appointment} />
+										<StatusBadge
+											appointment={appointment}
+										/>
 									</div>
 								</div>
 								{pricing.total && (
 									<div className="min-w-0 text-left lg:text-right">
-										<p className="text-sm font-semibold uppercase text-white/70">Total</p>
+										<p className="text-sm font-semibold uppercase text-white/70">
+											Total
+										</p>
 										<p className="mt-2 break-words text-4xl font-bold tracking-normal text-lime-300 sm:text-5xl">
 											{pricing.total}
 										</p>
@@ -567,13 +1096,19 @@ export default function SharedLaboratoryOrder({ laboratoryOrder, share }) {
 					<footer className="border-t border-zinc-200 pt-5">
 						<div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-4 text-base text-zinc-700">
 							<div className="flex min-w-0 flex-col items-center justify-center gap-4 text-center sm:flex-row sm:text-left">
-								<p className="font-medium text-zinc-800">¿Necesitas ayuda? Tenemos estos canales de soporte.</p>
+								<p className="font-medium text-zinc-800">
+									¿Necesitas ayuda? Tenemos estos canales de
+									soporte.
+								</p>
 								<div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row">
 									<a
 										href="tel:8128601893"
 										className="inline-flex min-h-11 items-center justify-center rounded-md border border-emerald-200 bg-white px-4 py-2 font-semibold text-[#171f45] transition hover:border-[#005e96] hover:text-[#005e96]"
 									>
-										<PhoneIcon className="mr-2 size-5 shrink-0 text-teal-700" aria-hidden />
+										<PhoneIcon
+											className="mr-2 size-5 shrink-0 text-teal-700"
+											aria-hidden
+										/>
 										81 2860 1893
 									</a>
 									<a

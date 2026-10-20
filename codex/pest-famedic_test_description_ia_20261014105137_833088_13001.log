@@ -1,0 +1,197 @@
+
+   PASS  Tests\Feature\Coupons\CouponBeneficiaryIsolatedTest
+  ✓ preview detecta usuario registrado                                   3.61s  
+  ✓ preview detecta beneficiario pendiente                               3.38s  
+  ✓ preview detecta email invalido                                       3.40s  
+  ✓ preview detecta duplicado en archivo                                 3.68s  
+  ✓ preview detecta email ya beneficiario                                7.05s  
+  ✓ confirm asigna usuario registrado con coupon user                    4.04s  
+  ✓ confirm crea pending user sin coupon user                            3.48s  
+  ✓ confirm respeta unique campana email                                 3.36s  
+  ✓ confirm respeta max beneficiaries contando pendientes                3.60s  
+  ✓ confirm copia vigencia y minimo en hijos                             3.61s  
+  ✓ confirm mezcla usuario registrado y pendiente                        3.44s  
+  ✓ plantilla csv existe con encabezados esperados                       3.32s  
+  ✓ get user balance no cuenta pendientes sin usuario                    3.32s  
+
+   PASS  Tests\Feature\Coupons\CouponBeneficiaryLinkingIsolatedTest
+  ✓ usuario verificado vincula beneficiario pendiente                    3.43s  
+  ✓ usuario no verificado no vincula                                     3.52s  
+  ✓ listener verified vincula beneficiario                               3.62s  
+  ✓ doble ejecucion es idempotente                                       3.36s  
+  ✓ no vincula beneficiario cancelled                                    3.48s  
+  ✓ no vincula si email no coincide normalizado                          5.20s  
+  ✓ no vincula si cupon maestro inactivo                                 3.25s  
+  ✓ no vincula si cupon maestro no aprobado                              3.42s  
+  ✓ vincula multiples campanas mismo email                               3.40s  
+  ✓ hereda vigencia y compra minima                                      3.35s  
+  ✓ comando dry run no modifica datos                                    3.43s  
+  ✓ comando sin dry run vincula pendientes                               3.40s  
+
+   PASS  Tests\Feature\Coupons\CouponBeneficiaryNotificationsIsolatedTest
+  ✓ mailables criticos implementan should queue                          3.52s  
+  ✓ confirm pendiente envia invitacion                                   3.94s  
+  ✓ confirm pendiente actualiza campos invitacion                        3.75s  
+  ✓ reenviar invitacion desde servicio funciona                          3.85s  
+  ✓ reenviar invitacion respeta cooldown                                 3.45s  
+  ✓ no permite reenviar beneficiario asignado                            3.33s  
+  ✓ no permite reenviar beneficiario cancelled                           3.37s  
+  ✓ vincular envia email activacion                                      3.41s  
+  ✓ activacion actualiza activated at y activation notified at           5.28s  
+  ✓ doble vinculacion no duplica email activacion                        3.32s  
+  ✓ fallo notificacion in app no revierte vinculacion                    3.46s  
+  ✓ invitacion incluye vigencia y compra minima                          3.57s  
+  ✓ usuario registrado asignado no recibe invitacion pendiente           3.53s  
+  ✓ confirm masiva encola invitaciones para pendientes                   3.37s  
+  ✓ confirm pendiente crea beneficiario aunque notificaciones esten des… 3.45s  
+  ✓ confirm registrado encola asignacion                                 3.36s  
+  ✓ colas funcionan con queue connection sync                            3.34s  
+  ✓ comando envia invitaciones pendientes sin enviar                     3.81s  
+
+   PASS  Tests\Feature\Coupons\CouponBeneficiaryReportIsolatedTest
+  ✓ usuario con dos creditos aparece una sola vez                        3.47s  
+  ✓ assigned coupons count cuenta correctamente                          3.33s  
+  ✓ available balance suma solo cupones vigentes no usados               3.50s  
+  ✓ used balance suma transacciones no revertidas                        3.34s  
+  ✓ reversed balance suma transacciones revertidas                       5.77s  
+  ✓ beneficiario pendiente sin usuario aparece como pendiente            3.36s  
+  ✓ mismo email pendiente en dos campanas se agrupa                      3.32s  
+  ✓ pendiente vinculado no aparece como fila pendiente duplicada         3.42s  
+  ✓ filtro busqueda por email funciona                                   3.40s  
+  ✓ filtro estado registrado y pendiente funciona                        3.33s  
+  ✓ filtro con saldo disponible funciona                                 3.40s  
+  ✓ consulta requiere permiso cupones view                               3.34s  
+
+   PASS  Tests\Feature\Coupons\CouponCampaignAdminActionsIsolatedTest
+  ✓ desactivar campana activa cambia is active a false                   4.56s  
+  ✓ desactivar campana genera audit log                                  4.52s  
+  ✓ desactivar campana no revoca hijos existentes                        4.68s  
+  ✓ desactivar campana no cancela pendientes existentes                  5.09s  
+  ✓ campana inactiva no permite nuevas asignaciones                      8.01s  
+  ✓ campana inactiva no permite carga masiva                             4.95s  
+  ✓ campana inactiva no permite reenviar invitacion                      4.39s  
+  ✓ eliminar campana sin actividad funciona                              4.51s  
+  ✓ eliminar campana sin actividad genera audit log                      4.41s  
+  ✓ eliminar campana con hijo falla                                      4.87s  
+  ✓ eliminar campana con beneficiario falla                              4.43s  
+  ✓ eliminar campana con transaccion falla                               4.50s  
+  ✓ eliminar campana con asignacion directa falla                        4.43s  
+  ✓ resumen actividad y flags para ui                                    4.48s  
+  ✓ campana con actividad reporta has activity true                      4.44s  
+  ✓ accion delete rechazada genera audit log                             6.56s  
+
+   PASS  Tests\Feature\Coupons\CouponConceptIsolatedTest
+  ✓ concepto existente mantiene coupon concept id                        3.50s  
+  ✓ otro crea nuevo coupon concept                                       3.78s  
+  ✓ otro reutiliza concepto existente case insensitive                   3.49s  
+  ✓ otro vacio falla validacion                                          3.53s  
+  ✓ concepto creado queda disponible en lista                            3.53s  
+
+   PASS  Tests\Feature\Coupons\CouponEligibilityIsolatedTest
+  ✓ cupon sin restricciones funciona como hoy                            3.41s  
+  ✓ cupon con valid from futuro no aplica                                3.62s  
+  ✓ cupon con expires at pasado no aplica                                3.46s  
+  ✓ cupon dentro de ventana de vigencia aplica                           3.61s  
+  ✓ cupon con min purchase y total menor falla                           3.48s  
+  ✓ cupon con min purchase y total igual aplica                          3.79s  
+  ✓ cupon con min purchase y total mayor aplica                          3.93s  
+  ✓ get user balance no suma cupones vencidos                            5.43s  
+  ✓ get available coupons no devuelve cupones vencidos                   3.41s  
+  ✓ al crear cupon hijo se copian campos de vigencia y minimo            4.04s  
+  ✓ reverso de saldo no modifica vigencia ni compra minima               3.94s  
+
+   PASS  Tests\Feature\Coupons\CouponEligibilityModesIsolatedTest
+  ✓ validity mode open guarda fechas null                                3.31s  
+  ✓ validity mode configured sin fechas falla                            3.42s  
+  ✓ validity mode configured solo expires at guarda correctamente        3.40s  
+  ✓ validity mode configured con expires menor a valid from falla        3.34s  
+  ✓ minimum purchase mode none guarda null                               3.41s  
+  ✓ minimum purchase mode required sin monto falla                       3.41s  
+  ✓ minimum purchase mode required con monto guarda centavos             3.28s  
+
+   PASS  Tests\Feature\Coupons\CouponMultipleCreditsPresentationIsolatedTest
+  ✓ juan scenario carrito 451 distingue aplicable y condicional          3.41s  
+  ✓ carrito 2500 ambos aplicables y recomendacion hibrida                3.38s  
+  ✓ recomendacion hibrida sin vencimiento elige mayor monto              3.44s  
+  ✓ cupon vencido no aparece en presentacion paciente                    5.63s  
+  ✓ cupon programado no aparece como disponible                          3.38s  
+  ✓ saldo mayor al total marca balance too large                         3.51s  
+  ✓ backend permite aplicar credito aplicable                            3.35s  
+  ✓ backend rechaza credito con compra minima no cumplida                3.38s  
+  ✓ presentacion excluye beneficiarios pending user                      3.67s  
+  ✓ build patient balance presentation mantiene compatibilidad           3.38s  
+
+   PASS  Tests\Feature\Coupons\CouponPatientBalancePresentationIsolatedTest
+  ✓ build patient balance presentation incluye saldo y cupones           3.33s  
+  ✓ build patient balance presentation sin saldo devuelve cero           3.42s  
+  ✓ build patient balance presentation excluye cupones vencidos          3.72s  
+  ✓ build patient balance presentation no incluye beneficiarios pending… 3.86s  
+  ✓ build patient balance presentation incluye min purchase en cupones   3.88s  
+  ✓ checkout rechaza cupon con saldo mayor al total                      3.49s  
+  ✓ checkout rechaza cupon si no cumple compra minima                    3.41s  
+  ✓ checkout permite cupon aplicable cuando cumple reglas                6.11s  
+  ✓ net total resta credito a favor del total bruto                      4.51s  
+  ✓ net total no es negativo si credito supera total                     3.35s  
+
+   PASS  Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest
+  ✓ cancelar beneficiario pendiente cambia status a cancelled            4.54s  
+  ✓ cancelar pendiente setea cancelled at                                4.54s  
+  ✓ pendiente cancelado ya no cuenta contra cupo                         4.51s  
+  ✓ pendiente cancelado no se vincula al verificar email                 4.65s  
+  ✓ pendiente cancelado no permite reenviar invitacion                   4.50s  
+  ✓ revocar credito asignado no usado lo oculta de checkout              4.50s  
+  ✓ revocar credito asignado no usado pone hijo inactivo                 4.56s  
+  ✓ revocar credito asignado no usado pone remaining cents en cero       4.50s  
+  ✓ revocar credito sincroniza beneficiary a cancelled                   4.62s  
+  ✓ no permite revocar credito usado con transaccion activa              6.35s  
+  ✓ permite revocar credito revertido restaurado                         4.53s  
+  ✓ revocacion genera audit log                                          4.52s  
+  ✓ cancelacion pendiente genera audit log                               4.53s  
+  ✓ endpoint cancelar pendiente requiere permiso edit                    4.54s  
+  ✓ endpoint revocar requiere permiso edit                               4.81s  
+
+   PASS  Tests\Feature\Coupons\LaboratoryPurchaseCouponReversalIsolatedTest
+  ✓ reverso exitoso restaura saldo marca transaccion y audita            0.96s  
+  ✓ action orquestadora delega y retorna monto restaurado                0.81s  
+  ✓ reverso es idempotente y no duplica saldo                            0.87s  
+  ✓ pedido sin cupon retorna cero sin error                              0.90s  
+  ✓ inconsistencia coupon discount sin transaccion lanza excepcion       0.74s  
+  ✓ transaccion de otro usuario lanza excepcion                          0.79s  
+  ✓ pedido de otro cliente lanza excepcion                               0.73s  
+  ✓ cupon no marcado como usado lanza excepcion                          0.90s  
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Coupons\LaboratoryPurchaseCouponReversalPhase3Test
+  ✓ getCouponReversalSummary expone datos del reverso en pedido cancel… 77.05s  
+  ✓ pedido sin reverso no expone couponReversal summary                  0.04s  
+  ✓ transacción revertida permanece en historial del cupón               0.04s  
+  ✓ notificación al cliente incluye saldo restaurado cuando aplica       0.03s  
+  ✓ notificación al cliente sin cupón no menciona saldo restaurado       0.02s  
+  ✓ notificación GDA incluye saldo restaurado cuando aplica              0.03s  
+  ✓ cancelación con cupón envía notificación con monto restaurado        0.06s  
+  ✓ auditoría reverse_coupon_application queda disponible para logs      0.04s  
+  ✓ admin puede ver detalle de cupón con transacción revertida en props  0.26s  
+  ✓ admin pedido cancelado recibe prop couponReversal                    0.16s  
+  ✓ admin pedido sin cupón no recibe couponReversal                      0.14s  
+
+   PASS  Tests\Feature\Coupons\LaboratoryPurchaseCouponReversalTest
+  ✓ cancelación con cupón 100% coupon_balance restaura saldo y marca re… 0.06s  
+  ✓ cancelación mixta cupón y pago real restaura cupón sin alterar coup… 0.06s  
+  ✓ cancelación sin cupón continúa normalmente                           0.04s  
+  ✓ doble reverso es idempotente y no duplica saldo                      0.04s  
+  ✓ refund monetario fallido no revierte cupón ni elimina pedido         0.04s  
+  ✓ inconsistencia coupon_discount sin coupon_transaction aborta revers… 0.04s  
+  ✓ reverso fallido aborta cancelación del pedido                        0.04s  
+
+   PASS  Tests\Feature\Admin\CouponAssignCreditTypesTest
+  ✓ assign puede crear código promocional compartido                     0.10s  
+  ✓ assign normaliza código promocional                                  0.08s  
+  ✓ assign rechaza código promocional duplicado                          0.07s  
+  ✓ assign exige max_redemptions para código promocional                 0.07s  
+  ✓ saldo a favor no exige vigencia en assign                            0.08s  
+  ✓ endpoint check-code indica disponibilidad                            0.09s  
+  ✓ generador backend produce código legible único                       0.02s  
+
+Fatal error: Allowed memory size of 134217728 bytes exhausted (tried to allocate 65536 bytes) in /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/LoadConfiguration.php on line 97
+
+Fatal error: Allowed memory size of 134217728 bytes exhausted (tried to allocate 65536 bytes) in /var/www/html/vendor/sebastian/code-unit/src/CodeUnit.php on line 190

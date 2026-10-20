@@ -9,6 +9,7 @@ use App\Models\Contact;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\LaboratoryCheckoutResumeLink;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 class ResolveLaboratoryCheckoutResumeLinkAction
 {
@@ -45,9 +46,10 @@ class ResolveLaboratoryCheckoutResumeLinkAction
             return new LaboratoryCheckoutResumeResolution(LaboratoryCheckoutResumeResolution::MISSING_CART, link: $link);
         }
 
-        $purchase = $cart->relatedLaboratoryPurchase();
+        $purchase = $cart->explicitLaboratoryPurchase();
         if ($purchase) {
             $link->forceFill(['last_used_at' => now()])->save();
+            $this->logResolution($link, $cart->id, 'explicit_purchase', $purchase->id);
 
             return new LaboratoryCheckoutResumeResolution(
                 LaboratoryCheckoutResumeResolution::COMPLETED,
@@ -58,6 +60,7 @@ class ResolveLaboratoryCheckoutResumeLinkAction
 
         if ($cart->status === MonitoringCartStatus::Completed) {
             $link->forceFill(['last_used_at' => now()])->save();
+            $this->logResolution($link, $cart->id, 'completed_purchase_list');
 
             return new LaboratoryCheckoutResumeResolution(
                 LaboratoryCheckoutResumeResolution::COMPLETED,
@@ -68,6 +71,8 @@ class ResolveLaboratoryCheckoutResumeLinkAction
 
         $brand = $link->laboratory_brand;
         if (! $customer->laboratoryCartItems()->ofBrand($brand)->exists()) {
+            $this->logResolution($link, $cart->id, 'empty_cart');
+
             return new LaboratoryCheckoutResumeResolution(
                 LaboratoryCheckoutResumeResolution::EMPTY_CART,
                 route('laboratory.shopping-cart', ['laboratory_brand' => $brand]),
@@ -87,6 +92,7 @@ class ResolveLaboratoryCheckoutResumeLinkAction
         ], fn ($value) => filled($value));
 
         $link->forceFill(['last_used_at' => now()])->save();
+        $this->logResolution($link, $cart->id, 'checkout');
 
         return new LaboratoryCheckoutResumeResolution(
             LaboratoryCheckoutResumeResolution::READY,
@@ -96,6 +102,21 @@ class ResolveLaboratoryCheckoutResumeLinkAction
             ]),
             $link,
         );
+    }
+
+    private function logResolution(
+        LaboratoryCheckoutResumeLink $link,
+        int $cartId,
+        string $destination,
+        ?int $purchaseId = null,
+    ): void {
+        Log::info('Laboratory checkout resume link resolved', array_filter([
+            'resume_link_id' => $link->id,
+            'cart_id' => $cartId,
+            'customer_id' => $link->customer_id,
+            'destination' => $destination,
+            'purchase_id' => $purchaseId,
+        ], static fn ($value) => $value !== null));
     }
 
     private function removeForeignDraftReferences(?LaboratoryCheckoutDraft $draft, int $customerId): void

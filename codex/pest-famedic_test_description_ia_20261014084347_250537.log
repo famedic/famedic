@@ -1,0 +1,105 @@
+
+   PASS  Tests\Feature\Laboratory\GdaResultsPdfFreshnessIsolatedTest
+  ✓ sin pdf con notificacion de resultados es stale                      1.80s  
+  ✓ pdf gda almacenado despues de la ultima notificacion no es stale     1.73s  
+  ✓ pdf gda almacenado antes de una nueva notificacion es stale          1.88s  
+  ✓ pdf manual no es candidato automatico de sobrescritura               1.66s  
+  ✓ compara contra la notificacion mas reciente                          6.18s  
+  ✓ identifica rutas gda versus manuales                                 1.91s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultsStoragePhase3PatientAutocureIsolatedTest
+  ✓ pdf gda current no despacha y sirve el actual                        1.71s  
+  ✓ pdf stale despacha refresh y sigue sirviendo pdf a                   1.65s  
+  ✓ segundo acceso despues del job sirve pdf b sin nuevo dispatch        1.71s  
+  ✓ pdf manual no despacha y se sirve igual                              1.71s  
+  ✓ refresh async falla paciente sigue recibiendo pdf a                  1.70s  
+  ✓ unique lock del webhook impide segundo job efectivo                  1.82s  
+  ✓ results controller stale despacha y usa temporary url de pdf a       1.78s  
+  ✓ view stale despacha refresh y redirige al pdf actual                 1.75s  
+  ✓ download stale despacha refresh y redirige al pdf actual             1.73s  
+  ✓ sin pdf el fallback siguen resolviendo desde gda                     1.84s  
+  ✓ abrir pdf stale no marca como visto el resultado nuevo               1.65s  
+  ✓ webhook y paciente comparten el mismo unique id                      1.68s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultsStoragePhase4PatientAccessSemanticsIsolatedTest
+  ✓ 1 fetch gda automatico no cuenta como lectura del paciente           1.74s  
+  ✓ 2 job refresh de pdf no cuenta como lectura                          1.77s  
+  ✓ 3 notif posterior al ultimo read at es resultado nuevo               1.65s  
+  ✓ 4 paciente abre pdf current marca notificaciones cubiertas           1.75s  
+  ✓ 5 paciente abre pdf stale notif nueva sigue unread                   1.75s  
+  ✓ 6 despues del refresh antes de reabrir sigue new                     1.68s  
+  ✓ 7 despues de abrir pdf actualizado new false                         1.77s  
+  ✓ 8 results fetched at posterior no apaga el badge                     1.72s  
+  ✓ 9 pending results count coincide con detalle                         1.74s  
+  ✓ 10 automatic fetch tecnico no consume badge                          1.69s  
+  ✓ 11 view current consume estado nuevo                                 1.71s  
+  ✓ 12 download current consume estado nuevo                             1.75s  
+  ✓ 13 results controller current consume estado nuevo                   1.85s  
+  ✓ 14 pdf manual mantiene comportamiento correcto                       1.70s  
+  ✓ 15 carrera stale refresh luego abrir current                         1.75s  
+  ✓ 16 no marca leido si el archivo no existe                            5.81s  
+  ✓ replay pedido 2309 badge sobrevive al job hasta abrir pdf final      1.84s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultsStoragePhase5OtpAccessSemanticsIsolatedTest
+  ✓ 1 solicitar otp no registra read at                                  2.89s  
+  ✓ 2 otp validado sin abrir pdf no registra read at                     2.78s  
+  ✓ 3 otp pdf gda current abierto registra acceso                        2.46s  
+  ✓ 4 otp download pdf current registra acceso                           2.57s  
+  ✓ 5 otp pdf stale sirve anterior y no marca notif nueva                2.48s  
+  ✓ 6 despues del refresh sin reabrir sigue new                          2.70s  
+  ✓ 7 volver a abrir pdf actualizado via otp deja de ser new             3.04s  
+  ✓ 8 pdf manual via otp es consistente con fase 4                       2.62s  
+  ✓ 9 otp invalido no registra read at                                   2.50s  
+  ✓ 10 otp expirado no registra read at                                  2.58s  
+  ✓ 11 archivo inexistente no registra read at                           2.45s  
+  ✓ 12 fetch tecnico dentro del flujo otp no registra read at            2.59s  
+  ✓ 13 pending results count antes y despues de otp current              2.48s  
+  ✓ 14 enlace compartido no consume read at del paciente                 2.55s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultVersioningPhase1Test
+  ✓ crea estado por estudio y version por hash de pdf                    1.78s  
+  ✓ no duplica estados versiones ni eventos al reprocesar mismo pdf      1.71s  
+  ✓ registra nueva version cuando cambia el hash del pdf                 1.88s  
+  ✓ transiciona a revision manual si el pdf no tiene regla deterministi… 1.71s  
+  ✓ eventos no guardan texto extraido del pdf                            1.71s  
+  ✓ webhook con pdf mantiene email y active campaign existentes          1.78s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultRefreshPhase2Test
+  ✓ pending interpretation programa primer next check                    5.48s  
+  ✓ feature flag off no programa refresh automatico                      1.67s  
+  ✓ refresh con mismo pdf no crea version y reagenda con backoff         1.79s  
+  ✓ refresh con nuevo pdf pendiente crea version y sigue pending         1.83s  
+  ✓ refresh con nuevo pdf completo detiene reintentos                    1.80s  
+  ✓ refresh con nuevo pdf unknown pasa a manual review                   1.76s  
+  ✓ max attempts pasa a manual review sin loop infinito                  1.79s  
+  ✓ webhook completa antes del job y el job no consulta gda              1.86s  
+  ✓ dos refresh secuenciales no duplican procesamiento efectivo          1.80s  
+  ✓ refresh respeta pdf manual y no lo sobrescribe                       1.79s  
+  ✓ mismo webhook repetido no posterga next check                        1.72s  
+  ✓ command despacha solo status pending vencidos                        1.84s  
+  ✓ estados complete y manual review no consultan gda                    1.77s  
+  ✓ fallo temporal gda mantiene politica de retry                        1.93s  
+  ✓ fallo permanente de pdf invalido queda en estado seguro              1.95s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultCompletionGatePhase3Test
+  ✓ flag off conserva comportamiento legacy                              1.84s  
+  ✓ shadow no bloquea pero registra diferencia semantica                 1.81s  
+  ✓ enforced con todos complete envia email y activecampaign una vez     1.86s  
+  ✓ enforced bloquea si un estudio sigue pending                         1.80s  
+  ✓ enforced bloquea manual review y error                               5.25s  
+  ✓ legacy order sin statuses conserva fallback legacy en enforced       1.74s  
+  ✓ ultimo estudio que pasa a complete libera la orden                   2.07s  
+  ✓ pdf complete procesado por storage dispara release si era ultimo pe… 1.93s  
+  ✓ upload manual legacy sigue notificando explicito                     1.73s  
+
+   PASS  Tests\Feature\Laboratory\LaboratoryResultExtractionEligibilityDispatchTest
+  ✓ pdf mixto solo despacha extraction para item de laboratorio          1.76s  
+  ✓ clasificacion unknown no despacha extraction                         1.70s  
+  ✓ clasificacion pending no despacha extraction                         4.19s  
+  ✓ item elegible complete despacha extraction                           1.66s  
+  ✓ item no elegible complete no despacha extraction                     1.74s  
+  ✓ reprocesar mismo pdf no duplica despachos                            1.81s  
+
+  Tests:    85 passed (397 assertions)
+  Duration: 180.57s
+

@@ -98,3 +98,9 @@ require __DIR__.'/online-pharmacy.php';
 require __DIR__.'/medical-attention.php';
 require __DIR__.'/auth.php';
 require __DIR__.'/webhooks.php';
+
+// Read-only proof that PHP-FPM loaded the same local QA guards as the workers.
+Route::get('/__local-checkout-qa/status', function () {
+    abort_unless(\App\Support\LocalCheckoutQa::enabled(), 404);
+    return response()->json(\App\Support\LocalQaPreflight::inspect());
+})->middleware('auth');

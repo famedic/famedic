@@ -6,6 +6,7 @@ use App\Actions\Laboratories\LaboratoryPurchaseConfirmationViewData;
 use App\Enums\LaboratoryBrand;
 use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -38,6 +39,7 @@ class SharedLaboratoryPurchaseResource extends JsonResource
         $featuredStores = $brand && ! $hasAppointment && ! $requiresAppointment
             ? $this->featuredStores($brand)
             : [];
+        $preparation = app(LaboratoryPreparationPresenter::class)->present($purchase);
 
         return [
             'order' => [
@@ -75,6 +77,7 @@ class SharedLaboratoryPurchaseResource extends JsonResource
                 ])
                 ->values()
                 ->all(),
+            'preparation' => $preparation,
             'pricing' => [
                 'currency' => 'MXN',
                 'subtotal' => formattedCentsPrice($subtotalCents),

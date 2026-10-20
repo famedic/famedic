@@ -1,0 +1,22 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase4Test
+  ✓ appointment first payment link uses step payment                    75.61s  
+  ✓ standard flow payment link uses step confirmation                    0.09s  
+  ✓ can send pending payment email only when appointment is payable      0.05s  
+  ✓ paid purchase suppresses pending payment email eligibility           0.06s  
+  ✓ appointment first notification uses confirmed subject                0.05s  
+  ✓ first confirmation transition is detected only once                  0.06s  
+  ✓ confirmed more than 24 hours ago but future appointment remains pay… 0.06s  
+  ✓ expired scheduled appointment blocks payment                         0.05s  
+  ✓ soft deleted appointment blocks payment link                         0.05s  
+  ✓ appointment from another cart does not unlock payment                0.05s  
+  ✓ legacy appointment without cart id remains payable when it is the o… 0.06s  
+  ✓ checkout deep link to payment redirects when appointment cancelled   0.16s  
+  ✓ confirmed appointment with future date allows checkout payment step  0.23s  
+  ✓ reprogramming confirmed appointment does not duplicate appointment_… 0.06s  
+  ✓ uses appointment first flow eligibility unchanged for phase four     0.05s  
+
+  Tests:    15 passed (35 assertions)
+  Duration: 76.75s
+

@@ -1,0 +1,23 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Admin\PromoCodeAdminTest
+  ✓ admin puede ver listado de promo codes                              82.54s  
+  ✓ admin puede crear código compartido                                  0.08s  
+  ✓ el código se normaliza al crear                                      0.07s  
+  ✓ no permite código duplicado                                          0.11s  
+  ✓ no permite monto inválido                                            0.06s  
+  ✓ no permite max_redemptions inválido                                  0.06s  
+  ✓ no permite expiración anterior a inicio                              0.08s  
+  ✓ admin puede ver detalle con historial de redenciones                 0.13s  
+  ✓ admin puede desactivar código                                        0.06s  
+  ✓ usuario sin cuenta admin no puede acceder a crear promo codes        0.04s  
+  ✓ usuario sin cuenta admin no puede desactivar promo codes             0.04s  
+  ✓ administrador sin permiso cupones.create no puede crear promo codes  0.07s  
+  ✓ administrador sin permiso cupones.edit no puede desactivar promo co… 0.07s  
+  ✓ creación exige OTP cuando está habilitado                            0.06s  
+  ✓ creación consume OTP verificado cuando está habilitado               0.07s  
+  ✓ correo a autorizadores incluye código promocional y máx usos         0.04s  
+
+  Tests:    16 passed (61 assertions)
+  Duration: 83.67s
+

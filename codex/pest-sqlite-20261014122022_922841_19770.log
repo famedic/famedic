@@ -1,0 +1,7 @@
+
+   PASS  Tests\Unit\CartJourneyDatabaseConfigurationTest
+  ✓ it confirms CartJourney configuration uses isolated testing SQLite   0.13s  
+
+  Tests:    1 passed (3 assertions)
+  Duration: 0.20s
+

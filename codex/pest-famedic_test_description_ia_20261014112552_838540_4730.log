@@ -1,0 +1,143 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\LaboratoryPreparationDecisionPersistenceTest
+  ✓ it persists an AUTO_CONSOLIDATED functional decision with rules an… 79.76s  
+  ✓ it rejects AUTO_CONSOLIDATED decisions without validated consolidat… 0.02s  
+  ✓ it persists a FALLBACK_ORIGINAL decision for provider review causes  0.03s  
+  ✓ it persists technical AI fallback without provider review            0.03s  
+  ✓ it rejects technical AI fallback decisions marked for provider revi… 0.05s  
+  ✓ it reads historical preparation summaries without v3 decision metad… 0.06s  
+  ✓ it serializes and deserializes decision JSON fields through model c… 0.04s  
+  ✓ it serializes AUTO_CONSOLIDATED decisions as schema v2 compatible p… 0.03s  
+  ✓ it serializes FALLBACK_ORIGINAL decisions as schema v2 compatible p… 0.03s  
+  ✓ it rejects original instructions that do not match schema v2 item s… 0.02s  
+
+   PASS  Tests\Feature\LaboratoryPreparationGenerationDispatchTest
+  ✓ it dispatches preparation summary generation after a confirmed labo… 0.16s  
+  ✓ it does not call OpenAI during the purchase fulfillment request      0.11s  
+  ✓ it dispatches deterministic v3 generation without creating a legacy… 0.12s  
+  ✓ it keeps the legacy job flow and runs deterministic v3 shadow when…  0.07s  
+  ✓ it does not run shadow twice when the same legacy job is handled ag… 0.06s  
+  ✓ it gives active deterministic v3 precedence over shadow when both f… 0.05s  
+  ✓ it does not break purchase fulfillment when queueing the preparatio… 0.12s  
+  ✓ it the preparation job supports bounded retries and records failed…  0.04s  
+  ✓ it the preparation job does not retry fidelity validation failures   0.09s  
+  ✓ it the preparation job keeps retry behavior for transient provider…  0.05s  
+  ✓ it the preparation job reuses an unchanged source hash without dupl… 0.07s  
+  ✓ it skips stale deterministic v3 jobs when indications changed befor… 0.04s  
+  ✓ it skips queued deterministic v3 jobs after rollback to flag off     0.04s  
+  ✓ it a missing purchase does not create a generation execution         0.03s  
+  ✓ it a changed source hash can be queued for regeneration              0.04s  
+
+   PASS  Tests\Feature\LaboratoryPreparationOpenAiRedactorTest
+  ✓ it activa un prompt versionado separado para redacción segura        0.03s  
+  ✓ it redacta una decisión AUTO válida usando únicamente el payload co… 0.03s  
+  ✓ it no llama OpenAI cuando la decisión es FALLBACK_ORIGINAL           0.03s  
+  ✓ it produce fallback técnico seguro ante timeout sin requerir revisi… 0.03s  
+  ✓ it produce fallback técnico seguro ante error de proveedor           0.02s  
+  ✓ it produce fallback técnico seguro ante JSON inválido                0.03s  
+  ✓ it rechaza una cifra inventada por la IA                             0.03s  
+  ✓ it rechaza una cifra omitida por la IA                               0.03s  
+  ✓ it rechaza un medicamento alterado por la IA                         0.03s  
+  ✓ it rechaza un requisito consolidado omitido                          0.03s  
+  ✓ it rechaza una unidad modificada                                     0.03s  
+  ✓ it rechaza una fusión incorrecta de muestras al omitir requisitos d… 0.02s  
+  ✓ it rechaza un intento de modificar el estado por parte de la IA      0.03s  
+  ✓ it rechaza texto vacío                                               0.03s  
+  ✓ it rechaza duplicaciones no autorizadas                              0.03s  
+  ✓ it no incluye indicaciones originales completas ni PII innecesaria…  0.03s  
+  ✓ it construye payload AUTO sin usar toSchemaPayload completo ni orig… 0.03s  
+
+   PASS  Tests\Feature\LaboratoryPreparationPresenterTest
+  ✓ it uses ai summary text and json when a valid summary exists         0.05s  
+  ✓ it presents deterministic v3 auto summaries as one consolidated pat… 0.04s  
+  ✓ it presents deterministic v3 fallback summaries as original instruc… 0.04s  
+  ✓ it rolls back persisted deterministic v3 auto summaries to original… 0.05s  
+  ✓ it falls back to purchase item indications when no valid summary ex… 0.03s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.05s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it never consults LaboratoryTest indications when presenting a hist… 0.04s  
+  ✓ it falls back when the persisted summary hash no longer matches pur… 0.05s  
+  ✓ it returns AI_PENDING when a current execution is queued or process… 0.06s  
+  ✓ it returns AI_PENDING when a current execution is queued or process… 0.05s  
+  ✓ it returns AI_FAILED when the current generation execution failed    0.05s  
+  ✓ it does not call OpenAI and keeps individual instructions available  0.05s  
+  ✓ it represents one study multiple studies and missing indications sa… 0.05s  
+  ✓ it makes confirmation email and pdf data consume the preparation re… 0.06s  
+  ✓ it adds preparation to shared resource while keeping compatibility…  0.06s  
+
+   PASS  Tests\Feature\LaboratoryPreparationResponseValidationTest
+  ✓ it activates laboratory preparation prompt version 3 with fidelity…  0.03s  
+  ✓ it accepts generic summary text when structured preparation content… 0.04s  
+  ✓ it accepts fixture A consolidating compatible duplicate instruction… 0.04s  
+  ✓ it rejects fixture A when compatible instructions are repeated with… 0.04s  
+  ✓ it accepts fixture B keeping incompatible urine instructions separa… 0.04s  
+  ✓ it rejects fixture B when incompatible instructions are concatenate… 0.03s  
+  ✓ it accepts fixture C keeping a unique instruction in individual_ins… 0.04s  
+  ✓ it accepts fixture D preserving quantities and time ranges in synth… 0.04s  
+  ✓ it accepts fixture E when studies have no indications and sections…  0.03s  
+  ✓ it accepts fixture F with structured urine preparation bullets       0.04s  
+  ✓ it accepts fixture G keeping different fasting ranges in separate s… 0.04s  
+  ✓ it rejects responses that omit source item coverage for indicated s… 0.03s  
+  ✓ it rejects tetra marcador responses that preserve source_item_id bu… 0.04s  
+  ✓ it accepts tetra marcador responses that preserve all critical inst… 0.03s  
+  ✓ it rejects responses that source items with null indications         0.04s  
+  ✓ it accepts a feature that appears only as study_name for an indicat… 0.05s  
+  ✓ it accepts a feature mentioned in instructions when backed by anoth… 0.04s  
+  ✓ it rejects a preparation instruction based only on feature_list con… 0.03s  
+  ✓ it rejects responses that invent preparation instructions from feat… 0.04s  
+  ✓ it rejects responses that lose numeric ranges from the original ind… 0.04s  
+  ✓ it rejects responses that lose critical units from the original ind… 0.03s  
+  ✓ it accepts safe textual variations when critical information is pre… 0.03s  
+  ✓ it accepts valid mixed purchases synthesizing indicated items and o… 0.03s  
+  ✓ it stores the validated OpenAI response payload when fidelity valid… 0.04s  
+  ✓ it keeps response_payload null when OpenAI fails before returning s… 0.03s  
+  ✓ it accepts tirosina newborn preparation with safe paraphrasing of n… 0.03s  
+  ✓ it accepts tirosina newborn preparation when ordinals are expressed… 0.03s  
+  ✓ it rejects responses that drop a concrete conditional requirement    0.03s  
+  ✓ it stores response_payload on successful preparation generation      0.05s  
+
+   PASS  Tests\Feature\LaboratoryPreparationSummaryServiceTest
+  ✓ it generates and persists a preparation summary for a purchase with… 0.06s  
+  ✓ it keeps current AI generated summaries without a v3 functional dec… 0.04s  
+  ✓ it persists existing fidelity fallback as a technical original fall… 0.04s  
+  ✓ it uses LaboratoryPurchaseItem indications and does not reconstruct… 0.04s  
+  ✓ it does not call OpenAI again when source hash is unchanged          0.04s  
+  ✓ it changes source hash when source indications change and keeps one… 0.04s  
+  ✓ it records failed AI execution without breaking the purchase flow    0.04s  
+  ✓ it does not include patient PII in the provider payload or redacted… 0.04s  
+  ✓ it keeps the legacy summary flow when deterministic v3 flag is off   0.03s  
+  ✓ it runs deterministic v3 auto flow and persists redacted patient te… 0.04s  
+  ✓ it includes patient context and rules version in deterministic v3 s… 0.06s  
+  ✓ it runs deterministic v3 fallback flow without calling OpenAI        0.04s  
+  ✓ it does not send a summary-ready notification for deterministic v3…  0.04s  
+  ✓ it does not send a pending deterministic v3 auto notification after… 0.04s  
+  ✓ it persists deterministic v3 technical OpenAI failures as original…  0.04s  
+  ✓ it records deterministic v3 shadow fallback without changing the vi… 0.05s  
+  ✓ it handles deterministic v3 shadow parser errors without persisting… 0.04s  
+  ✓ it handles deterministic v3 shadow engine errors without persisting… 0.04s  
+  ✓ it records deterministic v3 shadow fallback for an order without in… 0.03s  
+  ✓ it skips deterministic v3 shadow when the expected snapshot is stal… 0.05s  
+
+   PASS  Tests\Feature\LaboratoryPreparationChannelRenderTest
+  ✓ it renders ai sections in email when preparation is ai ready         0.07s  
+  ✓ it renders pending message and original instructions in email when…  0.05s  
+  ✓ it renders original instructions in email when preparation failed w… 0.06s  
+  ✓ it renders original instructions in email when preparation is fallb… 0.06s  
+  ✓ it renders special and individual instructions in email when ai rea… 0.06s  
+  ✓ it renders ai sections in pdf when preparation is ai ready           0.06s  
+  ✓ it renders deterministic v3 auto as a single consolidated section i… 0.06s  
+  ✓ it renders originals in email and pdf for persisted deterministic v… 0.06s  
+  ✓ it renders original instructions in pdf when preparation is ai pend… 0.06s  
+  ✓ it renders original instructions in pdf when preparation is fallbac… 0.06s  
+  ✓ it renders deterministic v3 fallback as original instructions in em… 0.06s  
+  ✓ it renders special and individual instructions in pdf when ai ready  0.06s  
+  ✓ it renders multi section ai preparation consistently in email and p… 0.07s  
+  ✓ it shows purchase item indications in email and pdf when no prepara… 0.07s  
+
+  Tests:    124 passed (518 assertions)
+  Duration: 85.41s
+

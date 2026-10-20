@@ -20,7 +20,7 @@ class LaboratoryGdaFailureLogService
         ?int $sourceLaboratoryPurchaseId = null,
     ): LaboratoryGdaFailureLog {
         $context = $exception->context();
-        $summary = $context['response_summary'] ?? [];
+        $summary = $exception->responseSummary() ?? [];
         $purchaseId = $context['laboratory_purchase_id'] ?? $purchase?->id;
 
         $purchase ??= $purchaseId

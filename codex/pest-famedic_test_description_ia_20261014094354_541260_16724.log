@@ -1,0 +1,222 @@
+
+   FAIL  Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest
+  ⨯ endpoint cancelar pendiente requiere permiso edit                    5.39s  
+  ⨯ endpoint revocar requiere permiso edit                               5.05s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest > endpoin…   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 500.
+Failed asserting that false is true.
+
+The following exception occurred during the last request:
+
+Spatie\Permission\Exceptions\PermissionDoesNotExist: There is no permission named `cupones.edit` for guard `web`. in /var/www/html/vendor/spatie/laravel-permission/src/Exceptions/PermissionDoesNotExist.php:11
+Stack trace:
+#0 /var/www/html/vendor/spatie/laravel-permission/src/Models/Permission.php(94): Spatie\Permission\Exceptions\PermissionDoesNotExist::create('cupones.edit', 'web')
+#1 /var/www/html/vendor/spatie/laravel-permission/src/Traits/HasPermissions.php(188): Spatie\Permission\Models\Permission::findByName('cupones.edit', 'web')
+#2 /var/www/html/vendor/spatie/laravel-permission/src/Traits/HasPermissions.php(215): App\Models\Administrator->filterPermission('cupones.edit', NULL)
+#3 /var/www/html/app/Policies/CouponPolicy.php(16): App\Models\Administrator->hasPermissionTo('cupones.edit')
+#4 /var/www/html/app/Policies/CouponPolicy.php(37): App\Policies\CouponPolicy->hasCouponPermission(Object(App\Models\User), 'cupones.edit')
+#5 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(816): App\Policies\CouponPolicy->update(Object(App\Models\User), Object(App\Models\Coupon))
+#6 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(769): Illuminate\Auth\Access\Gate->callPolicyMethod(Object(App\Policies\CouponPolicy), 'update', Object(App\Models\User), Array)
+#7 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(553): Illuminate\Auth\Access\Gate->Illuminate\Auth\Access\{closure}(Object(App\Models\User), Object(App\Models\Coupon))
+#8 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(448): Illuminate\Auth\Access\Gate->callAuthCallback(Object(App\Models\User), 'update', Array)
+#9 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(411): Illuminate\Auth\Access\Gate->raw('update', Array)
+#10 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(398): Illuminate\Auth\Access\Gate->inspect('update', Object(App\Models\Coupon))
+#11 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Auth/Access/AuthorizesRequests.php(25): Illuminate\Auth\Access\Gate->authorize('update', Object(App\Models\Coupon))
+#12 /var/www/html/app/Http/Controllers/Admin/CouponController.php(1842): App\Http\Controllers\Controller->authorize('update', Object(App\Models\Coupon))
+#13 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php(47): App\Http\Controllers\Admin\CouponController->cancelBeneficiary(Object(Illuminate\Http\Request), Object(App\Models\Coupon), Object(App\Models\CouponBeneficiary))
+#14 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Route.php(266): Illuminate\Routing\ControllerDispatcher->dispatch(Object(Illuminate\Routing\Route), Object(App\Http\Controllers\Admin\CouponController), 'cancelBeneficia...')
+#15 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Route.php(212): Illuminate\Routing\Route->runController()
+#16 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(808): Illuminate\Routing\Route->run()
+#17 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(170): Illuminate\Routing\Router->Illuminate\Routing\{closure}(Object(Illuminate\Http\Request))
+#18 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(202): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#19 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): class@anonymous->handle(Object(Illuminate\Http\Request), Object(Closure))
+#20 /var/www/html/app/Http/Middleware/EnsureUserHasAdminAccount.php(481): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#21 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): App\Http\Middleware\EnsureUserHasAdminAccount->handle(Object(Illuminate\Http\Request), Object(Closure))
+#22 /var/www/html/vendor/laravel/framework/src/Illuminate/Http/Middleware/AddLinkHeadersForPreloadedAssets.php(20): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#23 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets->handle(Object(Illuminate\Http\Request), Object(Closure))
+#24 /var/www/html/vendor/inertiajs/inertia-laravel/src/Middleware.php(96): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#25 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Inertia\Middleware->handle(Object(Illuminate\Http\Request), Object(Closure))
+#26 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php(51): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#27 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Routing\Middleware\SubstituteBindings->handle(Object(Illuminate\Http\Request), Object(Closure))
+#28 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Middleware/Authenticate.php(64): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#29 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Auth\Middleware\Authenticate->handle(Object(Illuminate\Http\Request), Object(Closure))
+#30 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(202): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#31 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): class@anonymous->handle(Object(Illuminate\Http\Request), Object(Closure))
+#32 /var/www/html/vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php(49): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#33 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\View\Middleware\ShareErrorsFromSession->handle(Object(Illuminate\Http\Request), Object(Closure))
+#34 /var/www/html/vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php(121): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#35 /var/www/html/vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php(64): Illuminate\Session\Middleware\StartSession->handleStatefulRequest(Object(Illuminate\Http\Request), Object(Illuminate\Session\Store), Object(Closure))
+#36 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Session\Middleware\StartSession->handle(Object(Illuminate\Http\Request), Object(Closure))
+#37 /var/www/html/vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php(37): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#38 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse->handle(Object(Illuminate\Http\Request), Object(Closure))
+#39 /var/www/html/vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php(75): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#40 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Cookie\Middleware\EncryptCookies->handle(Object(Illuminate\Http\Request), Object(Closure))
+#41 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(127): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#42 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(807): Illuminate\Pipeline\Pipeline->then(Object(Closure))
+#43 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(786): Illuminate\Routing\Router->runRouteWithinStack(Object(Illuminate\Routing\Route), Object(Illuminate\Http\Request))
+#44 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(750): Illuminate\Routing\Router->runRoute(Object(Illuminate\Http\Request), Object(Illuminate\Routing\Route))
+#45 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(739): Illuminate\Routing\Router->dispatchToRoute(Object(Illuminate\Http\Request))
+#46 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(201): Illuminate\Routing\Router->dispatch(Object(Illuminate\Http\Request))
+#47 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(170): Illuminate\Foundation\Http\Kernel->Illuminate\Foundation\Http\{closure}(Object(Illuminate\Http\Request))
+#48 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#49 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php(31): Illuminate\Foundation\Http\Middleware\TransformsRequest->handle(Object(Illuminate\Http\Request), Object(Closure))
+#50 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull->handle(Object(Illuminate\Http\Request), Object(Closure))
+#51 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#52 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php(51): Illuminate\Foundation\Http\Middleware\TransformsRequest->handle(Object(Illuminate\Http\Request), Object(Closure))
+#53 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Foundation\Http\Middleware\TrimStrings->handle(Object(Illuminate\Http\Request), Object(Closure))
+#54 /var/www/html/vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php(27): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#55 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Http\Middleware\ValidatePostSize->handle(Object(Illuminate\Http\Request), Object(Closure))
+#56 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php(110): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#57 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance->handle(Object(Illuminate\Http\Request), Object(Closure))
+#58 /var/www/html/vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php(49): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#59 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Http\Middleware\HandleCors->handle(Object(Illuminate\Http\Request), Object(Closure))
+#60 /var/www/html/vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php(58): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#61 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Http\Middleware\TrustProxies->handle(Object(Illuminate\Http\Request), Object(Closure))
+#62 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php(22): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#63 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Foundation\Http\Middleware\InvokeDeferredCallbacks->handle(Object(Illuminate\Http\Request), Object(Closure))
+#64 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(127): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#65 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(176): Illuminate\Pipeline\Pipeline->then(Object(Closure))
+#66 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(145): Illuminate\Foundation\Http\Kernel->sendRequestThroughRouter(Object(Illuminate\Http\Request))
+#67 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(607): Illuminate\Foundation\Http\Kernel->handle(Object(Illuminate\Http\Request))
+#68 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(397): Illuminate\Foundation\Testing\TestCase->call('POST', 'http://localhos...', Array, Array, Array, Array)
+#69 /var/www/html/tests/Feature/Coupons/CouponRevocationAdminIsolatedTest.php(253): Illuminate\Foundation\Testing\TestCase->post('http://localhos...')
+#70 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestCase.php(1188): Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest->endpoint_cancelar_pendiente_requiere_permiso_edit()
+#71 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestCase.php(687): PHPUnit\Framework\TestCase->runTest()
+#72 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestRunner.php(106): PHPUnit\Framework\TestCase->runBare()
+#73 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestCase.php(517): PHPUnit\Framework\TestRunner->run(Object(Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest))
+#74 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestSuite.php(380): PHPUnit\Framework\TestCase->run()
+#75 /var/www/html/vendor/phpunit/phpunit/src/TextUI/TestRunner.php(64): PHPUnit\Framework\TestSuite->run()
+#76 /var/www/html/vendor/phpunit/phpunit/src/TextUI/Application.php(202): PHPUnit\TextUI\TestRunner->run(Object(PHPUnit\TextUI\Configuration\Configuration), Object(PHPUnit\Runner\ResultCache\DefaultResultCache), Object(PHPUnit\Framework\TestSuite))
+#77 /var/www/html/vendor/pestphp/pest/src/Kernel.php(103): PHPUnit\TextUI\Application->run(Array)
+#78 /var/www/html/vendor/pestphp/pest/bin/pest(91): Pest\Kernel->handle(Array, Array)
+#79 /var/www/html/vendor/pestphp/pest/bin/pest(99): {closure}()
+#80 /var/www/html/vendor/bin/pest(119): include('/var/www/html/v...')
+#81 {main}
+
+----------------------------------------------------------------------------------
+
+There is no permission named `cupones.edit` for guard `web`.
+
+  at tests/Feature/Coupons/CouponRevocationAdminIsolatedTest.php:257
+    253▕             ->post(route('admin.coupons.beneficiaries.cancel', [
+    254▕                 'coupon' => $parent->id,
+    255▕                 'beneficiary' => $beneficiary->id,
+    256▕             ]))
+  ➜ 257▕             ->assertRedirect();
+    258▕ 
+    259▕         $this->assertSame(CouponBeneficiaryStatus::PendingUser, $beneficiary->fresh()->status);
+    260▕         $this->assertNull($beneficiary->fresh()->cancelled_at);
+    261▕     }
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest > endpoin…   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 500.
+Failed asserting that false is true.
+
+The following exception occurred during the last request:
+
+Spatie\Permission\Exceptions\PermissionDoesNotExist: There is no permission named `cupones.edit` for guard `web`. in /var/www/html/vendor/spatie/laravel-permission/src/Exceptions/PermissionDoesNotExist.php:11
+Stack trace:
+#0 /var/www/html/vendor/spatie/laravel-permission/src/Models/Permission.php(94): Spatie\Permission\Exceptions\PermissionDoesNotExist::create('cupones.edit', 'web')
+#1 /var/www/html/vendor/spatie/laravel-permission/src/Traits/HasPermissions.php(188): Spatie\Permission\Models\Permission::findByName('cupones.edit', 'web')
+#2 /var/www/html/vendor/spatie/laravel-permission/src/Traits/HasPermissions.php(215): App\Models\Administrator->filterPermission('cupones.edit', NULL)
+#3 /var/www/html/app/Policies/CouponPolicy.php(16): App\Models\Administrator->hasPermissionTo('cupones.edit')
+#4 /var/www/html/app/Policies/CouponPolicy.php(37): App\Policies\CouponPolicy->hasCouponPermission(Object(App\Models\User), 'cupones.edit')
+#5 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(816): App\Policies\CouponPolicy->update(Object(App\Models\User), Object(App\Models\Coupon))
+#6 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(769): Illuminate\Auth\Access\Gate->callPolicyMethod(Object(App\Policies\CouponPolicy), 'update', Object(App\Models\User), Array)
+#7 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(553): Illuminate\Auth\Access\Gate->Illuminate\Auth\Access\{closure}(Object(App\Models\User), Object(App\Models\Coupon))
+#8 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(448): Illuminate\Auth\Access\Gate->callAuthCallback(Object(App\Models\User), 'update', Array)
+#9 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(411): Illuminate\Auth\Access\Gate->raw('update', Array)
+#10 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Access/Gate.php(398): Illuminate\Auth\Access\Gate->inspect('update', Object(App\Models\Coupon))
+#11 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Auth/Access/AuthorizesRequests.php(25): Illuminate\Auth\Access\Gate->authorize('update', Object(App\Models\Coupon))
+#12 /var/www/html/app/Http/Controllers/Admin/CouponController.php(1867): App\Http\Controllers\Controller->authorize('update', Object(App\Models\Coupon))
+#13 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php(47): App\Http\Controllers\Admin\CouponController->destroyAssignment(Object(Illuminate\Http\Request), Object(App\Models\Coupon), Object(App\Models\CouponUser))
+#14 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Route.php(266): Illuminate\Routing\ControllerDispatcher->dispatch(Object(Illuminate\Routing\Route), Object(App\Http\Controllers\Admin\CouponController), 'destroyAssignme...')
+#15 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Route.php(212): Illuminate\Routing\Route->runController()
+#16 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(808): Illuminate\Routing\Route->run()
+#17 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(170): Illuminate\Routing\Router->Illuminate\Routing\{closure}(Object(Illuminate\Http\Request))
+#18 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(202): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#19 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): class@anonymous->handle(Object(Illuminate\Http\Request), Object(Closure))
+#20 /var/www/html/app/Http/Middleware/EnsureUserHasAdminAccount.php(481): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#21 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): App\Http\Middleware\EnsureUserHasAdminAccount->handle(Object(Illuminate\Http\Request), Object(Closure))
+#22 /var/www/html/vendor/laravel/framework/src/Illuminate/Http/Middleware/AddLinkHeadersForPreloadedAssets.php(20): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#23 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets->handle(Object(Illuminate\Http\Request), Object(Closure))
+#24 /var/www/html/vendor/inertiajs/inertia-laravel/src/Middleware.php(96): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#25 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Inertia\Middleware->handle(Object(Illuminate\Http\Request), Object(Closure))
+#26 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php(51): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#27 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Routing\Middleware\SubstituteBindings->handle(Object(Illuminate\Http\Request), Object(Closure))
+#28 /var/www/html/vendor/laravel/framework/src/Illuminate/Auth/Middleware/Authenticate.php(64): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#29 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Auth\Middleware\Authenticate->handle(Object(Illuminate\Http\Request), Object(Closure))
+#30 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(202): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#31 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): class@anonymous->handle(Object(Illuminate\Http\Request), Object(Closure))
+#32 /var/www/html/vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php(49): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#33 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\View\Middleware\ShareErrorsFromSession->handle(Object(Illuminate\Http\Request), Object(Closure))
+#34 /var/www/html/vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php(121): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#35 /var/www/html/vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php(64): Illuminate\Session\Middleware\StartSession->handleStatefulRequest(Object(Illuminate\Http\Request), Object(Illuminate\Session\Store), Object(Closure))
+#36 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Session\Middleware\StartSession->handle(Object(Illuminate\Http\Request), Object(Closure))
+#37 /var/www/html/vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php(37): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#38 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse->handle(Object(Illuminate\Http\Request), Object(Closure))
+#39 /var/www/html/vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php(75): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#40 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Cookie\Middleware\EncryptCookies->handle(Object(Illuminate\Http\Request), Object(Closure))
+#41 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(127): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#42 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(807): Illuminate\Pipeline\Pipeline->then(Object(Closure))
+#43 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(786): Illuminate\Routing\Router->runRouteWithinStack(Object(Illuminate\Routing\Route), Object(Illuminate\Http\Request))
+#44 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(750): Illuminate\Routing\Router->runRoute(Object(Illuminate\Http\Request), Object(Illuminate\Routing\Route))
+#45 /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Router.php(739): Illuminate\Routing\Router->dispatchToRoute(Object(Illuminate\Http\Request))
+#46 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(201): Illuminate\Routing\Router->dispatch(Object(Illuminate\Http\Request))
+#47 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(170): Illuminate\Foundation\Http\Kernel->Illuminate\Foundation\Http\{closure}(Object(Illuminate\Http\Request))
+#48 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#49 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php(31): Illuminate\Foundation\Http\Middleware\TransformsRequest->handle(Object(Illuminate\Http\Request), Object(Closure))
+#50 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull->handle(Object(Illuminate\Http\Request), Object(Closure))
+#51 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#52 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php(51): Illuminate\Foundation\Http\Middleware\TransformsRequest->handle(Object(Illuminate\Http\Request), Object(Closure))
+#53 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Foundation\Http\Middleware\TrimStrings->handle(Object(Illuminate\Http\Request), Object(Closure))
+#54 /var/www/html/vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php(27): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#55 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Http\Middleware\ValidatePostSize->handle(Object(Illuminate\Http\Request), Object(Closure))
+#56 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php(110): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#57 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance->handle(Object(Illuminate\Http\Request), Object(Closure))
+#58 /var/www/html/vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php(49): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#59 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Http\Middleware\HandleCors->handle(Object(Illuminate\Http\Request), Object(Closure))
+#60 /var/www/html/vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php(58): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#61 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Http\Middleware\TrustProxies->handle(Object(Illuminate\Http\Request), Object(Closure))
+#62 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php(22): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#63 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(209): Illuminate\Foundation\Http\Middleware\InvokeDeferredCallbacks->handle(Object(Illuminate\Http\Request), Object(Closure))
+#64 /var/www/html/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(127): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#65 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(176): Illuminate\Pipeline\Pipeline->then(Object(Closure))
+#66 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(145): Illuminate\Foundation\Http\Kernel->sendRequestThroughRouter(Object(Illuminate\Http\Request))
+#67 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(607): Illuminate\Foundation\Http\Kernel->handle(Object(Illuminate\Http\Request))
+#68 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php(487): Illuminate\Foundation\Testing\TestCase->call('DELETE', 'http://localhos...', Array, Array, Array, Array)
+#69 /var/www/html/tests/Feature/Coupons/CouponRevocationAdminIsolatedTest.php(271): Illuminate\Foundation\Testing\TestCase->delete('http://localhos...')
+#70 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestCase.php(1188): Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest->endpoint_revocar_requiere_permiso_edit()
+#71 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestCase.php(687): PHPUnit\Framework\TestCase->runTest()
+#72 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestRunner.php(106): PHPUnit\Framework\TestCase->runBare()
+#73 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestCase.php(517): PHPUnit\Framework\TestRunner->run(Object(Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest))
+#74 /var/www/html/vendor/phpunit/phpunit/src/Framework/TestSuite.php(380): PHPUnit\Framework\TestCase->run()
+#75 /var/www/html/vendor/phpunit/phpunit/src/TextUI/TestRunner.php(64): PHPUnit\Framework\TestSuite->run()
+#76 /var/www/html/vendor/phpunit/phpunit/src/TextUI/Application.php(202): PHPUnit\TextUI\TestRunner->run(Object(PHPUnit\TextUI\Configuration\Configuration), Object(PHPUnit\Runner\ResultCache\DefaultResultCache), Object(PHPUnit\Framework\TestSuite))
+#77 /var/www/html/vendor/pestphp/pest/src/Kernel.php(103): PHPUnit\TextUI\Application->run(Array)
+#78 /var/www/html/vendor/pestphp/pest/bin/pest(91): Pest\Kernel->handle(Array, Array)
+#79 /var/www/html/vendor/pestphp/pest/bin/pest(99): {closure}()
+#80 /var/www/html/vendor/bin/pest(119): include('/var/www/html/v...')
+#81 {main}
+
+----------------------------------------------------------------------------------
+
+There is no permission named `cupones.edit` for guard `web`.
+
+  at tests/Feature/Coupons/CouponRevocationAdminIsolatedTest.php:275
+    271▕             ->delete(route('admin.coupons.assignments.destroy', [
+    272▕                 'coupon' => $child->id,
+    273▕                 'couponUser' => $assignment->id,
+    274▕             ]))
+  ➜ 275▕             ->assertRedirect();
+    276▕ 
+    277▕         $this->assertTrue($child->fresh()->is_active);
+    278▕         $this->assertGreaterThan(0, $child->fresh()->remaining_cents);
+    279▕     }
+
+
+  Tests:    2 failed (2 assertions)
+  Duration: 10.52s
+

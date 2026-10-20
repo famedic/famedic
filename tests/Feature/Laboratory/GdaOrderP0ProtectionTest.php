@@ -661,6 +661,113 @@ test('status webhooks do not overwrite purchase gda order status enum values', f
         ->and($purchase->fresh()->gda_acuse)->toBe('acuse-status-1');
 });
 
+
+
+test('repeated and unknown external status events never overwrite the internal GDA enum', function () {
+    $purchase = gdaP0Purchase(gdaP0Customer(), LaboratoryBrand::OLAB, GdaOrderStatus::Uncertain);
+    $notification = LaboratoryNotification::query()->create(['laboratory_purchase_id' => $purchase->id,
+        'gda_order_id' => 'GDA-REPEATED', 'notification_type' => 'status_update',
+        'status' => LaboratoryNotification::STATUS_RECEIVED, 'payload' => []]);
+    foreach (['completed', 'completed', 'unknown_provider_status'] as $status) {
+        app(HandleStatusUpdateAction::class)->execute($notification,
+            ['id' => 'GDA-REPEATED', 'status' => $status], ['purchase_id' => $purchase->id]);
+        expect($purchase->fresh()->gda_status)->toBe(GdaOrderStatus::Uncertain)
+            ->and($notification->fresh()->gda_status)->toBe($status);
+    }
+});
+
+test('GDA confirmation rejects nonpositive and malformed consecutives without changing clinical eligibility', function () {
+    foreach ([null, '', 0, '0', -1, '-1', 'invalid', 1.5, true, []] as $consecutive) {
+        expect(\App\Services\Laboratory\GdaOrderConfirmation::valid(['id' => 'GDA-OK', 'infogda_consecutivo' => $consecutive]))->toBeFalse();
+    }
+    expect(\App\Services\Laboratory\GdaOrderConfirmation::valid(['id' => 'ABC-123-NO-RIGID', 'infogda_consecutivo' => '123']))->toBeTrue();
+});
+
+
+test('definitive pre-submission GDA failure preserves the existing refund policy', function () {
+    Notification::fake();
+    $customer = gdaP0Customer();
+    gdaP0CartItem($customer, LaboratoryBrand::OLAB);
+    $cart = gdaP0SyncedCart($customer, LaboratoryBrand::OLAB);
+    $transaction = gdaP0Transaction();
+    $this->mock(ChargeEfevooPaymentMethodAction::class, function ($mock) use ($transaction) {
+        $mock->shouldReceive('__invoke')->once()->andReturn($transaction);
+    });
+    $this->mock(CreateGDAQuotationAction::class, function ($mock) {
+        $mock->shouldReceive('__invoke')->once()->andThrow(new \App\Exceptions\GdaOrderDefinitiveException);
+    });
+    $this->mock(RefundTransactionAction::class, function ($mock) use ($transaction) {
+        $mock->shouldReceive('__invoke')->once()->with(Mockery::on(fn ($tx) => $tx->id === $transaction->id))->andReturnTrue();
+    });
+    expect(fn () => app(OrderAction::class)($customer, gdaP0Address($customer), gdaP0Contact($customer),
+        'QA-CARD', LaboratoryBrand::OLAB, 39900))->toThrow(\App\Exceptions\GdaOrderDefinitiveException::class);
+    expect($transaction->laboratoryPurchases()->sole()->gda_status)->toBe(GdaOrderStatus::Failed)
+        ->and($cart->fresh()->status)->toBe(MonitoringCartStatus::Active);
+    Notification::assertNothingSent();
+});
+
+
+test('replayed PayPal capture after definitive refund never refunds twice or restores captured status', function () {
+    $customer = gdaP0Customer();
+    $transaction = gdaP0Transaction(39900, 'paypal');
+    $transaction->update(['details' => ['customer_id' => $customer->id,
+        'laboratory_brand' => LaboratoryBrand::OLAB->value, 'address_id' => null]]);
+    $paypal = Mockery::mock(PayPalService::class);
+    $paypal->shouldReceive('extractCaptureInfo')->once()->andReturn(['capture_id' => 'CAP-REFUND-QA', 'status' => 'COMPLETED']);
+    $paypal->shouldReceive('refund')->once()->with('CAP-REFUND-QA')->andReturn([]);
+    app()->instance(PayPalService::class, $paypal);
+    expect(fn () => app(FinalizeLaboratoryPayPalPaymentAction::class)($transaction, ['id' => 'CAP-REFUND-QA']))
+        ->toThrow(RuntimeException::class, 'Dirección inválida');
+    expect($transaction->fresh()->refunded_at)->not->toBeNull()
+        ->and($transaction->fresh()->payment_status)->toBe('failed');
+    $replayed = app(FinalizeLaboratoryPayPalPaymentAction::class)($transaction->fresh(), ['id' => 'CAP-REFUND-QA']);
+    expect($replayed)->toBeNull()->and($transaction->fresh()->payment_status)->toBe('failed');
+});
+
+
+test('unresolved Efevoo processing evidence blocks another cart charge before fulfillment exists', function () {
+    $customer = gdaP0Customer();
+    gdaP0CartItem($customer, LaboratoryBrand::OLAB);
+    $cart = gdaP0SyncedCart($customer, LaboratoryBrand::OLAB);
+    $attempt = \App\Models\PaymentAttempt::create(['customer_id' => $customer->id, 'cart_id' => $cart->id,
+        'amount_cents' => 39900, 'gateway' => 'efevoopay', 'reference' => 'UNRESOLVED-QA', 'status' => 'processing']);
+    $guard = app(\App\Services\Laboratory\UncertainGdaPaymentGuard::class);
+    expect(fn () => $guard->withCartLock($cart, fn () => throw new LogicException('A charge must never start')))
+        ->toThrow(\App\Exceptions\LaboratoryPaymentInProgressException::class);
+    $attempt->update(['status' => 'declined']);
+    expect($guard->withCartLock($cart, fn () => 'allowed-after-definitive-decline'))->toBe('allowed-after-definitive-decline');
+    $attempt->update(['status' => 'approved']);
+    Transaction::create(['transaction_amount_cents' => 39900, 'payment_method' => 'efevoopay',
+        'reference_id' => $attempt->reference, 'refunded_at' => now()]);
+    expect($guard->withCartLock($cart, fn () => 'allowed-after-verified-refund'))->toBe('allowed-after-verified-refund');
+});
+
+test('Odessa response persistence failure retains a cart barrier without refunding or charging again', function () {
+    $customer = gdaP0OdessaCustomer();
+    gdaP0CartItem($customer, LaboratoryBrand::OLAB);
+    $cart = gdaP0SyncedCart($customer, LaboratoryBrand::OLAB);
+    $token = Mockery::mock(GetOdessaPrivateTokenAction::class);
+    $token->shouldReceive('__invoke')->once()->andReturn('QA-LOCAL-TOKEN');
+    $balance = Mockery::mock(CheckBalanceAction::class);
+    $balance->shouldReceive('__invoke')->once()->andReturnTrue();
+    $action = new ChargeOdessaAction($token, $balance);
+    config(['services.odessa.url' => 'https://odessa.example.test/']);
+    Http::fake(['https://odessa.example.test/applyCharge' => Http::response(['response' => ['errorCode' => 0, 'transactionOds' => 'QA-DEBIT-RECEIVED']], 200)]);
+    Transaction::updating(function ($transaction) {
+        if ($transaction->payment_method === 'odessa' && $transaction->reference_id === 'QA-DEBIT-RECEIVED') {
+            throw new RuntimeException('AUDIT_CLINICAL_CANARY_SYNTHETIC_25ML');
+        }
+    });
+    expect(fn () => $action($customer->customerable, 39900, $cart))
+        ->toThrow(\App\Exceptions\LaboratoryPaymentInProgressException::class);
+    $receipt = Transaction::where('details->cart_id', $cart->id)->sole();
+    expect($receipt->payment_status)->toBe('processing')->and($receipt->refunded_at)->toBeNull()
+        ->and($receipt->details)->toHaveKey('laboratory_charge_started_at');
+    expect(fn () => app(\App\Services\Laboratory\UncertainGdaPaymentGuard::class)->withCartLock($cart, fn () => throw new LogicException('No second charge')))
+        ->toThrow(\App\Exceptions\LaboratoryPaymentInProgressException::class);
+    Http::assertSentCount(1);
+});
+
 test('gda status migration backfills confirmed only for legacy purchases with folio and consecutivo evidence', function () {
     if (Schema::hasColumn('laboratory_purchases', 'gda_status')) {
         Schema::table('laboratory_purchases', function ($table) {

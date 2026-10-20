@@ -1,0 +1,106 @@
+
+   FAIL  Tests\Feature\Laboratory\GdaResultsPurchaseViewPhase5Test
+  ⨯ presentador expone status individual y oculta campos admin al paciente
+  ⨯ orden sin pdf ni estatus no se marca completa
+  ⨯ admin no puede enviar aviso si gate semantico no esta completo
+  ⨯ admin reenvia aviso completo sin duplicar active campaign
+  ⨯ admin analiza resultado historico sin enviar email ni active campaign
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsPurchaseViewPh…  QueryException   
+  SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'role_id' (Connection: mysql, SQL: create table `model_has_roles` (`role_id` bigint unsigned not null, `model_type` varchar(255) null, `model_id` bigint unsigned null, `role_id` bigint unsigned null) default character set utf8mb4 collate 'utf8mb4_unicode_ci')
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:328
+  10  tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:49
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsPurchaseViewPh…  QueryException   
+  SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'role_id' (Connection: mysql, SQL: create table `model_has_roles` (`role_id` bigint unsigned not null, `model_type` varchar(255) null, `model_id` bigint unsigned null, `role_id` bigint unsigned null) default character set utf8mb4 collate 'utf8mb4_unicode_ci')
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:328
+  10  tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:49
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsPurchaseViewPh…  QueryException   
+  SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'role_id' (Connection: mysql, SQL: create table `model_has_roles` (`role_id` bigint unsigned not null, `model_type` varchar(255) null, `model_id` bigint unsigned null, `role_id` bigint unsigned null) default character set utf8mb4 collate 'utf8mb4_unicode_ci')
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:328
+  10  tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:49
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsPurchaseViewPh…  QueryException   
+  SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'role_id' (Connection: mysql, SQL: create table `model_has_roles` (`role_id` bigint unsigned not null, `model_type` varchar(255) null, `model_id` bigint unsigned null, `role_id` bigint unsigned null) default character set utf8mb4 collate 'utf8mb4_unicode_ci')
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:328
+  10  tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:49
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsPurchaseViewPh…  QueryException   
+  SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'role_id' (Connection: mysql, SQL: create table `model_has_roles` (`role_id` bigint unsigned not null, `model_type` varchar(255) null, `model_id` bigint unsigned null, `role_id` bigint unsigned null) default character set utf8mb4 collate 'utf8mb4_unicode_ci')
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+8 vendor frames [22m
+  9   tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:328
+  10  tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:49
+
+
+  Tests:    5 failed (0 assertions)
+  Duration: 8.84s
+

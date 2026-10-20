@@ -1,0 +1,27 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\CartJourneyCheckoutFlowTest
+  ⨯ it confirms tests run only against testing sqlite database
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\CartJourneyCheckoutFlowTest > it co…  QueryException   
+  SQLSTATE[HY000]: General error: 1 no such table: information_schema.TABLE_CONSTRAINTS (Connection: sqlite, SQL: SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = :memory: AND TABLE_NAME = laboratory_result_extraction_qa_metrics AND CONSTRAINT_NAME = lab_res_qa_metrics_version_fk AND CONSTRAINT_TYPE = FOREIGN KEY LIMIT 1)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+4 vendor frames [22m
+  5   database/migrations/2026_09_19_100007_repair_laboratory_result_extraction_qa_metrics_table.php:43
+  6   database/migrations/2026_09_19_100007_repair_laboratory_result_extraction_qa_metrics_table.php:16
+
+
+  Tests:    1 failed (0 assertions)
+  Duration: 1.63s
+

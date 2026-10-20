@@ -1,0 +1,190 @@
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryInstructionFastingHourAbbreviationTest
+  ✓ it reconoce rangos de ayuno GDA con abreviatura h y h. with dataset… 0.19s  
+  ✓ it reconoce rangos de ayuno GDA con abreviatura h y h. with dataset… 0.03s  
+  ✓ it reconoce rangos de ayuno GDA con abreviatura h y h. with dataset… 0.02s  
+  ✓ it reconoce rangos de ayuno GDA con abreviatura h y h. with dataset… 0.03s  
+  ✓ it reconoce ayuno mínimo pediátrico con h.                           0.03s  
+  ✓ it parsea snapshot GDA 520236 y 520100 sin fragmentos no reconocido… 0.02s  
+  ✓ it parsea snapshot GDA 520236 y 520100 sin fragmentos no reconocido… 0.03s  
+  ✓ it no interpreta h como duración de ayuno fuera de contexto clínico… 0.02s  
+  ✓ it no interpreta h como duración de ayuno fuera de contexto clínico… 0.02s  
+  ✓ it sigue marcando FALLBACK cuando hay ayuno reconocido y texto clín… 0.03s  
+  ✓ it consolida orden equivalente a compra 2420 para adulto (AUTO 8–14… 0.02s  
+  ✓ it aplica R02 con abreviatura h en contexto Menor de 3 años          0.02s  
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryInstructionGda520794Test
+  ✓ it estructura el snapshot GDA 520794 sin fragmentos no reconocidos   0.05s  
+  ✓ it no fusiona volumen 10 mL con nivel de tres cuartas partes         0.02s  
+  ✓ it conserva timing de jornada laboral solo en el estudio 520794      0.02s  
+  ✓ it consolida orden equivalente a compra 2417 para adulto             0.03s  
+  ✓ it sigue en FALLBACK cuando el protocolo 520794 incluye texto clíni… 0.02s  
+  ✓ it reconoce recolectar muestra de orina en variantes documentadas s… 0.02s  
+  ✓ it reconoce recolectar muestra de orina en variantes documentadas s… 0.02s  
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryInstructionOfficialCasesTest
+  ✓ it carga exactamente 40 casos oficiales QA01 a QA40 con textos lite… 0.05s  
+  ✓ it parsea cada estudio oficial sin perder el texto fuente ni mezcla… 0.06s  
+  ✓ it reconstruye los bloques oficiales con el splitter sin alterar en… 0.02s  
+  ✓ it marca ambigüedades e incompletos explícitamente en casos oficial… 0.05s  
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryInstructionParserTest
+  ✓ it expone categorías reconocidas sin consolidar estudios             0.03s  
+  ✓ it conserva texto original y trazabilidad por span                   0.02s  
+  ✓ it marca instrucciones vacías sin inventar requisitos                0.02s  
+  ✓ it detecta ayuno con intervalo cerrado 8-10 sin decidir compatibili… 0.02s  
+  ✓ it preserva negaciones explícitas de ayuno                           0.02s  
+  ✓ it expone unidades desconocidas sin convertirlas en instrucciones v… 0.03s  
+  ✓ it integra con LaboratoryPreparationSource sin usar feature_list     0.02s  
+  ✓ it ejecuta escenarios de regresión internos del parser               0.04s  
+  ✓ it delega casos oficiales al fixture JSON generado desde Excel       0.02s  
+  ✓ it marca entradas incompletas de ayuno                               0.02s  
+  ✓ it marca fragmentos no reconocidos explícitamente en lugar de desca… 0.03s  
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationFragmentSecurityTest
+  ✓ it no consolida AUTO cuando hay ayuno reconocido y medicamento no e… 0.04s  
+  ✓ it no consolida AUTO cuando hay ayuno y restricción temporal no cla… 0.02s  
+  ✓ it no consolida AUTO cuando hay preparación de muestra y texto adic… 0.02s  
+  ✓ it tolera conectores lingüísticos aislados sin forzar fallback       0.03s  
+  ✓ it no consolida AUTO ante instrucción desconocida con negación clín… 0.02s  
+  ✓ it no consolida AUTO cuando una oración queda parcialmente reconoci… 0.02s  
+  ✓ it marca fallback cuando hay requisito reconocido fuera del alcance… 0.02s  
+  ✓ it marca fallback clínico por metformina incompatible entre estudio… 0.02s  
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineAuditTest
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.04s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.02s  
+  ✓ it mantiene el contrato schema v2 y las instrucciones originales li… 0.03s  
+  ✓ it conserva completos los FALLBACK oficiales sin consolidado parcia… 0.02s  
+  ✓ it conserva completos los FALLBACK oficiales sin consolidado parcia… 0.02s  
+  ✓ it conserva completos los FALLBACK oficiales sin consolidado parcia… 0.02s  
+  ✓ it conserva completos los FALLBACK oficiales sin consolidado parcia… 0.02s  
+  ✓ it conserva completos los FALLBACK oficiales sin consolidado parcia… 0.03s  
+  ✓ it conserva completos los FALLBACK oficiales sin consolidado parcia… 0.02s  
+  ✓ it conserva completos los FALLBACK oficiales sin consolidado parcia… 0.02s  
+  ✓ it conserva completos los FALLBACK oficiales sin consolidado parcia… 0.02s  
+  ✓ it preserva texto sensible R15-R18 en AUTO sin convertir dieta o su… 0.02s  
+  ✓ it preserva texto sensible R15-R18 en AUTO sin convertir dieta o su… 0.03s  
+  ✓ it preserva texto sensible R15-R18 en AUTO sin convertir dieta o su… 0.02s  
+  ✓ it preserva texto sensible R15-R18 en AUTO sin convertir dieta o su… 0.02s  
+  ✓ it preserva texto sensible R15-R18 en AUTO sin convertir dieta o su… 0.02s  
+  ✓ it no emite ausencia genérica de preparación cuando otro estudio sí… 0.02s  
+  ✓ it mantiene bloques R15 independientes cuando dos estudios comparte… 0.03s  
+  ✓ it es determinístico para evaluaciones repetidas y conserva la deci… 0.03s  
+  ✓ it bloquea fragmentos relevantes desconocidos antes de AUTO          0.02s  
+  ✓ it consolida abstinencia R07 solo cuando el rango es idéntico        0.02s  
+  ✓ it bloquea R07 cuando los rangos de abstinencia se solapan pero son… 0.03s  
+  ✓ it bloquea R07 cuando los rangos de abstinencia se solapan pero son… 0.04s  
+  ✓ it mantiene R18 en bloques separados para muestras diferentes con r… 0.02s  
+  ✓ it bloquea R18 cuando una misma muestra tiene recipiente y preserva… 0.02s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.02s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.02s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.03s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.02s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.02s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.02s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.02s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.03s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.03s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.02s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.03s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.03s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.03s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.02s  
+  ✓ it valida contenido estructurado crítico en hasta 15 casos oficiale… 0.02s  
+
+   PASS  Tests\Unit\LaboratoryPreparation\LaboratoryPreparationRuleEngineTest
+  ✓ it interseca ayuno 8 h con 10–12 h en AUTO (R01)                     0.20s  
+  ✓ it interseca 8–10 h con 10–12 h en un punto de 10 h (R01)            0.02s  
+  ✓ it marca FALLBACK clínico cuando 6–8 h choca con 10–12 h (R01)       0.02s  
+  ✓ it aplica condición pediátrica sin inventar edad (R02, QA05)         0.02s  
+  ✓ it consolida QA04 adulto con intersección 10–12 h (R01,R02)          0.02s  
+  ✓ it conserva hidratación y vejiga sin secuenciar orina ambigua (R03)  0.03s  
+  ✓ it aplica FALLBACK oficial QA26 por ayuno incompatible (R01,R03)     0.02s  
+  ✓ it evalúa casos oficiales R01 puros en AUTO (QA01–QA03) with ('QA01… 0.02s  
+  ✓ it evalúa casos oficiales R01 puros en AUTO (QA01–QA03) with ('QA02… 0.02s  
+  ✓ it evalúa casos oficiales R01 puros en AUTO (QA01–QA03) with ('QA03… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.03s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it evalúa el estado oficial AUTO/FALLBACK de los 40 casos R01–R18 w… 0.02s  
+  ✓ it preserva bloques R15–R18 en los casos oficiales prioritarios de…  0.03s  
+  ✓ it prioriza conflicto de medicamentos documentado en QA31 antes de…  0.02s  
+  ✓ it serializa decisiones AUTO y FALLBACK compatibles con schema v2    0.02s  
+
+  Tests:    172 passed (4357 assertions)
+  Duration: 4.88s
+

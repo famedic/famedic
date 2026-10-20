@@ -8,6 +8,7 @@
  * @see docs/modulo-saldo-a-favor-creditos-cupones.md
  */
 use App\Models\CouponAdminSettings;
+use App\Models\Permission;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -16,6 +17,8 @@ function isolatedCouponModuleTableNames(): array
     return [
         'coupon_audit_logs',
         'notifications',
+        'laboratory_notifications',
+        'laboratory_concierges',
         'coupon_beneficiaries',
         'coupon_transactions',
         'coupon_user',
@@ -96,12 +99,45 @@ function bootstrapIsolatedCouponModuleSchema(): void
         $table->timestamps();
     });
 
+    Schema::create('customers', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+        $table->string('stripe_id')->nullable();
+        $table->string('customerable_type')->nullable();
+        $table->unsignedBigInteger('customerable_id')->nullable();
+        $table->timestamps();
+        $table->softDeletes();
+    });
+
+    Schema::create('administrators', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+        $table->timestamps();
+        $table->softDeletes();
+    });
+
+    Schema::create('laboratory_concierges', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('administrator_id')->constrained()->cascadeOnDelete();
+        $table->timestamps();
+        $table->softDeletes();
+    });
+
+    Schema::create('laboratory_notifications', function (Blueprint $table) {
+        $table->id();
+        $table->unsignedBigInteger('user_id')->nullable();
+        $table->timestamp('read_at')->nullable();
+        $table->timestamps();
+        $table->softDeletes();
+    });
+
     Schema::create('notifications', function (Blueprint $table) {
         $table->id();
         $table->foreignId('user_id')->constrained()->cascadeOnDelete();
         $table->string('type', 64)->index();
         $table->string('title');
         $table->text('message');
+        $table->string('action_url')->nullable();
         $table->boolean('is_read')->default(false);
         $table->timestamp('created_at')->useCurrent();
     });
@@ -311,6 +347,45 @@ function bootstrapIsolatedCouponRevocationAdminSchema(): void
         $table->timestamps();
         $table->softDeletes();
     });
+
+    foreach ([
+        'activecampaign.manage',
+        'administrators.manage',
+        'automation.manage',
+        'clinical-interpreter.manage',
+        'cupones.edit',
+        'coupons.manage',
+        'customers.manage',
+        'documentation.manage',
+        'efevoo-tokens.manage',
+        'laboratory-notifications.monitor',
+        'laboratory-purchases.manage',
+        'laboratory-purchases.manage.vendor-payments',
+        'laboratory-stores.manage',
+        'laboratory-tests.manage',
+        'logs-general.manage',
+        'marketing-campaigns.manage',
+        'medical-attention-subscriptions.manage',
+        'monitoring-ai.manage',
+        'odessa-pre-enrollments.manage',
+        'odessa-pre-enrollments.view',
+        'odessa-reconciliation.manage',
+        'odessa-reconciliation.review',
+        'odessa-reconciliation.view',
+        'online-pharmacy-purchases.manage',
+        'online-pharmacy-purchases.manage.vendor-payments',
+        'payment-attempts.manage',
+        'simulators.manage',
+        'tax-profiles.manage',
+        'users.manage',
+        'view carts',
+        'view_config_monitor',
+    ] as $name) {
+        Permission::query()->firstOrCreate([
+            'name' => $name,
+            'guard_name' => 'web',
+        ]);
+    }
 }
 
 /**

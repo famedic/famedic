@@ -1,0 +1,480 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Unit\LaboratoryNotificationPdfRefreshTest
+  ✓ it refreshes cached pdf when a newer results notification exists f… 79.76s  
+  ✓ it does not refresh when results are stored on purchase              0.04s  
+  ✓ it refreshes pdf that came from webhook payload instead of consult…  0.03s  
+  ✓ it shows updated results badge when a newer notification arrives af… 0.03s  
+  ✓ it hides updated results badge after patient accessed the latest no… 0.04s  
+  ✓ it does not mark results updated when only the purchase pdf hash ch… 0.03s  
+
+   PASS  Tests\Unit\ResolveLaboratoryPurchasePdfPathHashTest
+  ✓ it keeps purchase pdf hash stable when only preparation metadata ch… 0.05s  
+  ✓ it rotates purchase pdf hash when visible preparation content chang… 0.04s  
+
+   PASS  Tests\Feature\Mail\MailSafetyPolicyTest
+  ✓ en production no bloquea correos aunque el destinatario no esté en…  0.03s  
+  ✓ en staging permite email exacto definido en MAIL_ALLOWED_RECIPIENTS  0.02s  
+  ✓ en staging permite email exacto con mayúsculas en MAIL_ALLOWED_RECI… 0.02s  
+  ✓ en staging permite dominio definido en MAIL_ALLOWED_DOMAINS          0.02s  
+  ✓ en staging bloquea destinatario externo no permitido                 0.02s  
+  ✓ en staging bloquea todo el correo si cc tiene destinatario no permi… 0.02s  
+  ✓ en staging bloquea todo el correo si bcc tiene destinatario no perm… 0.02s  
+  ✓ si MAIL_SAFE_MODE es false no bloquea en ambientes no productivos    0.02s  
+  ✓ registra log cuando se bloquea un correo si MAIL_LOG_BLOCKED es tru… 0.02s  
+  ✓ no registra log cuando MAIL_LOG_BLOCKED es false                     0.02s  
+  ✓ integración: el listener registrado bloquea el envío real con trans… 0.03s  
+  ✓ integración: el listener registrado permite el envío a destinatario… 0.02s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultVersioningPhase1Test
+  ✓ crea estado por estudio y version por hash de pdf                    2.75s  
+  ✓ no duplica estados versiones ni eventos al reprocesar mismo pdf      2.20s  
+  ✓ registra nueva version cuando cambia el hash del pdf                 2.15s  
+  ✓ transiciona a revision manual si el pdf no tiene regla deterministi… 2.15s  
+  ✓ eventos no guardan texto extraido del pdf                            2.10s  
+  ✓ webhook con pdf mantiene email y active campaign existentes          2.14s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultRefreshPhase2Test
+  ✓ pending interpretation programa primer next check                    2.36s  
+  ✓ feature flag off no programa refresh automatico                      2.24s  
+  ✓ refresh con mismo pdf no crea version y reagenda con backoff         3.61s  
+  ✓ refresh con nuevo pdf pendiente crea version y sigue pending         4.52s  
+  ✓ refresh con nuevo pdf completo detiene reintentos                    2.18s  
+  ✓ refresh con nuevo pdf unknown pasa a manual review                   2.19s  
+  ✓ max attempts pasa a manual review sin loop infinito                  2.25s  
+  ✓ webhook completa antes del job y el job no consulta gda              2.11s  
+  ✓ dos refresh secuenciales no duplican procesamiento efectivo          2.17s  
+  ✓ refresh respeta pdf manual y no lo sobrescribe                       2.36s  
+  ✓ mismo webhook repetido no posterga next check                        2.28s  
+  ✓ command despacha solo status pending vencidos                        2.29s  
+  ✓ estados complete y manual review no consultan gda                    2.16s  
+  ✓ fallo temporal gda mantiene politica de retry                        2.19s  
+  ✓ fallo permanente de pdf invalido queda en estado seguro              2.39s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultCompletionGatePhase3Test
+  ✓ flag off conserva comportamiento legacy                              2.16s  
+  ✓ shadow no bloquea pero registra diferencia semantica                 2.21s  
+  ✓ enforced con todos complete envia email y activecampaign una vez     2.30s  
+  ✓ enforced bloquea si un estudio sigue pending                         2.51s  
+  ✓ enforced bloquea manual review y error                               6.26s  
+  ✓ legacy order sin statuses conserva fallback legacy en enforced       2.16s  
+  ✓ ultimo estudio que pasa a complete libera la orden                   2.28s  
+  ✓ pdf complete procesado por storage dispara release si era ultimo pe… 2.16s  
+  ✓ upload manual legacy sigue notificando explicito                     3.44s  
+
+   PASS  Tests\Feature\Laboratory\GdaResultsPdfFreshnessIsolatedTest
+  ✓ sin pdf con notificacion de resultados es stale                      3.21s  
+  ✓ pdf gda almacenado despues de la ultima notificacion no es stale     2.58s  
+  ✓ pdf gda almacenado antes de una nueva notificacion es stale          2.49s  
+  ✓ pdf manual no es candidato automatico de sobrescritura               2.42s  
+  ✓ compara contra la notificacion mas reciente                          2.12s  
+  ✓ identifica rutas gda versus manuales                                 2.09s  
+
+   FAIL  Tests\Feature\Laboratory\GdaResultsNotAvailableTest
+  ⨯ get gda results action throws not available exception on 400 no con… 2.10s  
+  ⨯ get gda results action throws generic exception on other 400 messag… 2.03s  
+  ⨯ resolve gda results pdf action propagates not available exception    2.06s  
+  ⨯ resolve gda results pdf action records last not available in gda me… 2.24s  
+  ⨯ sync job retries on gda results not available                        2.08s  
+  ⨯ get gda results action sends order id as payload id for gabinete     2.09s  
+  ⨯ gda results stored in storage when pdf valid                         2.13s  
+  ⨯ no base64 stored in database notification                            2.13s  
+
+   FAIL  Tests\Feature\Laboratory\GdaResultsPurchaseViewPhase5Test
+  ✓ presentador expone status individual y oculta campos admin al pacie… 2.15s  
+  ⨯ orden sin pdf ni estatus no se marca completa                        2.11s  
+  ✓ admin no puede enviar aviso si gate semantico no esta completo       2.15s  
+  ✓ admin reenvia aviso completo sin duplicar active campaign            2.31s  
+  ✓ admin analiza resultado historico sin enviar email ni active campai… 2.18s  
+
+   FAIL  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest
+  ⨯ monitor muestra archivo en storage si cuando purchase results exist… 2.27s  
+  ⨯ monitor marca stale si pdf gda en storage y notificacion mas nueva   2.26s  
+  ⨯ monitor muestra base64 legacy en bd si cuando results pdf base64 ex… 2.25s  
+  ⨯ boton descargar usa storage si purchase results existe               2.18s  
+  ⨯ forzar actualizacion desde gda guarda en storage no en base64        4.24s  
+  ⨯ forzar actualizacion desde gda con error http devuelve json control… 2.14s  
+  ⨯ forzar actualizacion desde gda con html en lugar de pdf devuelve js… 2.25s  
+  ⨯ forzar actualizacion desde gda con falla de storage no marca sincro… 2.19s  
+  ⨯ sincronizar desde gda con excepcion interna devuelve json controlad… 2.09s  
+  ✓ detalle ajax para orden inexistente devuelve json controlado         2.11s  
+  ⨯ resultado manual no se sobrescribe por gda automatico                2.19s  
+  ✓ paciente descarga resultado automatico desde storage                 2.09s  
+  ✓ paciente descarga resultado manual desde storage                     2.09s  
+  ✓ paciente con historico base64 sigue funcionando                      2.14s  
+  ✓ fallback lazy funciona si job no corrio                              2.12s  
+  ✓ gabinete descarga correctamente con gda order id alfanumerico        2.15s  
+  ✓ laboratorio normal descarga correctamente con gda order id numerico  2.06s  
+  ✓ en qa safe mode correos a pacientes no autorizados se bloquean       2.02s  
+  ⨯ monitor incluye sync logs con datos de sincronizacion                2.13s  
+
+   PASS  Tests\Unit\GDA\GdaWebhookPayloadResolverTest
+  ✓ prioriza service request id numerico sobre infogda_orden en laborat… 0.03s  
+  ✓ normaliza payload de laboratorio con id numerico                     0.02s  
+  ✓ normaliza payload de gabinete con etiqueta alfanumerica              0.03s  
+  ✓ no asigna etiqueta alfanumerica como gda_consecutivo                 0.02s  
+  ✓ detecta gabinete por contenedor GAB                                  0.02s  
+  ✓ gabinete hibrido: prioriza etiqueta sobre ServiceRequest.id numeric… 0.02s  
+  ✓ laboratorio normal no usa etiqueta con sufijo como gda_order_id      0.02s  
+  ✓ isNumericConsecutivo valida solo digitos                             0.03s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsNotAvailableTest > get gda res…   
+  Failed asserting that exception of type "RuntimeException" matches expected exception "App\Exceptions\GdaResultsNotAvailableException". Message was: "Attempted request to [infogda-fullV3/consult] without a matching fake." at
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1336
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1305
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1291
+/var/www/html/vendor/laravel/nightwatch/src/Hooks/GuzzleMiddleware.php:45
+/var/www/html/vendor/guzzlehttp/guzzle/src/PrepareBodyMiddleware.php:64
+/var/www/html/vendor/guzzlehttp/guzzle/src/Middleware.php:38
+/var/www/html/vendor/guzzlehttp/guzzle/src/RedirectMiddleware.php:71
+/var/www/html/vendor/guzzlehttp/guzzle/src/Middleware.php:63
+/var/www/html/vendor/guzzlehttp/guzzle/src/HandlerStack.php:75
+/var/www/html/vendor/guzzlehttp/guzzle/src/Client.php:333
+/var/www/html/vendor/guzzlehttp/guzzle/src/Client.php:169
+/var/www/html/vendor/guzzlehttp/guzzle/src/Client.php:189
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1137
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:907
+/var/www/html/vendor/laravel/framework/src/Illuminate/Support/helpers.php:338
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:905
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:804
+/var/www/html/app/Actions/Laboratories/GetGDAResultsAction.php:188
+/var/www/html/app/Actions/Laboratories/GetGDAResultsAction.php:21
+/var/www/html/tests/Feature/Laboratory/GdaResultsNotAvailableTest.php:74
+.
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsNotAvailableTest > get gda res…   
+  Failed asserting that exception message 'Attempted request to [infogda-fullV3/consult] without a matching fake.' matches '/Error GDA/'.
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsNotAvailableTest > resolve gda…   
+  Failed asserting that exception of type "RuntimeException" matches expected exception "App\Exceptions\GdaResultsNotAvailableException". Message was: "Attempted request to [infogda-fullV3/consult] without a matching fake." at
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1336
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1305
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1291
+/var/www/html/vendor/laravel/nightwatch/src/Hooks/GuzzleMiddleware.php:45
+/var/www/html/vendor/guzzlehttp/guzzle/src/PrepareBodyMiddleware.php:64
+/var/www/html/vendor/guzzlehttp/guzzle/src/Middleware.php:38
+/var/www/html/vendor/guzzlehttp/guzzle/src/RedirectMiddleware.php:71
+/var/www/html/vendor/guzzlehttp/guzzle/src/Middleware.php:63
+/var/www/html/vendor/guzzlehttp/guzzle/src/HandlerStack.php:75
+/var/www/html/vendor/guzzlehttp/guzzle/src/Client.php:333
+/var/www/html/vendor/guzzlehttp/guzzle/src/Client.php:169
+/var/www/html/vendor/guzzlehttp/guzzle/src/Client.php:189
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1137
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:907
+/var/www/html/vendor/laravel/framework/src/Illuminate/Support/helpers.php:338
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:905
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:804
+/var/www/html/app/Actions/Laboratories/GetGDAResultsAction.php:188
+/var/www/html/app/Actions/Laboratories/GetGDAResultsAction.php:21
+/var/www/html/app/Actions/Laboratories/SyncGdaResultPdfToStorageAction.php:216
+/var/www/html/app/Actions/Laboratories/SyncGdaResultPdfToStorageAction.php:118
+/var/www/html/app/Actions/Laboratories/ResolveGdaResultsPdfAction.php:116
+/var/www/html/tests/Feature/Laboratory/GdaResultsNotAvailableTest.php:132
+.
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsNotAvailable…  RuntimeException   
+  Attempted request to [infogda-fullV3/consult] without a matching fake.
+
+  at vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1336
+    1332▕                     ->first();
+    1333▕ 
+    1334▕                 if (is_null($response)) {
+    1335▕                     if ($this->preventStrayRequests) {
+  ➜ 1336▕                         throw new RuntimeException('Attempted request to ['.(string) $request->getUri().'] without a matching fake.');
+    1337▕                     }
+    1338▕ 
+    1339▕                     return $handler($request, $options);
+    1340▕                 }
+
+      [2m+17 vendor frames [22m
+  18  app/Actions/Laboratories/GetGDAResultsAction.php:188
+  19  app/Actions/Laboratories/GetGDAResultsAction.php:21
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsNotAvailableTest > sync job re…   
+  Failed asserting that exception of type "RuntimeException" matches expected exception "App\Exceptions\GdaResultsNotAvailableException". Message was: "Attempted request to [infogda-fullV3/consult] without a matching fake." at
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1336
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1305
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1291
+/var/www/html/vendor/laravel/nightwatch/src/Hooks/GuzzleMiddleware.php:45
+/var/www/html/vendor/guzzlehttp/guzzle/src/PrepareBodyMiddleware.php:64
+/var/www/html/vendor/guzzlehttp/guzzle/src/Middleware.php:38
+/var/www/html/vendor/guzzlehttp/guzzle/src/RedirectMiddleware.php:71
+/var/www/html/vendor/guzzlehttp/guzzle/src/Middleware.php:63
+/var/www/html/vendor/guzzlehttp/guzzle/src/HandlerStack.php:75
+/var/www/html/vendor/guzzlehttp/guzzle/src/Client.php:333
+/var/www/html/vendor/guzzlehttp/guzzle/src/Client.php:169
+/var/www/html/vendor/guzzlehttp/guzzle/src/Client.php:189
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1137
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:907
+/var/www/html/vendor/laravel/framework/src/Illuminate/Support/helpers.php:338
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:905
+/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:804
+/var/www/html/app/Actions/Laboratories/GetGDAResultsAction.php:188
+/var/www/html/app/Actions/Laboratories/GetGDAResultsAction.php:21
+/var/www/html/app/Actions/Laboratories/SyncGdaResultPdfToStorageAction.php:216
+/var/www/html/app/Actions/Laboratories/SyncGdaResultPdfToStorageAction.php:118
+/var/www/html/app/Jobs/Laboratory/SyncGdaResultPdfToStorageJob.php:63
+/var/www/html/tests/Feature/Laboratory/GdaResultsNotAvailableTest.php:194
+.
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsNotAvailable…  RuntimeException   
+  Attempted request to [infogda-fullV3/consult] without a matching fake.
+
+  at vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1336
+    1332▕                     ->first();
+    1333▕ 
+    1334▕                 if (is_null($response)) {
+    1335▕                     if ($this->preventStrayRequests) {
+  ➜ 1336▕                         throw new RuntimeException('Attempted request to ['.(string) $request->getUri().'] without a matching fake.');
+    1337▕                     }
+    1338▕ 
+    1339▕                     return $handler($request, $options);
+    1340▕                 }
+
+      [2m+17 vendor frames [22m
+  18  app/Actions/Laboratories/GetGDAResultsAction.php:188
+  19  app/Actions/Laboratories/GetGDAResultsAction.php:21
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsNotAvailable…  RuntimeException   
+  Attempted request to [infogda-fullV3/consult] without a matching fake.
+
+  at vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1336
+    1332▕                     ->first();
+    1333▕ 
+    1334▕                 if (is_null($response)) {
+    1335▕                     if ($this->preventStrayRequests) {
+  ➜ 1336▕                         throw new RuntimeException('Attempted request to ['.(string) $request->getUri().'] without a matching fake.');
+    1337▕                     }
+    1338▕ 
+    1339▕                     return $handler($request, $options);
+    1340▕                 }
+
+      [2m+17 vendor frames [22m
+  18  app/Actions/Laboratories/GetGDAResultsAction.php:188
+  19  app/Actions/Laboratories/GetGDAResultsAction.php:21
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsNotAvailable…  RuntimeException   
+  Attempted request to [infogda-fullV3/consult] without a matching fake.
+
+  at vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1336
+    1332▕                     ->first();
+    1333▕ 
+    1334▕                 if (is_null($response)) {
+    1335▕                     if ($this->preventStrayRequests) {
+  ➜ 1336▕                         throw new RuntimeException('Attempted request to ['.(string) $request->getUri().'] without a matching fake.');
+    1337▕                     }
+    1338▕ 
+    1339▕                     return $handler($request, $options);
+    1340▕                 }
+
+      [2m+17 vendor frames [22m
+  18  app/Actions/Laboratories/GetGDAResultsAction.php:188
+  19  app/Actions/Laboratories/GetGDAResultsAction.php:21
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsPurchaseViewPhase5Test > orden…   
+  Failed asserting that two strings are identical.
+  -'pending'
+  +'pending_interpretation'
+  
+
+  at tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:101
+     97▕ 
+     98▕         $payload = app(LaboratoryPurchaseResultControlPresenter::class)
+     99▕             ->present($purchase->fresh(), $purchase->customer->user);
+    100▕ 
+  ➜ 101▕         $this->assertSame('pending', $payload['resultControl']['overall_status']);
+    102▕         $this->assertFalse($payload['resultControl']['is_complete']);
+    103▕         $this->assertFalse($payload['resultControl']['can_view_results']);
+    104▕     }
+    105▕
+
+  1   tests/Feature/Laboratory/GdaResultsPurchaseViewPhase5Test.php:101
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > monitor…   
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:73
+     69▕ 
+     70▕         $response = $this->actingAs($user)
+     71▕             ->getJson(route('admin.laboratory-notifications-monitor.order-details', ['orderKey' => $orderKey]));
+     72▕ 
+  ➜  73▕         $response->assertOk();
+     74▕         $response->assertJsonPath('summary.results_pdf.has_pdf_in_storage', true);
+     75▕         $response->assertJsonPath('summary.results_pdf.location', 'storage');
+     76▕         $response->assertJsonPath('summary.results_pdf.is_gda_automatic', true);
+     77▕         $response->assertJsonPath('summary.results_pdf.is_stale', false);
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > monitor…   
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:107
+    103▕ 
+    104▕         $response = $this->actingAs($user)
+    105▕             ->getJson(route('admin.laboratory-notifications-monitor.order-details', ['orderKey' => $orderKey]));
+    106▕ 
+  ➜ 107▕         $response->assertOk();
+    108▕         $response->assertJsonPath('summary.results_pdf.has_pdf_in_storage', true);
+    109▕         $response->assertJsonPath('summary.results_pdf.available_at_gda', true);
+    110▕         $response->assertJsonPath('summary.results_pdf.is_stale', true);
+    111▕         $response->assertJsonPath('summary.results_pdf.has_newer_results', true);
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > monitor…   
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:135
+    131▕ 
+    132▕         $response = $this->actingAs($user)
+    133▕             ->getJson(route('admin.laboratory-notifications-monitor.order-details', ['orderKey' => $orderKey]));
+    134▕ 
+  ➜ 135▕         $response->assertOk();
+    136▕         $response->assertJsonPath('summary.results_pdf.has_pdf_in_db', true);
+    137▕         $response->assertJsonPath('summary.results_pdf.has_pdf_in_storage', false);
+    138▕     }
+    139▕
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > boton d…   
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:155
+    151▕ 
+    152▕         $response = $this->actingAs($user)
+    153▕             ->get(route('admin.laboratory-notifications-monitor.download-results', ['orderKey' => $orderKey]));
+    154▕ 
+  ➜ 155▕         $response->assertOk();
+    156▕         $response->assertHeader('content-type', 'application/pdf');
+    157▕     }
+    158▕ 
+    159▕     // --- Forzar/sincronizar desde GDA guarda en storage, no en base64 ---
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > forzar…    
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:179
+    175▕ 
+    176▕         $response = $this->actingAs($user)
+    177▕             ->postJson(route('admin.laboratory-notifications-monitor.force-refresh-results', ['orderKey' => $orderKey]));
+    178▕ 
+  ➜ 179▕         $response->assertOk();
+    180▕         $response->assertJsonPath('success', true);
+    181▕ 
+    182▕         $purchase->refresh();
+    183▕         $notification->refresh();
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > forzar…    
+  Expected response status code [500] but received 403.
+Failed asserting that 403 is identical to 500.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:209
+    205▕             ->postJson(route('admin.laboratory-notifications-monitor.force-refresh-results', [
+    206▕                 'orderKey' => $purchase->gda_order_id,
+    207▕             ]));
+    208▕ 
+  ➜ 209▕         $response->assertStatus(500)
+    210▕             ->assertHeader('content-type', 'application/json')
+    211▕             ->assertJsonPath('success', false)
+    212▕             ->assertJsonPath('message', 'No fue posible forzar la actualización desde GDA.');
+    213▕
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > forzar…    
+  Expected response status code [500] but received 403.
+Failed asserting that 403 is identical to 500.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:237
+    233▕             ->postJson(route('admin.laboratory-notifications-monitor.force-refresh-results', [
+    234▕                 'orderKey' => $purchase->gda_order_id,
+    235▕             ]));
+    236▕ 
+  ➜ 237▕         $response->assertStatus(500)
+    238▕             ->assertHeader('content-type', 'application/json')
+    239▕             ->assertJsonPath('success', false);
+    240▕ 
+    241▕         $purchase->refresh();
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > forzar…    
+  Expected response status code [500] but received 403.
+Failed asserting that 403 is identical to 500.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:273
+    269▕             ->postJson(route('admin.laboratory-notifications-monitor.force-refresh-results', [
+    270▕                 'orderKey' => $purchase->gda_order_id,
+    271▕             ]));
+    272▕ 
+  ➜ 273▕         $response->assertStatus(500)
+    274▕             ->assertHeader('content-type', 'application/json')
+    275▕             ->assertJsonPath('success', false);
+    276▕ 
+    277▕         $purchase->refresh();
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > sincron…   
+  Expected response status code [500] but received 403.
+Failed asserting that 403 is identical to 500.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:304
+    300▕             ->postJson(route('admin.laboratory-notifications-monitor.fetch-results', [
+    301▕                 'orderKey' => $purchase->gda_order_id,
+    302▕             ]));
+    303▕ 
+  ➜ 304▕         $response->assertStatus(500)
+    305▕             ->assertHeader('content-type', 'application/json')
+    306▕             ->assertJsonPath('success', false)
+    307▕             ->assertJsonPath('message', 'No fue posible sincronizar el resultado desde GDA.');
+    308▕     }
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > resulta…   
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:345
+    341▕ 
+    342▕         $response = $this->actingAs($user)
+    343▕             ->postJson(route('admin.laboratory-notifications-monitor.force-refresh-results', ['orderKey' => $orderKey]));
+    344▕ 
+  ➜ 345▕         $response->assertOk();
+    346▕ 
+    347▕         $purchase->refresh();
+    348▕         $this->assertSame('results/manual-upload.pdf', $purchase->results);
+    349▕     }
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest > monitor…   
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:494
+    490▕ 
+    491▕         $response = $this->actingAs($user)
+    492▕             ->getJson(route('admin.laboratory-notifications-monitor.order-details', ['orderKey' => $orderKey]));
+    493▕ 
+  ➜ 494▕         $response->assertOk();
+    495▕         $response->assertJsonStructure([
+    496▕             'summary' => [
+    497▕                 'sync_logs' => [
+    498▕                     '*' => [
+
+
+  Tests:    20 failed, 76 passed (274 assertions)
+  Duration: 242.50s
+
