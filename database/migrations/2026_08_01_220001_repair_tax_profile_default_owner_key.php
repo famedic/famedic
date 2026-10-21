@@ -19,8 +19,6 @@ return new class extends Migration
             });
         }
 
-        $this->backfillDefaults();
-
         if (Schema::hasColumn('tax_profiles', 'default_owner_key') && $this->isGeneratedColumn()) {
             if ($this->hasDefaultOwnerKeyUniqueIndex()) {
                 Schema::table('tax_profiles', function (Blueprint $table): void {
@@ -47,7 +45,12 @@ return new class extends Migration
             });
         }
 
+        // Convert the legacy generated column before any backfill writes to it.
+        // MySQL rejects direct updates to generated columns (error 3105).
+        $this->backfillDefaults();
+
         $this->syncDefaultOwnerKeys();
+
     }
 
     public function down(): void
