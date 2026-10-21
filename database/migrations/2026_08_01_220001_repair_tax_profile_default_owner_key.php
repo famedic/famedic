@@ -66,6 +66,20 @@ return new class extends Migration
 
     private function isGeneratedColumn(): bool
     {
+        if (! $this->isMysql()) {
+            return false;
+        }
+
+        $expression = DB::table('information_schema.columns')
+            ->where('table_schema', DB::raw('database()'))
+            ->where('table_name', 'tax_profiles')
+            ->where('column_name', 'default_owner_key')
+            ->value('generation_expression');
+
+        if ($expression !== null && trim((string) $expression) !== '') {
+            return true;
+        }
+
         foreach (Schema::getColumns('tax_profiles') as $column) {
             if (($column['name'] ?? null) === 'default_owner_key') {
                 return str_contains(strtoupper((string) ($column['extra'] ?? '')), 'GENERATED');
