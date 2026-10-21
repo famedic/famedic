@@ -133,6 +133,26 @@ class CouponApplicationService
         $this->assertCouponApplicable($coupon, $assignment, $purchaseTotalCents);
     }
 
+    /**
+     * Validates a medical-services cart preview without consuming the benefit.
+     * Balance coupons may exceed the cart total because M2C applies them partially.
+     *
+     * @throws CouponApplicationException
+     */
+    public function validateMedicalServicePreview(User $user, int $couponId, int $cartTotalCents): Coupon
+    {
+        $coupon = Coupon::query()->findOrFail($couponId);
+
+        $assignment = CouponUser::query()
+            ->where('coupon_id', $coupon->id)
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+
+        $this->assertCouponApplicable($coupon, $assignment, $cartTotalCents, allowPartialBalance: true);
+
+        return $coupon;
+    }
+
     public function resolveDiscountCents(Coupon $coupon, int $purchaseTotalCents): int
     {
         if ($coupon->type === CouponType::Coupon) {
@@ -142,7 +162,12 @@ class CouponApplicationService
         return (int) $coupon->remaining_cents;
     }
 
-    private function assertCouponApplicable(Coupon $coupon, CouponUser $assignment, int $purchaseTotalCents): void
+    private function assertCouponApplicable(
+        Coupon $coupon,
+        CouponUser $assignment,
+        int $purchaseTotalCents,
+        bool $allowPartialBalance = false,
+    ): void
     {
         if (! $coupon->is_active) {
             throw new CouponApplicationException('El crédito no está activo.');
@@ -164,7 +189,11 @@ class CouponApplicationService
             throw new CouponApplicationException('El crédito no tiene saldo disponible.');
         }
 
-        if ($coupon->type === CouponType::Balance && $coupon->remaining_cents > $purchaseTotalCents) {
+        if (
+            ! $allowPartialBalance
+            && $coupon->type === CouponType::Balance
+            && $coupon->remaining_cents > $purchaseTotalCents
+        ) {
             throw new CouponApplicationException(
                 'Tu saldo es mayor al total de la compra, no puede aplicarse en esta compra.'
             );

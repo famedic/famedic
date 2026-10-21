@@ -29,6 +29,15 @@ $envInt = static function (string $key, int $default, int $min, int $max): int {
 
 return [
 
+    'pricing' => [
+        // FAMEDIC is the source of truth; this switch only models source availability.
+        'source_available' => $envBool('API_V1_PRICING_SOURCE_AVAILABLE', true),
+        // Deliberately null until FAMEDIC exposes authoritative tax/validity metadata.
+        'tax_included' => env('API_V1_PRICING_TAX_INCLUDED'),
+        'effective_at' => env('API_V1_PRICING_EFFECTIVE_AT'),
+        'valid_until' => env('API_V1_PRICING_VALID_UNTIL'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | HTTP Idempotency (phase 1) — Idempotency-Key

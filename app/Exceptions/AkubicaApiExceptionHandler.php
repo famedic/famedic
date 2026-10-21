@@ -71,11 +71,15 @@ class AkubicaApiExceptionHandler
                 return null;
             }
 
-            return ApiResponse::error(
+            $response = ApiResponse::error(
                 'TOO_MANY_REQUESTS',
                 'Demasiadas solicitudes. Intenta de nuevo en unos minutos.',
                 429,
             );
+            if ($request->routeIs('api.v1.integrations.atix.phone-lookups.store')) {
+                $response->headers->set('Retry-After', (string) config('atix.sandbox.rate_limit_retry_after_seconds', 60));
+            }
+            return $response;
         });
 
         $exceptions->render(function (Throwable $e, Request $request) {

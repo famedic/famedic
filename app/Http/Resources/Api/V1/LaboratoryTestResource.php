@@ -18,11 +18,12 @@ class LaboratoryTestResource extends JsonResource
             'description' => $this->description,
             'brand' => $this->brand->value,
             'category' => $this->laboratoryTestCategory?->name,
-            'price_cents' => $this->famedic_price_cents,
+            'price_cents' => (int) $this->famedic_price_cents,
             'currency' => 'MXN',
             'requires_appointment' => $this->requires_appointment,
             'gda_id' => $this->gda_id,
             'available' => ! $this->trashed(),
+            'pricing' => (new LaboratoryPricingResource($this->resource))->resolve($request),
         ];
     }
 }

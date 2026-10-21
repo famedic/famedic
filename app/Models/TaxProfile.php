@@ -8,11 +8,101 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class TaxProfile extends Model
 {
     use HasFactory, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::saving(function (TaxProfile $taxProfile): void {
+            if (! $taxProfile->hasDefaultOwnerKeyColumn()) {
+                return;
+            }
+
+            if ($taxProfile->is_default && $taxProfile->deleted_at === null) {
+                static::query()
+                    ->where('customer_id', $taxProfile->customer_id)
+                    ->whereNull('deleted_at')
+                    ->where('is_default', true)
+                    ->when(
+                        $taxProfile->exists,
+                        fn ($query) => $query->where($taxProfile->getKeyName(), '<>', $taxProfile->getKey()),
+                    )
+                    ->update([
+                        'is_default' => false,
+                        'default_owner_key' => null,
+                    ]);
+            }
+
+            $taxProfile->setAttribute(
+                'default_owner_key',
+                $taxProfile->is_default && $taxProfile->deleted_at === null
+                    ? $taxProfile->customer_id
+                    : null,
+            );
+        });
+
+        static::deleting(function (TaxProfile $taxProfile): void {
+            if (
+                $taxProfile->isForceDeleting()
+                || ! $taxProfile->hasDefaultOwnerKeyColumn()
+            ) {
+                return;
+            }
+
+            static::withoutEvents(function () use ($taxProfile): void {
+                static::query()
+                    ->whereKey($taxProfile->getKey())
+                    ->update(['default_owner_key' => null]);
+            });
+        });
+
+        static::restoring(function (TaxProfile $taxProfile): void {
+            if (! $taxProfile->hasDefaultOwnerKeyColumn()) {
+                return;
+            }
+
+            $hasAnotherActiveDefault = static::query()
+                ->where('customer_id', $taxProfile->customer_id)
+                ->whereNull('deleted_at')
+                ->where('is_default', true)
+                ->where($taxProfile->getKeyName(), '<>', $taxProfile->getKey())
+                ->exists();
+
+            if ($hasAnotherActiveDefault) {
+                $taxProfile->is_default = false;
+            }
+        });
+
+        static::restored(function (TaxProfile $taxProfile): void {
+            if (! $taxProfile->hasDefaultOwnerKeyColumn()) {
+                return;
+            }
+
+            static::withoutEvents(function () use ($taxProfile): void {
+                static::query()
+                    ->whereKey($taxProfile->getKey())
+                    ->update([
+                        'default_owner_key' => $taxProfile->is_default
+                            ? $taxProfile->customer_id
+                            : null,
+                    ]);
+            });
+        });
+    }
+
+    /**
+     * Direct Query Builder writes that change customer_id, is_default or
+     * deleted_at are outside the supported synchronization contract. Use this
+     * model or the TaxProfile actions so the ordinary owner key stays aligned.
+     */
+    private function hasDefaultOwnerKeyColumn(): bool
+    {
+        return Schema::hasColumn('tax_profiles', 'default_owner_key');
+    }
 
     protected $fillable = [
         'name',
@@ -35,6 +125,10 @@ class TaxProfile extends Model
         'hash_constancia',
         'verificado_automaticamente',
         'fecha_verificacion',
+    ];
+
+    protected $hidden = [
+        'default_owner_key',
     ];
 
     protected $casts = [

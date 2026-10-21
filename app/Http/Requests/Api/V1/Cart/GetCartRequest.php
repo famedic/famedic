@@ -16,7 +16,8 @@ class GetCartRequest extends ApiFormRequest
     public function rules(): array
     {
         return [
-            'brand' => ['required', Rule::enum(LaboratoryBrand::class)],
+            'service_line' => ['nullable', 'string', 'required_without:brand'],
+            'brand' => ['nullable', Rule::enum(LaboratoryBrand::class), 'required_without:service_line'],
         ];
     }
 }

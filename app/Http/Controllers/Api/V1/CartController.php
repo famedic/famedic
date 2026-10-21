@@ -6,6 +6,8 @@ use App\Actions\Api\V1\ClearAkubicaCartAction;
 use App\Actions\Laboratories\AddItemToCartAction;
 use App\Actions\Laboratories\DeleteItemFromCartAction;
 use App\Enums\LaboratoryBrand;
+use App\Exceptions\MedicalServiceCartConflictException;
+use App\Exceptions\MedicalServiceMembershipActiveException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Cart\AddCartItemRequest;
 use App\Http\Requests\Api\V1\Cart\ClearCartRequest;
@@ -13,9 +15,11 @@ use App\Http\Requests\Api\V1\Cart\GetCartRequest;
 use App\Http\Requests\Api\V1\Cart\GetCartTotalsRequest;
 use App\Http\Resources\Api\V1\CartItemResource;
 use App\Http\Resources\Api\V1\CartResource;
+use App\Http\Resources\Api\V1\MedicalServiceCartResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
+use App\Services\Api\V1\MedicalServiceCartService;
 use App\Services\Api\V1\Audit\AuditOutcome;
 use App\Services\Api\V1\Audit\CartCheckoutAuditRecorder;
 use App\Support\Api\V1\CartCouponSupport;
@@ -31,6 +35,16 @@ class CartController extends Controller
 
     public function index(GetCartRequest $request): JsonResponse
     {
+        if ($request->validated('service_line') !== null) {
+            if ($request->validated('service_line') !== 'medical_services' || $request->validated('brand') !== null) {
+                return $this->serviceLineMismatch();
+            }
+
+            $cart = app(MedicalServiceCartService::class)->activeCart($request->user()->customer);
+
+            return ApiResponse::success((new MedicalServiceCartResource($cart->load('items')))->resolve($request));
+        }
+
         $brand = LaboratoryBrand::from($request->validated('brand'));
         $items = $request->user()->customer->laboratoryCartItems()
             ->ofBrand($brand)
@@ -47,6 +61,44 @@ class CartController extends Controller
         AddItemToCartAction $addItemToCartAction,
     ): JsonResponse {
         $customer = $request->user()->customer;
+
+        if ($request->validated('service_line') !== null) {
+            if ($request->validated('service_line') !== 'medical_services' || $request->validated('brand') !== null) {
+                return $this->serviceLineMismatch();
+            }
+
+            if ($request->validated('item_type') !== 'membership'
+                || $request->validated('membership_plan_code') !== 'basic_annual'
+                || (int) ($request->validated('quantity') ?? 1) !== 1
+            ) {
+                return ApiResponse::error('VALIDATION_ERROR', 'Los datos enviados no son válidos.', 422);
+            }
+
+            try {
+                $cart = app(MedicalServiceCartService::class)->addBasicPlan($customer);
+            } catch (MedicalServiceMembershipActiveException $exception) {
+                $code = $exception->reason === 'sponsored_membership_active'
+                    ? 'SPONSORED_MEMBERSHIP_ACTIVE'
+                    : 'MEMBERSHIP_ALREADY_ACTIVE';
+
+                return ApiResponse::error($code, 'No se puede agregar una membresía médica activa.', 409);
+            } catch (MedicalServiceCartConflictException $exception) {
+                return ApiResponse::error($exception->errorCode, $exception->getMessage(), 409);
+            }
+
+            $this->cartCheckoutAudit->recordCartItemAdded(
+                request: $request,
+                outcome: AuditOutcome::SUCCEEDED,
+                httpStatus: 201,
+                metadata: ['service_line' => 'medical_services', 'item_type' => 'membership'],
+            );
+
+            return ApiResponse::success(
+                (new MedicalServiceCartResource($cart))->resolve($request),
+                status: 201,
+            );
+        }
+
         $brand = LaboratoryBrand::from($request->validated('brand'));
         $laboratoryTestId = (int) $request->validated('laboratory_test_id');
 
@@ -123,6 +175,45 @@ class CartController extends Controller
         int $cartItemId,
         DeleteItemFromCartAction $deleteItemFromCartAction,
     ): JsonResponse {
+        $medicalItem = \App\Models\MedicalServiceCartItem::query()->with('cart')->find($cartItemId);
+        if ($medicalItem) {
+            if ((int) $medicalItem->cart->customer_id !== (int) $request->user()->customer?->id) {
+                $response = ApiResponse::error('FORBIDDEN', 'No tienes permiso para eliminar este ítem.', 403);
+                $classified = $this->cartCheckoutAudit->classifyErrorResponse($response);
+                $this->cartCheckoutAudit->recordCartItemRemoved(
+                    request: $request,
+                    outcome: $classified['outcome'],
+                    httpStatus: 403,
+                    errorCode: $classified['error_code'],
+                );
+
+                return $response;
+            }
+
+            try {
+                $cart = app(MedicalServiceCartService::class)->removeItem($request->user()->customer, $cartItemId);
+            } catch (MedicalServiceCartConflictException $exception) {
+                $status = match ($exception->errorCode) {
+                    'FORBIDDEN' => 403,
+                    'CART_SERVICE_LINE_MISMATCH', 'MEMBERSHIP_ALREADY_IN_CART' => 409,
+                    default => 404,
+                };
+
+                return ApiResponse::error($exception->errorCode, $exception->getMessage(), $status);
+            }
+
+            $this->cartCheckoutAudit->recordCartItemRemoved(
+                request: $request,
+                outcome: AuditOutcome::SUCCEEDED,
+                httpStatus: 200,
+                metadata: ['service_line' => 'medical_services', 'item_type' => 'membership'],
+            );
+
+            return ApiResponse::success(
+                (new MedicalServiceCartResource($cart))->resolve($request),
+            );
+        }
+
         $cartItem = LaboratoryCartItem::query()
             ->with('laboratoryTest')
             ->find($cartItemId);
@@ -195,6 +286,19 @@ class CartController extends Controller
         CheckoutPreparation $checkoutPreparation,
         CartCouponSupport $cartCouponSupport,
     ): JsonResponse {
+        if ($request->validated('service_line') !== null) {
+            if ($request->validated('service_line') !== 'medical_services' || $request->validated('brand') !== null) {
+                return $this->serviceLineMismatch();
+            }
+
+            $cart = app(MedicalServiceCartService::class)->activeCart($request->user()->customer);
+
+            return ApiResponse::success((new MedicalServiceCartResource($cart->load('items')))->resolve($request)['totals'] + [
+                'service_line' => 'medical_services',
+                'applied_benefits' => [],
+            ]);
+        }
+
         $brand = LaboratoryBrand::from($request->validated('brand'));
 
         return ApiResponse::success(
@@ -223,5 +327,14 @@ class CartController extends Controller
             'deleted' => true,
             'deleted_count' => $deletedCount,
         ]);
+    }
+
+    private function serviceLineMismatch(): JsonResponse
+    {
+        return ApiResponse::error(
+            'CART_SERVICE_LINE_MISMATCH',
+            'La línea de servicio no corresponde al carrito solicitado.',
+            409,
+        );
     }
 }

@@ -16,8 +16,16 @@ class AddCartItemRequest extends ApiFormRequest
     public function rules(): array
     {
         return [
-            'laboratory_test_id' => ['required', 'integer', 'min:1'],
-            'brand' => ['required', Rule::enum(LaboratoryBrand::class)],
+            'service_line' => ['nullable', 'string', 'required_without:brand'],
+            'item_type' => ['nullable', 'string'],
+            'membership_plan_code' => ['nullable', 'string'],
+            'quantity' => ['nullable', 'integer', 'min:1'],
+            'laboratory_test_id' => ['nullable', 'integer', 'min:1', 'required_without:service_line'],
+            'brand' => ['nullable', Rule::enum(LaboratoryBrand::class), 'required_without:service_line'],
+            'price_cents' => ['prohibited'],
+            'unit_price_cents' => ['prohibited'],
+            'subtotal_cents' => ['prohibited'],
+            'total_cents' => ['prohibited'],
         ];
     }
 }

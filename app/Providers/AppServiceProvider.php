@@ -23,6 +23,8 @@ use Laravel\Cashier\Cashier;
 use Stripe\StripeClient;
 use App\Services\ConstanciaFiscalService;
 use App\Contracts\Otp\OtpCodeGenerator;
+use App\Contracts\Api\V1\Auth\AccountContextTokenIssuer;
+use App\Services\Api\V1\Auth\AccountContextTokenService;
 use App\Services\Otp\AkubicaLoginOtpDecoyStore;
 use App\Services\Otp\AkubicaLoginOtpService;
 use App\Services\Otp\OtpAbuseKeyHasher;
@@ -75,6 +77,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app->bind(OtpCodeGenerator::class, SecureOtpCodeGenerator::class);
+        $this->app->singleton(AccountContextTokenIssuer::class, AccountContextTokenService::class);
         $this->app->singleton(OtpAbuseKeyHasher::class);
         $this->app->scoped(\App\Services\Otp\Diagnostics\OtpDiagnosticContext::class);
         $this->app->singleton(\App\Services\Api\V1\Audit\AuditActorResolver::class);
@@ -174,6 +177,11 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('tax-profile-extract', function (Request $request) {
             return Limit::perMinute(5)->by((string) ($request->user()?->id ?: $request->ip()));
+        });
+
+        RateLimiter::for('atix-sandbox', function (Request $request) {
+            $integration = hash('sha256', (string) $request->header('X-Integration-Key-Id', 'unknown'));
+            return Limit::perMinute((int) config('atix.sandbox.rate_limit_per_minute', 60))->by('atix:'.$integration);
         });
 
         Event::listen(Verified::class, LinkPendingCouponBeneficiaries::class);

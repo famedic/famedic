@@ -109,8 +109,18 @@ paths:
       tags: [Auth]
       operationId: authLoginRequestCode
       summary: Solicitar OTP de login
+      x-proposed-v1-3-0-context:
+        status: proposal
+        compatibility: additive-to-v1.2.3
+        pre_otp: |
+          El flujo contextual conserva anti-enumeración. Para una cuenta elegible puede
+          devolver el challenge y únicamente personalization.allowed y first_name cuando
+          personalization.allowed=true. Nunca devuelve account_context_token, no crea
+          sesión Bearer y no permite datos privados antes del OTP.
+        binding: [phone, conversation_id, channel_event_id, channel, audience]
       description: |
         **P0-A ON:** body `{ "phone": "+52..." }` → `202` + `OtpChallenge` (SMS).
+        Para reconocimiento conversacional puede incluir `conversation_id`, `channel_event_id`, `channel` y `personalization.allowed`.
         Teléfono inexistente → misma forma `202` (señuelo; sin SMS).
         **Legacy OFF:** body `{ "email" }` → `200` genérico (anti-enumeración).
         Soporta `Idempotency-Key` opcional (fase 1) cuando el flag está ON.
@@ -132,6 +142,16 @@ paths:
               legacy:
                 value:
                   email: usuario.ejemplo@example.com
+              contextual-proposal-v1-3:
+                summary: Ejemplo sintético de propuesta; no contiene secretos.
+                value:
+                  phone: '+520000000000'
+                  conversation_id: conversation-example
+                  channel_event_id: event-example
+                  channel: channel-pending-atix
+                  audience: audience-pending-atix
+                  personalization:
+                    allowed: true
       responses:
         '200':
           description: Legacy — solicitud procesada
@@ -159,7 +179,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/OtpChallenge'
+                        oneOf:
+                          - $ref: '#/components/schemas/OtpChallenge'
+                          - $ref: '#/components/schemas/PreOtpContactRecognitionResponse'
         '422':
           $ref: '#/components/responses/ValidationError'
         '429':
@@ -176,9 +198,19 @@ paths:
     post:
       tags: [Auth]
       operationId: authLoginVerifyCode
-      summary: Verificar OTP de login y emitir token
+      summary: Verificar OTP de login
+      x-proposed-v1-3-0-context:
+        status: proposal
+        post_otp: |
+          En flujo contextual, el OTP eleva el mismo contexto pre-OTP y conserva el
+          binding por teléfono, conversación, evento, canal y audiencia. No devuelve
+          account_context_token, no acepta ese contexto como Bearer y no crea una
+          segunda identidad. El login no contextual conserva el Bearer normal.
       description: |
         **P0-A:** `{ "challenge_id", "code" }` → token + user.
+        En modo contextual conversacional, el OTP se verifica sin crear sesión Sanctum;
+        la respuesta contiene únicamente el estado de verificación y, si fue permitido,
+        el primer nombre. El `account_context_token` nunca se expone.
         **Legacy:** `{ "email", "code" }`.
         `expires_in` refleja TTL efectivo (≈10800 s con Sanctum 3h ON).
       parameters:
@@ -205,7 +237,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/TokenResponse'
+                        oneOf:
+                          - $ref: '#/components/schemas/TokenResponse'
+                          - $ref: '#/components/schemas/ContactRecognitionResponse'
         '422':
           $ref: '#/components/responses/OtpVerifyError'
         '429':
@@ -572,6 +606,15 @@ paths:
                 $ref: '#/components/schemas/CatalogLaboratoryTestsResponse'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '503':
+          description: PRICING_SOURCE_UNAVAILABLE
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
   /catalog/laboratory-test-categories:
     get:
       tags: [Catalog]
@@ -658,6 +701,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          description: PRICING_SOURCE_UNAVAILABLE
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
 
   /catalog/medications/{medication_id}:
     get:
@@ -679,6 +731,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
 
+  /memberships/plans:
+    get:
+      tags: [Memberships]
+      operationId: membershipPlansIndex
+      summary: Consultar membresías disponibles para contratación individual
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Planes de membresía disponibles
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPlansResponse'
+
+  /memberships/status:
+    get:
+      tags: [Memberships]
+      operationId: membershipStatusShow
+      summary: Consultar estado de membresía médica
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Estado de membresía del cliente autenticado
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /cart:
     get:
       tags: [Cart]
@@ -688,7 +782,8 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
-        - $ref: '#/components/parameters/BrandRequired'
+        - $ref: '#/components/parameters/ServiceLine'
+        - $ref: '#/components/parameters/BrandOptional'
       responses:
         '200':
           description: Carrito
@@ -739,7 +834,8 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
-        - $ref: '#/components/parameters/BrandRequired'
+        - $ref: '#/components/parameters/ServiceLine'
+        - $ref: '#/components/parameters/BrandOptional'
       responses:
         '200':
           description: Totales
@@ -767,18 +863,15 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [laboratory_test_id, brand]
-              properties:
-                laboratory_test_id:
-                  type: integer
-                brand:
-                  $ref: '#/components/schemas/LaboratoryBrand'
+              oneOf:
+                - $ref: '#/components/schemas/LaboratoryCartItemCreateLegacy'
+                - $ref: '#/components/schemas/MembershipCartItemCreate'
       responses:
         '201':
           description: Ítem agregado
@@ -803,7 +896,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '409':
-          description: ITEM_ALREADY_IN_CART
+          description: ITEM_ALREADY_IN_CART / MEMBERSHIP_ALREADY_ACTIVE / SPONSORED_MEMBERSHIP_ACTIVE / MEMBERSHIP_ALREADY_IN_CART / CART_SERVICE_LINE_MISMATCH
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'
@@ -822,6 +915,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
         - $ref: '#/components/parameters/CartItemId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
           description: Eliminado
@@ -845,6 +939,109 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          description: IDEMPOTENCY_REPLAY_CONFLICT / CART_SERVICE_LINE_MISMATCH
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /cart/medical-benefit:
+    get:
+      tags: [Cart]
+      operationId: medicalServiceBenefitShow
+      summary: Ver beneficio aplicado al carrito médico
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/ServiceLineMedical'
+      responses:
+        '200':
+          description: Carrito médico con beneficio aplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalServiceBenefitResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      tags: [Cart]
+      operationId: medicalServiceBenefitApply
+      summary: Aplicar cupón o saldo a favor al carrito médico
+      description: |
+        Aplica como máximo un beneficio monetario al carrito medical_services.
+        No consume definitivamente el cupón ni el saldo.
+        No se permite combinar cupón y saldo en el mismo carrito.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [service_line, code]
+              additionalProperties: false
+              properties:
+                service_line:
+                  type: string
+                  const: medical_services
+                code:
+                  type: string
+                  maxLength: 100
+      responses:
+        '200':
+          description: Beneficio aplicado sin consumo definitivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalServiceBenefitResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: COUPON_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          description: EMPTY_CART / COUPON_EXPIRED / COUPON_NOT_APPLICABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+    delete:
+      tags: [Cart]
+      operationId: medicalServiceBenefitRemove
+      summary: Retirar beneficio del carrito médico
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ServiceLineMedical'
+      responses:
+        '200':
+          description: Beneficio retirado o inexistente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalServiceBenefitResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
 
   /cart/coupon:
     get:
@@ -855,7 +1052,8 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
-        - $ref: '#/components/parameters/BrandRequired'
+        - $ref: '#/components/parameters/ServiceLine'
+        - $ref: '#/components/parameters/BrandOptional'
       responses:
         '200':
           description: Cupón
@@ -963,7 +1161,8 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XCorrelationId'
-        - $ref: '#/components/parameters/BrandRequired'
+        - $ref: '#/components/parameters/ServiceLine'
+        - $ref: '#/components/parameters/BrandOptional'
       responses:
         '200':
           description: Payload prepare
@@ -2498,6 +2697,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
 
+  /integrations/atix/phone-lookups:
+    post:
+      tags: [Integrations]
+      operationId: atixPhoneLookup
+      security: []
+      description: |
+        Endpoint sandbox de FAMEDIC para reconocimiento conversacional. Requiere
+        HMAC-SHA256 sobre `METHOD`, ruta, timestamp, nonce y hash SHA-256 del cuerpo,
+        separados por saltos de línea. No devuelve `account_context_token` ni crea
+        una sesión Bearer. La respuesta permite únicamente iniciar OTP y, si se
+        solicitó, personalizar con el primer nombre.
+      parameters:
+        - $ref: '#/components/parameters/AtixCorrelationId'
+        - $ref: '#/components/parameters/AtixIntegrationKeyId'
+        - $ref: '#/components/parameters/AtixTimestamp'
+        - $ref: '#/components/parameters/AtixNonce'
+        - $ref: '#/components/parameters/AtixSignature'
+        - $ref: '#/components/parameters/AtixIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtixPhoneLookupRequest'
+            example:
+              phone: '+525512345678'
+              conversation_id: '8f5d9f2d-7b7a-4a89-9f2c-111111111111'
+              channel_event_id: 'evt-sandbox-0001'
+              channel: whatsapp
+              audience: leo
+              personalization: {allowed: true}
+      responses:
+        '202':
+          description: Reconocimiento anti-enumeracion y OTP iniciado si corresponde
+          headers:
+            X-Correlation-ID: {$ref: '#/components/headers/X-Correlation-ID'}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AtixPhoneLookupResponse'
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '409':
+          description: Replay, nonce repetido o conflicto de idempotencia
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '422':
+          description: Carga o canal/audiencia invalidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '429':
+          description: Rate limit de la integracion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2528,6 +2787,40 @@ components:
         enum: ['true']
 
   parameters:
+    AtixCorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+        pattern: '^[A-Za-z0-9._-]+$'
+    AtixIntegrationKeyId:
+      name: X-Integration-Key-Id
+      in: header
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 128}
+    AtixTimestamp:
+      name: X-Timestamp
+      in: header
+      required: true
+      schema: {type: string, pattern: '^[0-9]+$'}
+    AtixNonce:
+      name: X-Nonce
+      in: header
+      required: true
+      schema: {type: string, minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+    AtixSignature:
+      name: X-Signature
+      in: header
+      required: true
+      schema: {type: string, minLength: 64, maxLength: 64, pattern: '^[a-fA-F0-9]{64}$'}
+    AtixIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
     XCorrelationId:
       name: X-Correlation-ID
       in: header
@@ -2601,6 +2894,27 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/LaboratoryBrand'
+    BrandOptional:
+      name: brand
+      in: query
+      required: false
+      description: Requerido para el flujo legacy de laboratorio; omitido para medical_services.
+      schema:
+        $ref: '#/components/schemas/LaboratoryBrand'
+    ServiceLine:
+      name: service_line
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [medical_services, laboratory, pharmacy]
+    ServiceLineMedical:
+      name: service_line
+      in: query
+      required: true
+      schema:
+        type: string
+        const: medical_services
     SecureDownloadToken:
       name: token
       in: path
@@ -2719,6 +3033,43 @@ components:
             $ref: '#/components/schemas/ApiErrorResponse'
 
   schemas:
+    AtixPhoneLookupRequest:
+      type: object
+      additionalProperties: false
+      required: [phone, conversation_id, channel_event_id, channel, audience, personalization]
+      properties:
+        phone: {type: string, pattern: '^\\+[1-9][0-9]{7,14}$', description: E.164}
+        conversation_id: {type: string, maxLength: 128}
+        channel_event_id: {type: string, maxLength: 128}
+        channel: {type: string, enum: [whatsapp]}
+        audience: {type: string, enum: [leo]}
+        personalization:
+          type: object
+          additionalProperties: false
+          required: [allowed]
+          properties: {allowed: {type: boolean}}
+    AtixPhoneLookupResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, const: true}
+        data:
+          type: object
+          required: [requires_otp, challenge_id, purpose, channel, destination_masked, expires_at, resend_available_at, personalization]
+          properties:
+            requires_otp: {type: boolean, const: true}
+            challenge_id: {type: string}
+            purpose: {type: string, example: akubica_login}
+            channel: {type: string, example: sms}
+            destination_masked: {type: string}
+            expires_at: {type: string, format: date-time}
+            resend_available_at: {type: string, format: date-time}
+            personalization:
+              type: object
+              required: [allowed]
+              properties:
+                allowed: {type: boolean}
+                first_name: {type: string, nullable: true}
     ApiSuccessResponse:
       type: object
       required: [success, data]
@@ -2763,6 +3114,245 @@ components:
       $ref: '#/components/schemas/ApiSuccessResponse'
     ErrorResponse:
       $ref: '#/components/schemas/ApiErrorResponse'
+
+    MembershipPlan:
+      type: object
+      required: [code, name, audience, price_cents, currency, tax_included, billing_type, validity_months, trial_days, is_available]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [basic_annual]
+        name:
+          type: string
+          enum: [Plan Básico]
+        audience:
+          type: string
+          enum: [individual]
+        price_cents:
+          type: integer
+          example: 30000
+        currency:
+          type: string
+          enum: [MXN]
+        tax_included:
+          type: boolean
+          example: true
+        billing_type:
+          type: string
+          enum: [one_time]
+        validity_months:
+          type: integer
+          example: 12
+        trial_days:
+          type: integer
+          example: 0
+        is_available:
+          type: boolean
+
+    MembershipPlansResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          required: [plans]
+          properties:
+            plans:
+              type: array
+              items:
+                $ref: '#/components/schemas/MembershipPlan'
+
+    MembershipStatus:
+      type: object
+      required: [status, purchase_eligible]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [none, active, expired]
+        plan_code:
+          type: string
+          nullable: true
+          enum: [basic_annual, null]
+        plan_name:
+          type: string
+          nullable: true
+          enum: [Plan Básico, null]
+        source:
+          type: string
+          nullable: true
+          enum: [individual, sponsored, null]
+        starts_at:
+          type: string
+          format: date
+          nullable: true
+        expires_at:
+          type: string
+          format: date
+          nullable: true
+        purchase_eligible:
+          type: boolean
+        ineligibility_reason:
+          type: string
+          nullable: true
+          enum: [membership_already_active, sponsored_membership_active, renewal_not_supported, null]
+
+    MembershipStatusResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/MembershipStatus'
+
+    LaboratoryCartItemCreateLegacy:
+      type: object
+      required: [laboratory_test_id, brand]
+      additionalProperties: false
+      properties:
+        laboratory_test_id:
+          type: integer
+          minimum: 1
+        brand:
+          $ref: '#/components/schemas/LaboratoryBrand'
+
+    MembershipCartItemCreate:
+      type: object
+      required: [service_line, item_type, membership_plan_code]
+      additionalProperties: false
+      properties:
+        service_line:
+          type: string
+          const: medical_services
+        item_type:
+          type: string
+          const: membership
+        membership_plan_code:
+          type: string
+          const: basic_annual
+
+    MedicalServiceCartItem:
+      type: object
+      required: [id, item_type, name, membership_plan_code, quantity, unit_price_cents, subtotal_cents, requires_appointment]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        item_type:
+          type: string
+          const: membership
+        name:
+          type: string
+        membership_plan_code:
+          type: string
+          const: basic_annual
+        laboratory_test_id:
+          type: 'null'
+        brand:
+          type: 'null'
+        quantity:
+          type: integer
+          const: 1
+        unit_price_cents:
+          type: integer
+          const: 30000
+        subtotal_cents:
+          type: integer
+          const: 30000
+        requires_appointment:
+          type: boolean
+          const: false
+
+    MedicalServiceCart:
+      type: object
+      required: [cart_id, service_line, items, totals, applied_benefits, requires_appointment]
+      properties:
+        cart_id:
+          type: integer
+        service_line:
+          type: string
+          const: medical_services
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MedicalServiceCartItem'
+        totals:
+          type: object
+          required: [subtotal_cents, discount_cents, credit_applied_cents, total_cents, currency, item_count]
+          properties:
+            subtotal_cents:
+              type: integer
+            discount_cents:
+              type: integer
+            credit_applied_cents:
+              type: integer
+            total_cents:
+              type: integer
+            currency:
+              type: string
+              const: MXN
+            item_count:
+              type: integer
+        applied_benefits:
+          type: array
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/MedicalServiceCartBenefit'
+        requires_appointment:
+          type: boolean
+
+    MedicalServiceCartResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiSuccessResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/MedicalServiceCart'
+
+    MedicalServiceBenefitResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiSuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [service_line, cart]
+              additionalProperties: false
+              properties:
+                service_line:
+                  type: string
+                  const: medical_services
+                cart:
+                  $ref: '#/components/schemas/MedicalServiceCart'
+
+    MedicalServiceCartBenefit:
+      type: object
+      required: [id, type, coupon_id, code, description, applied_cents, currency]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [coupon, credit]
+        coupon_id:
+          type: integer
+        code:
+          type: string
+        description:
+          type: string
+        applied_cents:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          const: MXN
 
     LaboratoryBrand:
       type: string
@@ -2854,7 +3444,7 @@ components:
           type: string
     LaboratoryTestListItem:
       type: object
-      required: [id, name, brand, price_cents, currency, requires_appointment, category, indications, is_available]
+      required: [id, name, brand, price_cents, currency, requires_appointment, category, indications, is_available, pricing]
       additionalProperties: false
       properties:
         id:
@@ -2877,6 +3467,8 @@ components:
           nullable: true
         is_available:
           type: boolean
+        pricing:
+          $ref: '#/components/schemas/LaboratoryPricing'
     CatalogLaboratoryTestsResponse:
       allOf:
         - $ref: '#/components/schemas/ApiSuccessResponse'
@@ -3087,9 +3679,48 @@ components:
           type: object
           additionalProperties: true
 
+    LaboratoryPricing:
+      type: object
+      required: [famedic_price_cents, currency, tax_included, comparison_status, effective_at]
+      additionalProperties: false
+      properties:
+        public_price_cents:
+          type: integer
+          minimum: 0
+          nullable: true
+        famedic_price_cents:
+          type: integer
+          minimum: 0
+        savings_cents:
+          type: integer
+          minimum: 0
+          nullable: true
+        savings_percentage:
+          type: number
+          minimum: 0
+          maximum: 100
+          nullable: true
+        currency:
+          type: string
+          enum: [MXN]
+        tax_included:
+          type: boolean
+          nullable: true
+        comparison_status:
+          type: string
+          enum: [available, public_price_unavailable, no_savings, data_inconsistent]
+        effective_at:
+          type: string
+          format: date-time
+          nullable: true
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+
     LaboratoryTest:
       type: object
-      required: [id, name, description, brand, category, price_cents, currency, requires_appointment, gda_id, available]
+      required: [id, name, description, brand, category, price_cents, currency, requires_appointment, gda_id, available, pricing]
       additionalProperties: false
       properties:
         id:
@@ -3115,10 +3746,13 @@ components:
           type: string
         available:
           type: boolean
+        pricing:
+          $ref: '#/components/schemas/LaboratoryPricing'
 
     LoginRequestCodeSms:
       type: object
       required: [phone]
+      additionalProperties: false
       properties:
         phone:
           type: string
@@ -3126,6 +3760,74 @@ components:
         phone_country:
           type: string
           default: MX
+        conversation_id:
+          type: string
+          maxLength: 128
+          description: Identificador opaco de conversación; no se devuelve ni se registra.
+        channel_event_id:
+          type: string
+          maxLength: 128
+          description: Identificador opaco del evento del canal; no se devuelve ni se registra.
+        channel:
+          type: string
+          maxLength: 32
+          description: Canal proporcionado por la integración; su semántica queda pendiente de ATIX.
+        audience:
+          type: string
+          maxLength: 128
+          description: |
+            Binding de la propuesta v1.3.0. El enum y la semántica requieren confirmación
+            de ATIX; el runtime v1.2.3 deriva una audiencia interna fija.
+        personalization:
+          type: object
+          additionalProperties: false
+          properties:
+            allowed:
+              type: boolean
+              default: false
+
+    PreOtpContactRecognitionResponse:
+      allOf:
+        - $ref: '#/components/schemas/OtpChallenge'
+        - type: object
+          required: [personalization]
+          properties:
+            personalization:
+              type: object
+              required: [allowed]
+              additionalProperties: false
+              properties:
+                allowed:
+                  type: boolean
+                first_name:
+                  type: string
+                  description: Solo aparece si la cuenta es elegible y personalization.allowed=true.
+      description: |
+        Respuesta contextual pre-OTP propuesta para v1.3.0. Mantiene la forma
+        anti-enumeración del challenge y no contiene account_context_token, Bearer,
+        sesión ni datos privados.
+
+    ContactRecognitionResponse:
+      type: object
+      required: [otp_verified, personalization]
+      additionalProperties: false
+      properties:
+        otp_verified:
+          type: boolean
+          const: true
+        personalization:
+          type: object
+          required: [allowed]
+          additionalProperties: false
+          properties:
+            allowed:
+              type: boolean
+            first_name:
+              type: string
+              description: Solo aparece cuando allowed=true y el OTP fue validado.
+      description: |
+        Respuesta contextual post-OTP propuesta para v1.3.0. Representa la elevación
+        del mismo contexto pre-OTP; no contiene tokens internos ni Bearer.
 
     LoginRequestCodeLegacy:
       type: object

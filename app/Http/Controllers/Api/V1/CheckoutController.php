@@ -10,10 +10,12 @@ use App\Http\Requests\Api\V1\Checkout\GeneratePaymentLinkRequest;
 use App\Http\Requests\Api\V1\Checkout\PrepareCheckoutRequest;
 use App\Http\Requests\Api\V1\Checkout\SyncCheckoutDraftRequest;
 use App\Http\Resources\Api\V1\CheckoutPaymentLinkResource;
+use App\Http\Resources\Api\V1\MedicalServiceCartResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Services\Api\V1\Audit\AuditOutcome;
 use App\Services\Api\V1\Audit\CartCheckoutAuditRecorder;
+use App\Services\Api\V1\MedicalServiceCartService;
 use App\Support\Api\V1\CartCouponSupport;
 use App\Support\Api\V1\CheckoutPreparation;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +31,33 @@ class CheckoutController extends Controller
         CheckoutPreparation $checkoutPreparation,
         CartCouponSupport $cartCouponSupport,
     ): JsonResponse {
+        if ($request->validated('service_line') !== null) {
+            if ($request->validated('service_line') !== 'medical_services' || $request->validated('brand') !== null) {
+                return ApiResponse::error(
+                    'CART_SERVICE_LINE_MISMATCH',
+                    'La línea de servicio no corresponde al carrito solicitado.',
+                    409,
+                );
+            }
+
+            $cart = app(MedicalServiceCartService::class)->activeCart($request->user()->customer);
+            $cartPayload = (new MedicalServiceCartResource($cart->load('items')))->resolve($request);
+
+            return ApiResponse::success([
+                'service_line' => 'medical_services',
+                'cart' => $cartPayload,
+                'requirements' => [
+                    'has_items' => $cartPayload['totals']['item_count'] > 0,
+                    'requires_contact' => false,
+                    'requires_address' => false,
+                    'requires_appointment' => false,
+                    'requires_invoice_data' => false,
+                ],
+                'warnings' => [],
+                'can_continue_to_payment_platform' => false,
+            ]);
+        }
+
         $brand = LaboratoryBrand::from($request->validated('brand'));
 
         return ApiResponse::success(

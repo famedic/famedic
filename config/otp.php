@@ -95,6 +95,9 @@ return [
     */
 
     'p0a' => [
+        'account_context' => [
+            'ttl_minutes' => $otpEnvInt('OTP_P0A_ACCOUNT_CONTEXT_TTL_MINUTES', 10, 1, 60),
+        ],
 
         'flags' => [
             /** Nueva infraestructura / servicio OTP reutilizable (P0-A2+). */

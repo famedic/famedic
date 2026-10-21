@@ -1,0 +1,187 @@
+{
+  "info": {
+    "name": "Famedic Akubica API v1.3.0 - Regression",
+    "description": "Casos de contrato para catalogo, membresias, medical_services y reconocimiento de contacto. No contiene adapter ATIX ni consume beneficios de forma definitiva.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('X-Correlation-ID presente', function () { pm.expect(pm.response.headers.get('X-Correlation-ID')).to.be.ok; });",
+          "const body = pm.response.json();",
+          "if (body && body.error) { pm.test('error.correlation_id coincide', function () { pm.expect(body.error.correlation_id).to.eql(pm.response.headers.get('X-Correlation-ID')); }); }"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost/api/v1" },
+    { "key": "access_token", "value": "" },
+    { "key": "other_access_token", "value": "" },
+    { "key": "correlation_id", "value": "" },
+    { "key": "medical_service_line", "value": "medical_services" },
+    { "key": "laboratory_test_id", "value": "" },
+    { "key": "membership_plan_code", "value": "basic_annual" },
+    { "key": "medical_cart_item_id", "value": "" },
+    { "key": "medical_benefit_code", "value": "" },
+    { "key": "medical_coupon_unknown", "value": "" },
+    { "key": "medical_coupon_expired", "value": "" },
+    { "key": "medical_idempotency_key", "value": "" },
+    { "key": "contact_login_phone", "value": "" },
+    { "key": "contact_unknown_phone", "value": "" },
+    { "key": "contact_unverified_phone", "value": "" },
+    { "key": "contact_conversation_id", "value": "" },
+    { "key": "contact_channel_event_id", "value": "" },
+    { "key": "contact_channel", "value": "" },
+    { "key": "contact_audience", "value": "akubica_conversation" },
+    { "key": "contact_preotp_challenge_id", "value": "" },
+    { "key": "contact_otp", "value": "" },
+    { "key": "contact_expired_challenge_id", "value": "" },
+    { "key": "context_token_placeholder", "value": "opaque-context-token-never-issued-to-client" }
+  ],
+  "item": [
+    {
+      "name": "01 - Catalogo y membresias",
+      "item": [
+        {
+          "name": "Catalogo comparativo de laboratorio | catalogIndexLaboratoryTests",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/catalog/laboratory-tests?brand={{brand}}", "host": ["{{base_url}}"], "path": ["catalog", "laboratory-tests"], "query": [{ "key": "brand", "value": "{{brand}}" }] }, "description": "Regresion del catalogo comparativo existente. El precio y pricing vienen del servidor; no modificar Grupo A ni enviar importes desde Postman. operationId segun OpenAPI actual: catalogIndexLaboratoryTests." },
+          "response": []
+        },
+        {
+          "name": "Detalle con pricing comparativo | catalogShowLaboratoryTest",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/catalog/laboratory-tests/{{laboratory_test_id}}", "host": ["{{base_url}}"], "path": ["catalog", "laboratory-tests", "{{laboratory_test_id}}"] }, "description": "Regresion del detalle de precio comparativo. Espera pricing con importes en centavos o el error contractual de fuente no disponible; no altera el catalogo." },
+          "response": []
+        },
+        {
+          "name": "Planes disponibles | membershipPlansIndex",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/memberships/plans", "host": ["{{base_url}}"], "path": ["memberships", "plans"] }, "description": "Contrato: GET /memberships/plans, operationId membershipPlansIndex. Espera 200 y precios canonicos en price_cents; el cliente no envia precios." },
+          "response": []
+        },
+        {
+          "name": "Estado protegido | membershipStatusShow",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/memberships/status", "host": ["{{base_url}}"], "path": ["memberships", "status"] }, "description": "Contrato: GET /memberships/status, operationId membershipStatusShow. Requiere Bearer emitido tras login/OTP. Casos: none, active individual, active sponsored y expired." },
+          "response": []
+        },
+        {
+          "name": "Agregar membresia al carrito medico | cartItemsStore",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }, { "key": "Idempotency-Key", "value": "{{medical_idempotency_key}}" }], "body": { "mode": "raw", "raw": "{\n  \"service_line\": \"medical_services\",\n  \"item_type\": \"membership\",\n  \"membership_plan_code\": \"{{membership_plan_code}}\"\n}" }, "url": { "raw": "{{base_url}}/cart/items", "host": ["{{base_url}}"], "path": ["cart", "items"] }, "description": "Contrato: POST /cart/items, operationId cartItemsStore. Solo medical_services; el servidor determina precio. Repetir con membresia activa individual o sponsored debe validar elegibilidad y no crear un segundo item." },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Carrito medico y checkout de preparacion",
+      "item": [
+        {
+          "name": "Carrito medical_services | cartIndex",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/cart?service_line=medical_services", "host": ["{{base_url}}"], "path": ["cart"], "query": [{ "key": "service_line", "value": "medical_services" }] }, "description": "Contrato: GET /cart, operationId cartIndex. Verificar service_line, ownership, totales enteros y aislamiento de laboratorio/farmacia." },
+          "response": []
+        },
+        {
+          "name": "Totales medicos | cartTotals",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/cart/totals?service_line=medical_services", "host": ["{{base_url}}"], "path": ["cart", "totals"], "query": [{ "key": "service_line", "value": "medical_services" }] }, "description": "Contrato: GET /cart/totals, operationId cartTotals. Verificar subtotal_cents, discount_cents, credit_applied_cents y total_cents; nunca negativos." },
+          "response": []
+        },
+        {
+          "name": "Preparar checkout medico sin pago | checkoutPrepare",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/checkout/prepare?service_line=medical_services", "host": ["{{base_url}}"], "path": ["checkout", "prepare"], "query": [{ "key": "service_line", "value": "medical_services" }] }, "description": "Contrato: GET /checkout/prepare, operationId checkoutPrepare. Caso de regresion: preparar no crea pago, payment link ni llama gateways; confirmar can_continue_to_payment_platform=false si el contrato lo indica." },
+          "response": []
+        },
+        {
+          "name": "Regresion laboratorio aislada | cartIndex",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/cart?brand={{brand}}", "host": ["{{base_url}}"], "path": ["cart"], "query": [{ "key": "brand", "value": "{{brand}}" }] }, "description": "Regresion de aislamiento: la lectura legacy por brand no debe incluir items medical_services ni beneficios medicos." },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Beneficio, cupon y saldo medico",
+      "item": [
+        {
+          "name": "Aplicar beneficio | medicalServiceBenefitApply",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }, { "key": "Idempotency-Key", "value": "{{medical_idempotency_key}}" }], "body": { "mode": "raw", "raw": "{\n  \"service_line\": \"medical_services\",\n  \"code\": \"{{medical_benefit_code}}\"\n}" }, "url": { "raw": "{{base_url}}/cart/medical-benefit", "host": ["{{base_url}}"], "path": ["cart", "medical-benefit"] }, "description": "Contrato: POST /cart/medical-benefit, operationId medicalServiceBenefitApply. Maximo un beneficio monetario; no combina cupon y credito; no consume definitivamente; devuelve applied_benefits y totales en centavos." },
+          "response": []
+        },
+        {
+          "name": "Reaplicar con misma Idempotency-Key",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }, { "key": "Idempotency-Key", "value": "{{medical_idempotency_key}}" }], "body": { "mode": "raw", "raw": "{\n  \"service_line\": \"medical_services\",\n  \"code\": \"{{medical_benefit_code}}\"\n}" }, "url": { "raw": "{{base_url}}/cart/medical-benefit", "host": ["{{base_url}}"], "path": ["cart", "medical-benefit"] }, "description": "Regresion de idempotencia: misma key y payload debe devolver el mismo resultado, no duplicar applied_benefits ni descontar dos veces; revisar Idempotency-Replayed cuando el flag esta activo." },
+          "response": []
+        },
+        {
+          "name": "Beneficio inexistente | COUPON_NOT_FOUND",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }, { "key": "Idempotency-Key", "value": "{{medical_idempotency_key}}-unknown" }], "body": { "mode": "raw", "raw": "{\n  \"service_line\": \"medical_services\",\n  \"code\": \"{{medical_coupon_unknown}}\"\n}" }, "url": { "raw": "{{base_url}}/cart/medical-benefit", "host": ["{{base_url}}"], "path": ["cart", "medical-benefit"] }, "description": "Esperado 404 COUPON_NOT_FOUND sin filtrar existencia ni datos de otro cliente." },
+          "response": []
+        },
+        {
+          "name": "Beneficio vencido | COUPON_EXPIRED",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }, { "key": "Idempotency-Key", "value": "{{medical_idempotency_key}}-expired" }], "body": { "mode": "raw", "raw": "{\n  \"service_line\": \"medical_services\",\n  \"code\": \"{{medical_coupon_expired}}\"\n}" }, "url": { "raw": "{{base_url}}/cart/medical-benefit", "host": ["{{base_url}}"], "path": ["cart", "medical-benefit"] }, "description": "Esperado 409 COUPON_EXPIRED. Requiere fixture QA controlado; no inventar fecha ni descuento." },
+          "response": []
+        },
+        {
+          "name": "Retirar beneficio | medicalServiceBenefitRemove",
+          "request": { "method": "DELETE", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }, { "key": "Idempotency-Key", "value": "{{medical_idempotency_key}}-remove" }], "url": { "raw": "{{base_url}}/cart/medical-benefit?service_line=medical_services", "host": ["{{base_url}}"], "path": ["cart", "medical-benefit"], "query": [{ "key": "service_line", "value": "medical_services" }] }, "description": "Contrato: DELETE /cart/medical-benefit, operationId medicalServiceBenefitRemove. Debe dejar discount_cents y credit_applied_cents en cero sin afectar laboratorio." },
+          "response": []
+        },
+        {
+          "name": "Ownership: otro cliente no ve beneficio",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{other_access_token}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/cart/medical-benefit?service_line=medical_services", "host": ["{{base_url}}"], "path": ["cart", "medical-benefit"], "query": [{ "key": "service_line", "value": "medical_services" }] }, "description": "Regresion de ownership y aislamiento: la cuenta distinta no debe leer ni modificar el beneficio del propietario." },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - Reconocimiento pre-OTP y contexto",
+      "item": [
+        {
+          "name": "Reconocimiento valido y saludo permitido",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }, { "key": "Idempotency-Key", "value": "{{contact_conversation_id}}-request" }], "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{contact_login_phone}}\",\n  \"conversation_id\": \"{{contact_conversation_id}}\",\n  \"channel_event_id\": \"{{contact_channel_event_id}}\",\n  \"channel\": \"{{contact_channel}}\",\n  \"personalization\": { \"allowed\": true }\n}" }, "url": { "raw": "{{base_url}}/auth/login/request-code", "host": ["{{base_url}}"], "path": ["auth", "login", "request-code"] }, "description": "Contrato: POST /auth/login/request-code, operationId authLoginRequestCode. Espera 202 anti-enumeracion; puede crear contexto interno, pero nunca devuelve account_context_token ni datos privados. El saludo pre-OTP solo puede usar first_name si el contrato/respuesta lo autoriza." },
+          "response": []
+        },
+        {
+          "name": "Telefono inexistente sin enumeracion",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{contact_unknown_phone}}\",\n  \"conversation_id\": \"{{contact_conversation_id}}\",\n  \"channel_event_id\": \"{{contact_channel_event_id}}-unknown\",\n  \"channel\": \"{{contact_channel}}\",\n  \"personalization\": { \"allowed\": true }\n}" }, "url": { "raw": "{{base_url}}/auth/login/request-code", "host": ["{{base_url}}"], "path": ["auth", "login", "request-code"] }, "description": "Esperado: misma forma/status de challenge que un telefono no elegible; sin first_name, sin token y sin indicar si existe una cuenta." },
+          "response": []
+        },
+        {
+          "name": "Telefono no verificado sin enumeracion",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{contact_unverified_phone}}\",\n  \"conversation_id\": \"{{contact_conversation_id}}\",\n  \"channel_event_id\": \"{{contact_channel_event_id}}-unverified\",\n  \"channel\": \"{{contact_channel}}\",\n  \"personalization\": { \"allowed\": true }\n}" }, "url": { "raw": "{{base_url}}/auth/login/request-code", "host": ["{{base_url}}"], "path": ["auth", "login", "request-code"] }, "description": "Requiere fixture de cuenta con telefono no verificado. No debe devolver nombre, cuenta ni datos privados." },
+          "response": []
+        },
+        {
+          "name": "Privado bloqueado antes de OTP",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{context_token_placeholder}}" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/memberships/status", "host": ["{{base_url}}"], "path": ["memberships", "status"] }, "description": "Debe responder 401: un contexto opaco interno no es Bearer, no autentica y no permite informacion privada antes de OTP." },
+          "response": []
+        },
+        {
+          "name": "Verify OTP invalido o expirado",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "body": { "mode": "raw", "raw": "{\n  \"challenge_id\": \"{{contact_preotp_challenge_id}}\",\n  \"code\": \"000000\"\n}" }, "url": { "raw": "{{base_url}}/auth/login/verify-code", "host": ["{{base_url}}"], "path": ["auth", "login", "verify-code"] }, "description": "Contrato: POST /auth/login/verify-code, operationId authLoginVerifyCode. Probar INVALID_CODE y CODE_EXPIRED con fixtures controlados; no debe crear sesion por telefono." },
+          "response": []
+        },
+        {
+          "name": "Verify OTP valido y elevacion interna",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "body": { "mode": "raw", "raw": "{\n  \"challenge_id\": \"{{contact_preotp_challenge_id}}\",\n  \"code\": \"{{contact_otp}}\"\n}" }, "url": { "raw": "{{base_url}}/auth/login/verify-code", "host": ["{{base_url}}"], "path": ["auth", "login", "verify-code"] }, "description": "Esperado 200 contextual: otp_verified=true y, si fue permitido, first_name. No account_context_token, no Bearer ni datos personales adicionales. La elevacion debe conservar telefono/conversacion/evento/canal/audiencia." },
+          "response": []
+        },
+        {
+          "name": "Contexto aislado por conversacion/canal/evento/audiencia",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{contact_login_phone}}\",\n  \"conversation_id\": \"{{contact_conversation_id}}-different\",\n  \"channel_event_id\": \"{{contact_channel_event_id}}-different\",\n  \"channel\": \"different-channel\",\n  \"personalization\": { \"allowed\": true }\n}" }, "url": { "raw": "{{base_url}}/auth/login/request-code", "host": ["{{base_url}}"], "path": ["auth", "login", "request-code"] }, "description": "Regresion de binding: un challenge/contexto de otra conversacion, evento, canal o audiencia no puede verificarse ni reutilizarse." },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 - Pendientes de fixtures y ATIX",
+      "item": [
+        {
+          "name": "Checklist no ejecutable sin datos controlados",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "X-Correlation-ID", "value": "{{correlation_id}}" }], "url": { "raw": "{{base_url}}/memberships/plans", "host": ["{{base_url}}"], "path": ["memberships", "plans"] }, "description": "Esta solicitud documenta el punto de entrada para completar: membresia activa individual, patrocinada, cupón no asignado, vencido, saldo parcial y no creación de pagos. Requieren fixtures QA controlados; no se inventan códigos, saldos, teléfonos ni OTP." },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

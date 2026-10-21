@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\LaboratoryAppointmentController;
+use App\Http\Controllers\Api\V1\MembershipController;
+use App\Http\Controllers\Api\V1\MedicalServiceBenefitController;
 use App\Http\Controllers\Api\V1\OrderDocumentDownloadController;
 use App\Http\Controllers\Api\V1\OrderInvoiceRequestController;
 use App\Http\Controllers\Api\V1\OrderController;
@@ -20,6 +22,7 @@ use App\Http\Controllers\Api\V1\UserAddressController;
 use App\Http\Controllers\Api\V1\UserContactController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserTaxProfileController;
+use App\Http\Controllers\Api\V1\Integrations\AtixPhoneLookupController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -59,6 +62,10 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
             ->name('register.resend-code');
     });
 
+    Route::post('integrations/atix/phone-lookups', [AtixPhoneLookupController::class, 'store'])
+        ->middleware(['throttle:atix-sandbox', 'api.audit', 'atix.hmac', 'atix.idempotency'])
+        ->name('integrations.atix.phone-lookups.store');
+
     // ── Auth: revocar token (solo Sanctum, sin api.customer) ───────────
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('auth/token', [TokenController::class, 'destroy'])
@@ -92,8 +99,14 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
             ->name('medications.show');
     });
 
+    Route::get('memberships/plans', [MembershipController::class, 'plans'])
+        ->name('memberships.plans.index');
+
     // ── Rutas protegidas ──────────────────────────────────────────────────
     Route::middleware(['auth:sanctum', 'api.customer'])->group(function () {
+
+        Route::get('memberships/status', [MembershipController::class, 'status'])
+            ->name('memberships.status.show');
 
         Route::get('cart/totals', [CartController::class, 'totals'])->name('cart.totals');
         Route::get('cart/coupon', [CartCouponController::class, 'show'])->name('cart.coupon.show');
@@ -103,15 +116,23 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
         Route::delete('cart/coupon', [CartCouponController::class, 'remove'])
             ->middleware('api.audit')
             ->name('cart.coupon.remove');
+        Route::get('cart/medical-benefit', [MedicalServiceBenefitController::class, 'show'])
+            ->name('cart.medical-benefit.show');
+        Route::post('cart/medical-benefit', [MedicalServiceBenefitController::class, 'apply'])
+            ->middleware(['api.idempotency', 'api.audit'])
+            ->name('cart.medical-benefit.apply');
+        Route::delete('cart/medical-benefit', [MedicalServiceBenefitController::class, 'remove'])
+            ->middleware(['api.idempotency', 'api.audit'])
+            ->name('cart.medical-benefit.remove');
         Route::delete('cart', [CartController::class, 'clear'])
             ->middleware('api.audit')
             ->name('cart.clear');
         Route::get('cart', [CartController::class, 'index'])->name('cart.index');
         Route::post('cart/items', [CartController::class, 'store'])
-            ->middleware('api.audit')
+            ->middleware(['api.idempotency', 'api.audit'])
             ->name('cart.items.store');
         Route::delete('cart/items/{cart_item_id}', [CartController::class, 'destroy'])
-            ->middleware('api.audit')
+            ->middleware(['api.idempotency', 'api.audit'])
             ->name('cart.items.destroy');
 
         Route::get('checkout/prepare', [CheckoutController::class, 'prepare'])->name('checkout.prepare');

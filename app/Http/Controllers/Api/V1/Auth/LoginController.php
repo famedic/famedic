@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Auth;
 use App\Actions\Api\V1\Auth\IssueAkubicaTokenAction;
 use App\Actions\Api\V1\Auth\IssueAuthOtpAction;
 use App\Actions\Api\V1\Auth\VerifyAuthOtpAction;
+use App\Contracts\Api\V1\Auth\AccountContextTokenIssuer;
 use App\Exceptions\Api\V1\Auth\AuthOtpVerificationException;
 use App\Exceptions\Otp\OtpChallengeException;
 use App\Exceptions\Otp\OtpConfigurationException;
@@ -21,6 +22,8 @@ use App\Models\User;
 use App\Services\Api\V1\Audit\AuditOutcome;
 use App\Services\Api\V1\Audit\AuthOtpAuditRecorder;
 use App\Services\Otp\AkubicaLoginOtpService;
+use App\Services\Api\V1\Auth\ContactRecognitionBinding;
+use App\Services\Api\V1\Auth\ContactRecognitionContext;
 use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -35,6 +38,7 @@ class LoginController extends Controller
         private OtpExceptionHttpMapper $otpExceptionHttpMapper,
         private AuthOtpAuditRecorder $authOtpAudit,
         private OtpDiagnosticContext $otpDiagnostics,
+        private AccountContextTokenIssuer $accountContextTokens,
     ) {}
 
     public function requestCode(LoginRequestCodeRequest $request): JsonResponse
@@ -165,7 +169,35 @@ class LoginController extends Controller
                 return ApiResponse::success($payload, null, 202);
             }
 
-            $payload = $this->akubicaLoginOtpService->request($user, $phone, $request->ip());
+            $contactContext = $this->contactContextFromRequest($request);
+            $payload = $this->akubicaLoginOtpService->request(
+                $user,
+                $phone,
+                $request->ip(),
+                $contactContext,
+            );
+
+            if ($contactContext instanceof ContactRecognitionContext
+                && is_string($payload['challenge_id'] ?? null)
+            ) {
+                $challenge = OtpChallenge::query()->where('public_id', $payload['challenge_id'])->first();
+                if ($challenge instanceof OtpChallenge) {
+                    // The token stays inside the server-side context boundary.
+                    $this->accountContextTokens->issuePreOtp(
+                        $user,
+                        $this->bindingHash($phoneComparisonKey),
+                        $contactContext->binding((string) config('app.key')),
+                        $challenge->id,
+                    );
+
+                    if ($contactContext->isPersonalizationAllowed()) {
+                        $payload['personalization'] = [
+                            'allowed' => true,
+                            'first_name' => $this->firstName($user),
+                        ];
+                    }
+                }
+            }
         } catch (OtpIdentityNormalizationException $e) {
             return ApiResponse::error(
                 'VALIDATION_ERROR',
@@ -238,6 +270,8 @@ class LoginController extends Controller
     {
         $challengePublicId = (string) $request->validated('challenge_id');
         $material = $this->loginMaterialFromChallenge($challengePublicId);
+        $challenge = OtpChallenge::query()->where('public_id', $challengePublicId)->first();
+        $contactBinding = $this->contactBindingFromChallenge($challenge);
 
         try {
             $this->akubicaLoginOtpService->assertConfigurationReady();
@@ -264,6 +298,44 @@ class LoginController extends Controller
 
         $userId = is_array($payload['user'] ?? null) ? ($payload['user']['id'] ?? null) : null;
         $user = is_numeric($userId) ? User::query()->find((int) $userId) : null;
+
+        if ($contactBinding instanceof ContactRecognitionBinding
+            && $challenge instanceof OtpChallenge
+            && $user instanceof User
+        ) {
+            // The token is intentionally retained only in the internal service boundary.
+            // It is never added to the HTTP or conversational response.
+            if (! $this->accountContextTokens->elevateForChallenge($challenge->id, $user)) {
+                return ApiResponse::error(
+                    'ACCOUNT_CONTEXT_EXPIRED',
+                    'El contexto de reconocimiento ya no es válido. Solicita un nuevo código.',
+                    422,
+                );
+            }
+
+            $this->authOtpAudit->recordLoginVerified(
+                request: $request,
+                phoneComparisonKey: $material,
+                outcome: AuditOutcome::SUCCEEDED,
+                httpStatus: 200,
+                authenticatedUser: null,
+                challengePublicId: $challengePublicId,
+                metadata: [
+                    'session_issued' => false,
+                    'contact_context_bound' => true,
+                ],
+            );
+
+            return ApiResponse::success([
+                'otp_verified' => true,
+                'personalization' => $contactBinding->personalizationAllowed
+                    ? [
+                        'allowed' => true,
+                        'first_name' => $this->firstName($user),
+                    ]
+                    : ['allowed' => false],
+            ]);
+        }
 
         $this->authOtpAudit->recordLoginVerified(
             request: $request,
@@ -315,5 +387,53 @@ class LoginController extends Controller
         }
 
         return ! OtpChallenge::query()->where('public_id', $publicId)->exists();
+    }
+
+    private function contactContextFromRequest(LoginRequestCodeRequest $request): ?ContactRecognitionContext
+    {
+        if (! $request->filled('conversation_id')) {
+            return null;
+        }
+
+        return new ContactRecognitionContext(
+            conversationId: trim((string) $request->validated('conversation_id')),
+            channelEventId: trim((string) $request->validated('channel_event_id')),
+            channel: strtolower(trim((string) $request->validated('channel'))),
+            personalizationAllowed: (bool) data_get($request->validated(), 'personalization.allowed', false),
+        );
+    }
+
+    private function contactBindingFromChallenge(?OtpChallenge $challenge): ?ContactRecognitionBinding
+    {
+        $context = $challenge?->meta['contact_context'] ?? null;
+        if (! is_array($context)
+            || ! is_string($context['conversation_hash'] ?? null)
+            || ! is_string($context['channel_event_hash'] ?? null)
+            || ! is_string($context['channel'] ?? null)
+            || ! is_string($context['audience'] ?? null)
+        ) {
+            return null;
+        }
+
+        return new ContactRecognitionBinding(
+            conversationHash: $context['conversation_hash'],
+            channelEventHash: $context['channel_event_hash'],
+            channel: $context['channel'],
+            personalizationAllowed: (bool) ($context['personalization_allowed'] ?? false),
+            audience: $context['audience'],
+        );
+    }
+
+    private function bindingHash(string $value): string
+    {
+        return hash_hmac('sha256', $value, (string) config('app.key'));
+    }
+
+    private function firstName(User $user): string
+    {
+        $name = trim((string) $user->name);
+        $parts = preg_split('/\s+/u', $name, -1, PREG_SPLIT_NO_EMPTY);
+
+        return is_array($parts) && isset($parts[0]) ? $parts[0] : '';
     }
 }

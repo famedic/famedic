@@ -222,6 +222,14 @@ Este material no autoriza UAT por sí mismo, no autoriza producción y no implic
 | 503 | Flag OFF (`FEATURE_DISABLED`) |
 | PDF vacío / JSON parse error | Content-Type binario — scripts de colección lo omiten |
 
+## Akubica v1.3.0 - regresion nueva
+
+La coleccion complementaria `Famedic-Akubica-v1.3.0-Regression.postman_collection.json` alinea los escenarios nuevos con `docs/Akubica/akubica-openapi.yaml` y las rutas actuales. Se importa junto con la coleccion legacy; no reemplaza sus pruebas de laboratorio, farmacia ni pagos.
+
+Incluye membresias, carrito `medical_services`, totales en centavos, beneficio/cupon/saldo, idempotencia, ownership, checkout de preparacion sin pago y reconocimiento/OTP contextual. Los valores de fixture (telefonos, OTP, codigos, saldos, tokens y eventos) quedan vacios y deben ser proporcionados por QA sin versionar datos sensibles.
+
+La coleccion no asume transporte, firma, headers, sandbox, reintentos, rate limits ni SLA de ATIX.
+
 ## Carpetas principales
 
 `01` Registro · `02` Login · `03` Perfil · `04` Catálogo · `05` Carrito · `06` Cupones · `07` Contactos · `08` Direcciones · `09` Checkout · `10` Citas · `11` Payment link · `12` Pedidos · `13` Resultados · `14` Facturas · `15` Solicitud factura · `16` Bearer downloads · `17` 503 · `18`/`19` Step-up/secure · `20` Idempotency · `90` Negativos · `99` Legacy

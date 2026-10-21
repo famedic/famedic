@@ -17,6 +17,7 @@ use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
 use App\Services\Otp\Delivery\OtpDeliveryOutcome;
+use App\Services\Api\V1\Auth\ContactRecognitionContext;
 use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use App\Services\Otp\Registration\MexicoPhoneNormalizer;
 use App\Services\Otp\Registration\PhoneIdentity;
@@ -120,12 +121,6 @@ class AkubicaLoginOtpService
         /** @var User $user */
         $user = $users->first();
 
-        if ($this->isInactive($user)) {
-            $this->markDecoyReason(OtpDiagnosticContext::REASON_USER_INACTIVE);
-
-            return null;
-        }
-
         if ($user->customer === null) {
             $this->markDecoyReason(OtpDiagnosticContext::REASON_CUSTOMER_MISSING);
 
@@ -155,7 +150,7 @@ class AkubicaLoginOtpService
      *
      * @throws OtpDeliveryFailedException
      */
-    public function request(User $user, PhoneIdentity $phone, ?string $clientIp): array
+    public function request(User $user, PhoneIdentity $phone, ?string $clientIp, ?ContactRecognitionContext $contactContext = null): array
     {
         $this->assertConfigurationReady();
 
@@ -176,7 +171,16 @@ class AkubicaLoginOtpService
             contextType: self::CONTEXT_TYPE,
             contextId: $user->id,
             invalidatePreviousActive: true,
-            meta: ['flow' => 'akubica_login'],
+            meta: array_filter([
+                'flow' => 'akubica_login',
+                'contact_context' => $contactContext === null ? null : [
+                    'conversation_hash' => $this->bindingHash($contactContext->conversationId),
+                    'channel_event_hash' => $this->bindingHash($contactContext->channelEventId),
+                    'channel' => $contactContext->channel,
+                    'audience' => $contactContext->audience,
+                    'personalization_allowed' => $contactContext->isPersonalizationAllowed(),
+                ],
+            ], static fn (mixed $value): bool => $value !== null),
             maxAttempts: (int) config('otp.p0a.policy.max_attempts', 5),
         );
 
@@ -233,6 +237,7 @@ class AkubicaLoginOtpService
             'destination_masked' => $masked,
             'expires_at' => $expiresAt->utc()->format('Y-m-d\TH:i:s\Z'),
             'resend_available_at' => $resendAvailableAt->utc()->format('Y-m-d\TH:i:s\Z'),
+            'personalization' => ['allowed' => false],
         ];
     }
 
@@ -341,7 +346,12 @@ class AkubicaLoginOtpService
             contextType: self::CONTEXT_TYPE,
             contextId: $user->id,
             invalidatePreviousActive: true,
-            meta: ['flow' => 'akubica_login', 'resend_of' => $previous->public_id],
+            meta: array_merge(
+                ['flow' => 'akubica_login', 'resend_of' => $previous->public_id],
+                is_array($previous->meta) && is_array($previous->meta['contact_context'] ?? null)
+                    ? ['contact_context' => $previous->meta['contact_context']]
+                    : [],
+            ),
             maxAttempts: (int) config('otp.p0a.policy.max_attempts', 5),
         );
 
@@ -581,10 +591,9 @@ class AkubicaLoginOtpService
         $this->otpDiagnostics->markDecoyReason($reason);
     }
 
-    private function isInactive(User $user): bool
+    private function bindingHash(string $value): string
     {
-        $state = strtolower(trim((string) ($user->state ?? '')));
-
-        return in_array($state, ['inactive', 'disabled', 'blocked', 'suspended'], true);
+        return hash_hmac('sha256', $value, (string) config('app.key'));
     }
+
 }

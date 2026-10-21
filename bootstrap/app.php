@@ -53,6 +53,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.token.guard' => \App\Http\Middleware\UseApiTokenGuard::class,
             'api.idempotency' => \App\Http\Middleware\Api\V1\EnforceIdempotencyKey::class,
             'api.audit' => \App\Http\Middleware\Api\V1\InitializeApiV1AuditContext::class,
+            'atix.hmac' => \App\Http\Middleware\Api\V1\AuthenticateAtixHmac::class,
+            'atix.idempotency' => \App\Http\Middleware\Api\V1\EnforceAtixPhoneLookupIdempotency::class,
             'otp.diagnostic' => \App\Http\Middleware\Api\V1\AddOtpDiagnosticResponseHeaders::class,
         ]);
     })

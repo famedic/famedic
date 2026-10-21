@@ -25,6 +25,7 @@ class LaboratoryTestListResource extends JsonResource
             ] : null,
             'indications' => $this->indications,
             'is_available' => ! $this->trashed(),
+            'pricing' => (new LaboratoryPricingResource($this->resource))->resolve($request),
         ];
     }
 }

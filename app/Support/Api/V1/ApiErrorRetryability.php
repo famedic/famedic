@@ -24,6 +24,7 @@ final class ApiErrorRetryability
         'DELIVERY_FAILED',
         'DOCUMENT_STORAGE_UNAVAILABLE',
         'CATALOG_UNAVAILABLE',
+        'PRICING_SOURCE_UNAVAILABLE',
         'IDEMPOTENCY_REQUEST_IN_PROGRESS',
     ];
 
@@ -86,6 +87,18 @@ final class ApiErrorRetryability
         'OTP_CHALLENGE_ERROR',
         'IDEMPOTENCY_KEY_CONFLICT',
         'IDEMPOTENCY_OPERATION_UNCERTAIN',
+        'ATIX_INTEGRATION_UNAUTHORIZED',
+        'ATIX_SIGNATURE_INVALID',
+        'ATIX_TIMESTAMP_EXPIRED',
+        'ATIX_NONCE_REPLAY',
+        'ATIX_CHANNEL_INVALID',
+        'ATIX_AUDIENCE_INVALID',
+        'ATIX_EVENT_REPLAY_CONFLICT',
+        'ATIX_OPERATION_UNCERTAIN',
+        'ATIX_IDEMPOTENCY_REQUIRED',
+        'ATIX_CORRELATION_ID_REQUIRED',
+        'ATIX_IDEMPOTENCY_INVALID',
+        'ATIX_INFRASTRUCTURE_UNAVAILABLE',
     ];
 
     public static function isRetryable(string $code, ?int $httpStatus = null): bool

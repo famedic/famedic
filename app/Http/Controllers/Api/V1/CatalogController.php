@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\LaboratoryBrand;
+use App\Exceptions\Api\V1\PricingSourceUnavailableException;
 use App\Http\Controllers\Api\V1\Concerns\RespondsFeatureDisabled;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Catalog\ListLaboratoryBrandsRequest;
@@ -81,8 +82,14 @@ class CatalogController extends Controller
                 page: $validated['page'] ?? null,
             );
 
+        try {
+            $laboratoryTests = LaboratoryTestListResource::collection($paginator->items())->resolve($request);
+        } catch (PricingSourceUnavailableException) {
+            return $this->pricingSourceUnavailable();
+        }
+
         return ApiResponse::success([
-            'laboratory_tests' => LaboratoryTestListResource::collection($paginator->items())->resolve($request),
+            'laboratory_tests' => $laboratoryTests,
             'pagination' => $this->paginationMeta($paginator),
         ]);
     }
@@ -138,9 +145,13 @@ class CatalogController extends Controller
             );
         }
 
-        return ApiResponse::success(
-            (new LaboratoryTestResource($laboratoryTest))->resolve(),
-        );
+        try {
+            $resource = (new LaboratoryTestResource($laboratoryTest))->resolve(request());
+        } catch (PricingSourceUnavailableException) {
+            return $this->pricingSourceUnavailable();
+        }
+
+        return ApiResponse::success($resource);
     }
 
     public function showMedication(int $medicationId): JsonResponse
@@ -156,6 +167,16 @@ class CatalogController extends Controller
             'per_page' => $paginator->perPage(),
             'total' => $paginator->total(),
         ];
+    }
+
+    private function pricingSourceUnavailable(): JsonResponse
+    {
+        return ApiResponse::error(
+            'PRICING_SOURCE_UNAVAILABLE',
+            'No fue posible obtener precios vigentes.',
+            503,
+            retryable: true,
+        );
     }
 
     /**

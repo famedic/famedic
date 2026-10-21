@@ -36,6 +36,13 @@ final class AuditEventDefinitions
 
     public const EVENT_STEP_UP_VERIFIED = 'api_v1.otp.step_up_verified';
 
+    public const EVENT_ATIX_PHONE_LOOKUP = 'api_v1.integrations.atix_phone_lookup';
+
+    private const ATIX_PHONE_LOOKUP_METADATA = [
+        'integration', 'outcome_class', 'channel', 'audience', 'event_hash',
+        'account_match', 'personalization_allowed',
+    ];
+
     // ── Secure links / downloads (Block 3) ────────────────────────────────
 
     public const EVENT_RESULTS_SECURE_LINK_CREATED = 'api_v1.results.secure_link_created';
@@ -166,6 +173,7 @@ final class AuditEventDefinitions
      * @var list<string>
      */
     private const CART_BENEFIT_METADATA = [
+        'service_line',
         'laboratory_brand',
         'benefit_type',
         'coupon_row_id',
@@ -236,6 +244,7 @@ final class AuditEventDefinitions
         self::EVENT_REGISTRATION_COMPLETED => self::AUTH_OTP_METADATA,
         self::EVENT_STEP_UP_REQUESTED => self::AUTH_OTP_METADATA,
         self::EVENT_STEP_UP_VERIFIED => self::AUTH_OTP_METADATA,
+        self::EVENT_ATIX_PHONE_LOOKUP => self::ATIX_PHONE_LOOKUP_METADATA,
         self::EVENT_RESULTS_SECURE_LINK_CREATED => self::DOCUMENT_SECURE_LINK_CREATED_METADATA,
         self::EVENT_RESULTS_SECURE_LINK_OPENED => self::DOCUMENT_SECURE_LINK_OPENED_METADATA,
         self::EVENT_RESULTS_DOWNLOADED => self::DOCUMENT_DOWNLOADED_METADATA,

@@ -314,7 +314,73 @@ test('GET /catalog/laboratory-tests returns tests with expected structure', func
         ->assertJsonPath('data.laboratory_tests.0.category.name', 'Hematología')
         ->assertJsonPath('data.laboratory_tests.0.indications', 'Ayuno de 8 horas')
         ->assertJsonPath('data.laboratory_tests.0.is_available', true)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.public_price_cents', 40000)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.famedic_price_cents', 35000)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.savings_cents', 5000)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.savings_percentage', 12.5)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.currency', 'MXN')
+        ->assertJsonPath('data.laboratory_tests.0.pricing.tax_included', null)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.comparison_status', 'available')
+        ->assertJsonPath('data.laboratory_tests.0.pricing.effective_at', null)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.valid_until', null)
         ->assertJsonMissingPath('data.laboratory_tests.0.gda_id');
+});
+
+test('GET /catalog/laboratory-tests reports no savings when public and FAMEDIC prices are equal', function () {
+    createOlabTest([
+        'public_price_cents' => 35000,
+        'famedic_price_cents' => 35000,
+    ]);
+
+    $this->getJson('/api/v1/catalog/laboratory-tests?brand=olab')
+        ->assertOk()
+        ->assertJsonPath('data.laboratory_tests.0.pricing.comparison_status', 'no_savings')
+        ->assertJsonPath('data.laboratory_tests.0.pricing.savings_cents', 0)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.savings_percentage', 0);
+});
+
+test('GET /catalog/laboratory-tests does not report positive savings when public price is lower', function () {
+    createOlabTest([
+        'public_price_cents' => 30000,
+        'famedic_price_cents' => 35000,
+    ]);
+
+    $this->getJson('/api/v1/catalog/laboratory-tests?brand=olab')
+        ->assertOk()
+        ->assertJsonPath('data.laboratory_tests.0.pricing.comparison_status', 'data_inconsistent')
+        ->assertJsonPath('data.laboratory_tests.0.pricing.savings_cents', null)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.savings_percentage', null);
+});
+
+test('GET /catalog/laboratory-tests reports unavailable public price for zero price', function () {
+    createOlabTest(['public_price_cents' => 0]);
+
+    $this->getJson('/api/v1/catalog/laboratory-tests?brand=olab')
+        ->assertOk()
+        ->assertJsonPath('data.laboratory_tests.0.pricing.comparison_status', 'public_price_unavailable')
+        ->assertJsonPath('data.laboratory_tests.0.pricing.savings_cents', null)
+        ->assertJsonPath('data.laboratory_tests.0.pricing.savings_percentage', null);
+});
+
+test('GET /catalog/laboratory-tests returns retryable error when pricing source is unavailable', function () {
+    config(['api_v1.pricing.source_available' => false]);
+    createOlabTest();
+
+    $this->getJson('/api/v1/catalog/laboratory-tests?brand=olab')
+        ->assertStatus(503)
+        ->assertJsonPath('error.code', 'PRICING_SOURCE_UNAVAILABLE')
+        ->assertJsonPath('error.retryable', true)
+        ->assertJsonPath('error.correlation_id', fn ($value) => is_string($value) && $value !== '');
+});
+
+test('GET /catalog/laboratory-tests/{id} returns retryable error when pricing source is unavailable', function () {
+    config(['api_v1.pricing.source_available' => false]);
+    $test = createOlabTest();
+
+    $this->getJson("/api/v1/catalog/laboratory-tests/{$test->id}")
+        ->assertStatus(503)
+        ->assertJsonPath('error.code', 'PRICING_SOURCE_UNAVAILABLE')
+        ->assertJsonPath('error.retryable', true);
 });
 
 test('GET /catalog/laboratory-tests filters by search text', function () {
@@ -549,6 +615,20 @@ test('GET /catalog/laboratory-tests/{id} still returns laboratory test detail', 
         ->assertJsonPath('data.id', $test->id)
         ->assertJsonPath('data.name', 'Detalle estudio')
         ->assertJsonStructure(['data' => ['gda_id', 'available']]);
+});
+
+test('GET /catalog/laboratory-tests/{id} keeps price_cents as FAMEDIC alias and exposes pricing', function () {
+    $test = createOlabTest([
+        'public_price_cents' => 50000,
+        'famedic_price_cents' => 35000,
+    ]);
+
+    $this->getJson("/api/v1/catalog/laboratory-tests/{$test->id}")
+        ->assertOk()
+        ->assertJsonPath('data.price_cents', 35000)
+        ->assertJsonPath('data.pricing.famedic_price_cents', 35000)
+        ->assertJsonPath('data.pricing.public_price_cents', 50000)
+        ->assertJsonPath('data.pricing.comparison_status', 'available');
 });
 
 test('GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE', function () {
