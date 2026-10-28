@@ -1,0 +1,7 @@
+
+   PASS  Tests\Unit\CouponServicesSmokeTest
+  ✓ servicios de cupones y notificaciones están registrados              0.14s  
+
+  Tests:    1 passed (3 assertions)
+  Duration: 0.22s
+

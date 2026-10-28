@@ -1,0 +1,49 @@
+
+   PASS  Tests\Feature\Admin\LaboratoryBilling\LaboratoryBillingModuleIsolatedTest
+  ✓ access allows invoice and manage permissions                         2.22s  
+  ✓ metrics count pending completed overdue and in progress              2.15s  
+  ✓ cancelled purchases are excluded from billing queries metrics and e… 1.95s  
+  ✓ requests query searches by folio and rfc and filters documents       1.97s  
+  ✓ invoices query distinguishes complete and missing xml                2.07s  
+  ✓ tax profiles query tracks usage soft delete and hides paths          1.94s  
+  ✓ authorized user can open module pages and unauthorized gets 403      2.33s  
+  ✓ automatic reports authorize superadmin manage and reports permissio… 2.04s  
+  ✓ invoice manager cannot submit automatic report actions directly      1.87s  
+  ✓ failed jobs screen lists failures for log admins only                1.91s  
+  ✓ invoice manager does not see failed jobs navigation                  6.23s  
+  ✓ automatic report index exposes summary cards without loading full c… 2.23s  
+  ✓ automatic report preview is read only authorized and uses report da… 2.16s  
+  ✓ automatic report form rejects invalid email normalizes recipients a… 2.22s  
+  ✓ completed invoice stays in original period after document replace    2.02s  
+  ✓ invoice permission allows upload manage and superadmin deny others   2.18s  
+  ✓ invoice admin can store and replace invoice documents via http       2.13s  
+  ✓ export invoices uses completed at not created at as completion       2.17s  
+  ✓ automatic report limits pending and overdue to selected period       1.98s  
+  ✓ automatic report uses one period cohort for preview email excel and… 2.46s  
+  ✓ automatic report notification attaches excel from storage disk       1.85s  
+  ✓ automatic report notification logs missing attachment without local… 1.85s  
+  ✓ automatic report notification has no attachment when excel is not i… 1.79s  
+  ✓ automatic report schedule calculates next run and paused has no nex… 1.84s  
+  ✓ dispatcher creates one scheduled run for due configuration           1.81s  
+  ✓ report job generates excel and sends notification without real mail  1.93s  
+  ✓ automatic report handles legacy complete invoices filters stores an… 6.46s  
+  ✓ automatic report labels missing store without blank excel cells      1.88s  
+  ✓ automatic report can filter requests without store                   1.91s  
+  ✓ report job uses link for large excel and exports expected sheets     1.97s  
+  ✓ sent report job is not delivered again                               1.76s  
+  ✓ failed report job records sanitized error without sending mail       1.89s  
+  ✓ manual and test runs do not change the scheduled next run            1.90s  
+  ✓ manual custom range persists dates filters and does not change sche… 1.86s  
+  ✓ manual custom range validation rejects invalid future and too large… 5.74s  
+  ✓ custom range is rejected for test runs and schedule configuration    1.86s  
+  ✓ manual idempotency token prevents duplicate direct clicks            1.82s  
+  ✓ custom preview is read only and uses selected range                  1.88s  
+  ✓ job notification excel and history use manual run stored period      2.08s  
+  ✓ paused schedule is not dispatched                                    1.89s  
+  ✓ report download requires permission signature live link and existin… 1.97s  
+  ✓ prune report files deletes expired excel and keeps history           1.85s  
+  ✓ historical complete backfill uses least of created and updated       1.96s  
+
+  Tests:    43 passed (401 assertions)
+  Duration: 98.08s
+

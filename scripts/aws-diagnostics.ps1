@@ -286,4 +286,3 @@ if ($delete.ExitCode -eq 0) {
 
 Remove-Item -LiteralPath $probeFile -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath (Join-Path $env:TEMP "famedic-s3-probe-download.txt") -ErrorAction SilentlyContinue
-

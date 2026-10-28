@@ -1,0 +1,42 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\LaboratoryPreparationChannelRenderTest
+  ✓ it renders ai sections in email when preparation is ai ready        77.19s  
+  ✓ it renders pending message and original instructions in email when…  0.05s  
+  ✓ it renders original instructions in email when preparation failed w… 0.04s  
+  ✓ it renders original instructions in email when preparation is fallb… 0.06s  
+  ✓ it renders special and individual instructions in email when ai rea… 0.05s  
+  ✓ it renders ai sections in pdf when preparation is ai ready           0.05s  
+  ✓ it renders deterministic v3 auto as a single consolidated section i… 0.05s  
+  ✓ it renders originals in email and pdf for persisted deterministic v… 0.05s  
+  ✓ it renders original instructions in pdf when preparation is ai pend… 0.05s  
+  ✓ it renders original instructions in pdf when preparation is fallbac… 0.04s  
+  ✓ it renders deterministic v3 fallback as original instructions in em… 0.05s  
+  ✓ it renders special and individual instructions in pdf when ai ready  0.05s  
+  ✓ it renders multi section ai preparation consistently in email and p… 0.06s  
+  ✓ it shows purchase item indications in email and pdf when no prepara… 0.04s  
+
+   PASS  Tests\Feature\LaboratoryPreparationPresenterTest
+  ✓ it uses ai summary text and json when a valid summary exists         0.05s  
+  ✓ it presents deterministic v3 auto summaries as one consolidated pat… 0.05s  
+  ✓ it presents deterministic v3 fallback summaries as original instruc… 0.04s  
+  ✓ it rolls back persisted deterministic v3 auto summaries to original… 0.04s  
+  ✓ it falls back to purchase item indications when no valid summary ex… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.05s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it uses fallback for failed stale invalidated corrupt or empty summ… 0.04s  
+  ✓ it never consults LaboratoryTest indications when presenting a hist… 0.03s  
+  ✓ it falls back when the persisted summary hash no longer matches pur… 0.04s  
+  ✓ it returns AI_PENDING when a current execution is queued or process… 0.03s  
+  ✓ it returns AI_PENDING when a current execution is queued or process… 0.04s  
+  ✓ it returns AI_FAILED when the current generation execution failed    0.03s  
+  ✓ it does not call OpenAI and keeps individual instructions available  0.04s  
+  ✓ it represents one study multiple studies and missing indications sa… 0.04s  
+  ✓ it makes confirmation email and pdf data consume the preparation re… 0.05s  
+  ✓ it adds preparation to shared resource while keeping compatibility…  0.05s  
+
+  Tests:    33 passed (162 assertions)
+  Duration: 78.74s
+

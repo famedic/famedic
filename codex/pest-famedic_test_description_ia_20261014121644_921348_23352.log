@@ -1,0 +1,253 @@
+
+   FAIL  Tests\Feature\Laboratory\GdaResultsQaReviewIsolatedTest
+  ⨯ monitor muestra archivo en storage si cuando purchase results exist… 2.30s  
+  ⨯ monitor marca stale si pdf gda en storage y notificacion mas nueva   1.74s  
+  ⨯ monitor muestra base64 legacy en bd si cuando results pdf base64 ex… 1.78s  
+  ⨯ boton descargar usa storage si purchase results existe               1.94s  
+  ⨯ forzar actualizacion desde gda guarda en storage no en base64        1.77s  
+  ⨯ forzar actualizacion desde gda con error http devuelve json control… 1.79s  
+  ⨯ forzar actualizacion desde gda con html en lugar de pdf devuelve js… 1.78s  
+  ⨯ forzar actualizacion desde gda con falla de storage no marca sincro… 1.79s  
+  ⨯ sincronizar desde gda con excepcion interna devuelve json controlad… 1.79s  
+  ⨯ detalle ajax para orden inexistente devuelve json controlado         1.74s  
+  ⨯ resultado manual no se sobrescribe por gda automatico                4.13s  
+  ✓ paciente descarga resultado automatico desde storage                 1.76s  
+  ✓ paciente descarga resultado manual desde storage                     1.68s  
+  ✓ paciente con historico base64 sigue funcionando                      1.77s  
+  ✓ fallback lazy funciona si job no corrio                              2.04s  
+  ✓ gabinete descarga correctamente con gda order id alfanumerico        1.74s  
+  ✓ laboratorio normal descarga correctamente con gda order id numerico  1.78s  
+  ✓ en qa safe mode correos a pacientes no autorizados se bloquean       1.70s  
+  ⨯ monitor incluye sync logs con datos de sincronizacion                1.90s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:64
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:98
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:126
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:146
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:170
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:199
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:227
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:263
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:294
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (1) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:310
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:336
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\GdaResultsQaReviewIsolat…  QueryException   
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'administrators.deleted_at' in 'where clause' (Connection: mysql, SQL: select * from `administrators` where `administrators`.`user_id` in (2) and `administrators`.`deleted_at` is null)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:407
+    403▕             // For select statements, we'll simply execute the query and return an array
+    404▕             // of the database result set. Each element in the array will be a single
+    405▕             // row from the database table, and will either be an array or objects.
+    406▕             $statement = $this->prepared(
+  ➜ 407▕                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕
+
+      [2m+17 vendor frames [22m
+  18  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:656
+  19  tests/Feature/Laboratory/GdaResultsQaReviewIsolatedTest.php:485
+
+
+  Tests:    12 failed, 7 passed (25 assertions)
+  Duration: 36.98s
+

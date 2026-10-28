@@ -6,6 +6,7 @@ use App\Actions\Laboratories\CalculateTotalsAndDiscountAction;
 use App\Actions\Laboratories\FulfillLaboratoryCartOrderAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\GdaOrderResultUncertainException;
+use App\Services\Laboratory\UncertainGdaPaymentGuard;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
 use App\Models\Address;
@@ -37,64 +38,89 @@ class FinalizeLaboratoryPayPalPaymentAction
      */
     public function __invoke(Transaction $transaction, array $capturePayload, ?array $clientContext = null): ?LaboratoryPurchase
     {
+        return app(UncertainGdaPaymentGuard::class)->withTransactionLock($transaction,
+            fn () => $this->finalize($transaction->fresh(), $capturePayload, $clientContext));
+
+    }
+
+    private function finalize(Transaction $transaction, array $capturePayload, ?array $clientContext): ?LaboratoryPurchase
+    {
+        // Replayed capture webhooks must not restart a terminal refund/fulfillment attempt.
+        if ($transaction->refunded_at !== null || $transaction->payment_status === 'refunded'
+            || $transaction->gateway_status === 'FULFILLMENT_FAILED') {
+            return $transaction->laboratoryPurchases()->useWritePdo()->first();
+        }
         $info = $this->payPalService->extractCaptureInfo($capturePayload);
 
-        if (($info['capture_id'] ?? null) === null) {
+        if (($info['capture_id'] ?? null) === null || ! in_array(strtoupper((string) ($info['status'] ?? '')), ['COMPLETED', 'CAPTURED'], true)) {
             Log::error('[PayPal] Finalize: sin capture_id', ['transaction_id' => $transaction->id]);
 
             return null;
         }
 
-        $existingPurchase = null;
+        if ($existing = $transaction->laboratoryPurchases()->useWritePdo()->first()) {
+            return app(UncertainGdaPaymentGuard::class)->existingPurchaseResult($existing);
+        }
+        // Retain an unresolved-capture barrier even if persisting captured evidence fails.
+        try {
+            $transaction->update(['details' => [...($transaction->details ?? []),
+                'laboratory_capture_started_at' => $transaction->details['laboratory_capture_started_at'] ?? now()->toIso8601String()]]);
+            $existingPurchase = null;
 
-        DB::transaction(function () use ($transaction, $capturePayload, $info, &$existingPurchase) {
-            $tx = Transaction::lockForUpdate()->findOrFail($transaction->id);
-            $commissionCents = $this->extractCommissionCentsFromCapture($capturePayload);
-            $details = is_array($tx->details) ? $tx->details : [];
+            DB::transaction(function () use ($transaction, $capturePayload, $info, &$existingPurchase) {
+                $tx = Transaction::lockForUpdate()->findOrFail($transaction->id);
+                $commissionCents = $this->extractCommissionCentsFromCapture($capturePayload);
+                $details = is_array($tx->details) ? $tx->details : [];
 
-            if ($tx->laboratoryPurchases()->exists()) {
-                $existingPurchase = $tx->laboratoryPurchases()->first();
+                if ($tx->laboratoryPurchases()->useWritePdo()->exists()) {
+                    $existingPurchase = $tx->laboratoryPurchases()->useWritePdo()->first();
 
-                return;
-            }
+                    return;
+                }
 
-            $tx->update([
-                'gateway_transaction_id' => $info['capture_id'],
-                'provider_transaction_id' => $info['capture_id'],
-                'payment_status' => 'captured',
-                'gateway_status' => $info['status'] ?? 'COMPLETED',
-                'raw_response' => $capturePayload,
-                'gateway_response' => $capturePayload,
-                'gateway_processed_at' => now(),
-                'details' => array_merge($details, [
-                    'commission_cents' => $commissionCents,
-                    'commission_fetched_at' => now()->toIso8601String(),
-                    'commission_source' => 'paypal_capture',
-                ]),
-            ]);
-        });
+                $tx->update([
+                    'gateway_transaction_id' => $info['capture_id'],
+                    'provider_transaction_id' => $info['capture_id'],
+                    'payment_status' => 'captured',
+                    'gateway_status' => $info['status'] ?? 'COMPLETED',
+                    'raw_response' => $capturePayload,
+                    'gateway_response' => $capturePayload,
+                    'gateway_processed_at' => now(),
+                    'details' => array_merge($details, [
+                        'commission_cents' => $commissionCents,
+                        'commission_fetched_at' => now()->toIso8601String(),
+                        'commission_source' => 'paypal_capture',
+                    ]),
+                ]);
+            });
+
+        } catch (Throwable) {
+            throw new GdaOrderResultUncertainException('gda_persistence_failed');
+        }
 
         if ($existingPurchase !== null) {
-            return $existingPurchase;
+            return app(UncertainGdaPaymentGuard::class)->existingPurchaseResult($existingPurchase);
         }
 
         $transaction->refresh();
+        $guard = app(UncertainGdaPaymentGuard::class);
+        if ($other = $guard->capturedUncertainPurchaseForCart($guard->cartForTransaction($transaction))) {
+            $details = $transaction->details ?? [];
+            $transaction->update(['details' => [...$details, 'gda_reconciliation_required' => true, 'blocked_by_purchase_id' => $other->id]]);
+            throw new GdaOrderResultUncertainException;
+        }
 
+        if ($cart = $guard->cartForTransaction($transaction)) {
+            $guard->ensureNoUnresolvedCapture($cart, $transaction->id);
+        }
         try {
             return $this->runFulfillment($transaction, $clientContext);
-        } catch (GdaOrderResultUncertainException $e) {
-            Log::warning('[PayPal] GDA incierto tras captura; no se reembolsa automáticamente', $e->context() + [
-                'transaction_id' => $transaction->id,
-                'capture_id' => $info['capture_id'],
-            ]);
-
-            $purchase = $e->purchase();
-
-            if ($purchase instanceof LaboratoryPurchase) {
-                return $purchase;
+        } catch (GdaOrderResultUncertainException $safe) {
+            \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'paypal_gda_order_uncertain', $safe->context() + ['transaction_id' => $transaction->id]);
+            if ($safe->purchase()) {
+                return $safe->purchase();
             }
-
-            throw $e;
+            throw $safe;
         } catch (Throwable $e) {
             Log::error('[PayPal] Fallo al generar pedido tras captura; intentando reembolso', [
                 'transaction_id' => $transaction->id,
@@ -102,8 +128,10 @@ class FinalizeLaboratoryPayPalPaymentAction
                 'error' => $e->getMessage(),
             ]);
 
+            $refunded = false;
             try {
                 $this->payPalService->refund($info['capture_id']);
+                $refunded = true;
             } catch (Throwable $refundError) {
                 Log::error('[PayPal] Reembolso tras fallo de fulfillment falló', [
                     'capture_id' => $info['capture_id'],
@@ -114,6 +142,7 @@ class FinalizeLaboratoryPayPalPaymentAction
             $transaction->update([
                 'payment_status' => 'failed',
                 'gateway_status' => 'FULFILLMENT_FAILED',
+                'refunded_at' => $refunded ? now() : $transaction->refunded_at,
             ]);
 
             throw $e;

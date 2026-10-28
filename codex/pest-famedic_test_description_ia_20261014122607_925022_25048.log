@@ -1,0 +1,11 @@
+
+   PASS  Tests\Feature\Laboratory\GdaResultsPurchaseViewPhase5Test
+  ✓ presentador expone status individual y oculta campos admin al pacie… 2.66s  
+  ✓ orden sin pdf ni estatus no se marca completa                        1.73s  
+  ✓ admin no puede enviar aviso si gate semantico no esta completo       1.97s  
+  ✓ admin reenvia aviso completo sin duplicar active campaign            1.75s  
+  ✓ admin analiza resultado historico sin enviar email ni active campai… 1.91s  
+
+  Tests:    5 passed (32 assertions)
+  Duration: 10.08s
+

@@ -5,12 +5,14 @@ namespace App\Actions\Laboratories;
 use App\Enums\LaboratoryResultEventType;
 use App\Enums\LaboratoryResultPdfClassification;
 use App\Enums\LaboratoryResultStatus as LaboratoryResultStatusEnum;
+use App\Jobs\ExtractLaboratoryResultReportJob;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseItem;
 use App\Models\LaboratoryResultEvent;
 use App\Models\LaboratoryResultStatus;
 use App\Models\LaboratoryResultVersion;
+use App\Services\LaboratoryResults\LaboratoryResultItemExtractionEligibility;
 use App\Services\LaboratoryResults\LaboratoryResultPdfClassifier;
 use App\Services\LaboratoryResults\LaboratoryResultRefreshPolicy;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +24,7 @@ class RecordGdaResultPdfVersionAction
         private LaboratoryResultPdfClassifier $classifier,
         private LaboratoryResultRefreshPolicy $refreshPolicy,
         private AttemptReleaseLaboratoryResultsNotificationAction $attemptReleaseResultsNotificationAction,
+        private LaboratoryResultItemExtractionEligibility $extractionEligibility,
     ) {}
 
     /**
@@ -51,8 +54,11 @@ class RecordGdaResultPdfVersionAction
         $classification = $this->classifier->classifyBinary($pdfBinary);
         $now = now();
         $shouldAttemptRelease = false;
+        $versionIdsForStructuredExtraction = [];
 
-        DB::transaction(function () use ($purchase, $notification, $storagePath, $source, $sha256, $classification, $now, &$shouldAttemptRelease): void {
+        DB::transaction(function () use ($purchase, $notification, $storagePath, $source, $sha256, $classification, $now, &$shouldAttemptRelease, &$versionIdsForStructuredExtraction): void {
+            $purchaseBrand = $purchase->brand;
+
             /** @var LaboratoryPurchaseItem $item */
             foreach ($purchase->laboratoryPurchaseItems as $item) {
                 $status = $this->resolveStatus($purchase, $item, $now);
@@ -143,6 +149,36 @@ class RecordGdaResultPdfVersionAction
                     $shouldAttemptRelease = true;
                 }
 
+                if ($createdVersion && $targetStatus === LaboratoryResultStatusEnum::Complete) {
+                    $eligibility = $this->extractionEligibility->evaluate($item, $purchaseBrand);
+
+                    if ($eligibility->eligible) {
+                        $versionIdsForStructuredExtraction[] = $version->id;
+                    } else {
+                        $this->recordEvent(
+                            $status,
+                            $version,
+                            LaboratoryResultEventType::ExtractionSuppressed,
+                            metadata: [
+                                'purchase_item_id' => $item->id,
+                                'purchase_item_name' => $item->name,
+                                'gda_id' => $item->gda_id,
+                                'reason' => $eligibility->reason,
+                                'source' => $eligibility->source,
+                                'classification' => $classification->classification->value,
+                            ],
+                        );
+
+                        Log::info('laboratory_result_extraction_suppressed', [
+                            'purchase_id' => $purchase->id,
+                            'purchase_item_id' => $item->id,
+                            'result_version_id' => $version->id,
+                            'reason' => $eligibility->reason,
+                            'source' => $eligibility->source,
+                        ]);
+                    }
+                }
+
                 Log::info('laboratory_result_classified', [
                     'purchase_id' => $purchase->id,
                     'purchase_item_id' => $item->id,
@@ -157,6 +193,12 @@ class RecordGdaResultPdfVersionAction
 
         if ($shouldAttemptRelease && $attemptRelease) {
             $this->attemptReleaseResultsNotificationAction->execute($purchase->fresh(), source: 'result_status_complete');
+        }
+
+        if (config('laboratory-results.structured_extraction.enabled', false)) {
+            foreach (array_unique($versionIdsForStructuredExtraction) as $versionId) {
+                ExtractLaboratoryResultReportJob::dispatch($versionId);
+            }
         }
     }
 

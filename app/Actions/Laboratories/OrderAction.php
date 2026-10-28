@@ -9,6 +9,7 @@ use App\Actions\Transactions\RefundTransactionAction;
 use App\Enums\LaboratoryBrand;
 use App\Exceptions\GdaOrderResultUncertainException;
 use App\Exceptions\LaboratoryPaymentAlreadyReceivedException;
+use App\Services\Laboratory\UncertainGdaPaymentGuard;
 use App\Exceptions\MissingLaboratoryAppointmentException;
 use App\Exceptions\UnmatchingTotalPriceException;
 use App\Models\Address;
@@ -21,7 +22,6 @@ use App\Models\Transaction;
 use App\Services\CouponApplicationService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\PromoCodeService;
-use App\Services\Laboratory\UncertainGdaPaymentGuard;
 use App\Notifications\LaboratoryPurchaseCreated;
 use App\Notifications\FewDaysLeftToRequestInvoice;
 use Illuminate\Database\Eloquent\Collection;
@@ -41,7 +41,6 @@ class OrderAction
     private CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction;
     private FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction;
     private SyncMonitoringCartService $syncMonitoringCartService;
-    private UncertainGdaPaymentGuard $uncertainGdaPaymentGuard;
 
     private Collection $laboratoryCartItems;
 
@@ -56,7 +55,6 @@ class OrderAction
         CreateCouponBalanceTransactionAction $createCouponBalanceTransactionAction,
         FulfillLaboratoryCartOrderAction $fulfillLaboratoryCartOrderAction,
         SyncMonitoringCartService $syncMonitoringCartService,
-        UncertainGdaPaymentGuard $uncertainGdaPaymentGuard,
     ) {
         $this->calculateTotalsAndDiscountAction = $calculateTotalsAndDiscountAction;
         $this->chargeEfevooPaymentMethodAction = $chargeEfevooPaymentMethodAction;
@@ -68,7 +66,6 @@ class OrderAction
         $this->createCouponBalanceTransactionAction = $createCouponBalanceTransactionAction;
         $this->fulfillLaboratoryCartOrderAction = $fulfillLaboratoryCartOrderAction;
         $this->syncMonitoringCartService = $syncMonitoringCartService;
-        $this->uncertainGdaPaymentGuard = $uncertainGdaPaymentGuard;
     }
 
     public function __invoke(
@@ -82,6 +79,19 @@ class OrderAction
         ?string $promoValidationToken = null,
         ?array $clientContext = null,
     ): LaboratoryPurchase {
+
+        if (\App\Support\LocalCheckoutQa::enabled()) {
+            abort_unless(strtolower($customer->user->email) === \App\Support\LocalCheckoutQa::recipient(), 403, 'local_qa_user_blocked');
+            if (! \App\Support\LocalQaPreflight::inspect(ready: true)['ok']) {
+                throw new \RuntimeException('local_qa_coordinator_not_ready');
+            }
+            abort_unless(ctype_digit($paymentMethod) && $couponId === null && $promoValidationToken === null, 403, 'local_qa_payment_blocked');
+            $qaToken = $customer->efevooTokens()->active()->find($paymentMethod);
+            abort_unless($qaToken && \App\Support\MockEfevooPaymentSupport::isMockToken($qaToken), 403, 'local_qa_mock_token_required');
+            if (! app(\App\Contracts\EfevooPayGateway::class) instanceof \App\Services\EfevooPay\MockEfevooPayGateway) {
+                throw new \RuntimeException('local_qa_mock_gateway_required');
+            }
+        }
 
         $this->laboratoryCartItems = $customer->laboratoryCartItems()
             ->ofBrand($laboratoryBrand)
@@ -154,87 +164,56 @@ class OrderAction
         $patientAddress = $address;
 
         $transaction = null;
+        $initialTransactionLevel = DB::transactionLevel();
 
         try {
-            $laboratoryPurchase = $this->uncertainGdaPaymentGuard->withCartLock(
-                $monitoringCart,
-                function (?Cart $lockedMonitoringCart) use (
-                    $amountToChargeCents,
-                    $paymentMethod,
+            $laboratoryPurchase = app(UncertainGdaPaymentGuard::class)->withCartLock($monitoringCart, function () use ($amountToChargeCents, $paymentMethod, $customer, $monitoringCart, $clientContext, $couponId, $discountCents, $promoValidationToken, $calculatedTotalCents, $laboratoryBrand, $patientAddress, $patient, $laboratoryAppointment, $cartHash, &$transaction) {
+                if ($amountToChargeCents > 0) {
+                    $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer, $monitoringCart, $clientContext);
+                } else {
+                    $transaction = ($this->createCouponBalanceTransactionAction)(
+                        $customer,
+                        $couponId,
+                        $discountCents,
+                        $promoValidationToken,
+                    );
+                }
+
+                if ($couponId !== null) {
+                    $this->addCouponDetailsToTransaction($transaction, (int) $couponId, $discountCents, $calculatedTotalCents);
+                } elseif ($promoValidationToken !== null) {
+                    $this->addPromoDetailsToTransaction($transaction, $promoValidationToken, $discountCents, $calculatedTotalCents);
+                }
+
+                $gdaBrandValue = request()->laboratory_brand->value ?? $laboratoryBrand->value;
+
+                return ($this->fulfillLaboratoryCartOrderAction)(
                     $customer,
-                    $clientContext,
-                    $couponId,
-                    $discountCents,
-                    $promoValidationToken,
-                    $calculatedTotalCents,
                     $laboratoryBrand,
                     $patientAddress,
                     $patient,
+                    $transaction,
                     $laboratoryAppointment,
+                    $this->laboratoryCartItems,
+                    $gdaBrandValue,
+                    $couponId,
+                    $promoValidationToken,
                     $cartHash,
-                    &$transaction,
-                ) {
-                    $cartForPayment = $lockedMonitoringCart ?? null;
-
-                    if ($amountToChargeCents > 0) {
-                        $transaction = $this->chargeAndCreateTransaction($amountToChargeCents, $paymentMethod, $customer, $cartForPayment, $clientContext);
-                    } else {
-                        $transaction = ($this->createCouponBalanceTransactionAction)(
-                            $customer,
-                            $couponId,
-                            $discountCents,
-                            $promoValidationToken,
-                        );
-                    }
-
-                    if ($couponId !== null) {
-                        $this->addCouponDetailsToTransaction($transaction, (int) $couponId, $discountCents, $calculatedTotalCents);
-                    } elseif ($promoValidationToken !== null) {
-                        $this->addPromoDetailsToTransaction($transaction, $promoValidationToken, $discountCents, $calculatedTotalCents);
-                    }
-
-                    $gdaBrandValue = request()->laboratory_brand->value ?? $laboratoryBrand->value;
-
-                    return ($this->fulfillLaboratoryCartOrderAction)(
-                        $customer,
-                        $laboratoryBrand,
-                        $patientAddress,
-                        $patient,
-                        $transaction,
-                        $laboratoryAppointment,
-                        $this->laboratoryCartItems,
-                        $gdaBrandValue,
-                        $couponId,
-                        $promoValidationToken,
-                        $cartHash,
-                        $cartForPayment,
-                        $clientContext,
-                    );
-                },
-            );
-        } catch (LaboratoryPaymentAlreadyReceivedException $th) {
-            return $th->purchase();
-        } catch (GdaOrderResultUncertainException $th) {
-            if (DB::transactionLevel() > 0) {
-                DB::rollBack();
+                    $monitoringCart,
+                    $clientContext,
+                );
+            });
+        } catch (LaboratoryPaymentAlreadyReceivedException $exception) {
+            return $exception->purchase();
+        } catch (GdaOrderResultUncertainException $exception) {
+            \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'laboratory_payment_gda_uncertain', $exception->context());
+            if ($exception->purchase()) {
+                return $exception->purchase();
             }
-
-            Log::warning('[GDA P0] Resultado GDA incierto tras pago; no se reembolsa automáticamente', $th->context() + [
-                'transaction_id' => $transaction?->id,
-                'customer_id' => $customer->id,
-                'brand' => $laboratoryBrand->value,
-            ]);
-
-            $purchase = $th->purchase();
-
-            if ($purchase instanceof LaboratoryPurchase) {
-                return $purchase;
-            }
-
-            throw $th;
+            throw $exception;
         } catch (\Throwable $th) {
-            if (DB::transactionLevel() > 0) {
-                DB::rollBack();
+            if (DB::transactionLevel() > $initialTransactionLevel) {
+                DB::rollBack($initialTransactionLevel);
             }
 
             if ($transaction) {
@@ -291,7 +270,7 @@ class OrderAction
     private function chargeAndCreateTransaction(int $amountCents, string $paymentMethod, Customer $customer, ?Cart $cart, ?array $clientContext = null): Transaction
     {
         if ($paymentMethod === 'odessa') {
-            return ($this->chargeOdessaAction)($customer->customerable, $amountCents);
+            return ($this->chargeOdessaAction)($customer->customerable, $amountCents, $cart);
         }
 
         // Usar EfevooPay en lugar de Stripe

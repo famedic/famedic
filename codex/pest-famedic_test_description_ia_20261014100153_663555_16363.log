@@ -1,0 +1,21 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\CartJourneyCheckoutFlowTest
+  ✓ it shows payment method selected in journey and timeline without m… 81.70s  
+  ✓ it shows appointment requested via checkout contact sync as waiting… 0.18s  
+  ✓ it shows confirmed appointment in journey for explicit cart appoint… 0.15s  
+  ✓ it does not contaminate current cart journey with historical purcha… 0.28s  
+  ✓ it shows call_requested from current cart in timeline                0.18s  
+  ✓ it records appointment_pending_5m for current cart appointment       0.15s  
+  ✓ it refuses tests when database is not the testing sqlite database    0.02s  
+  ✓ it derives journey payment method from checkout draft when event is… 0.15s  
+  ✓ it does not use historical payment attempt without cart_id in curre… 0.16s  
+  ✓ it does not use historical appointment without cart_id in current c… 0.15s  
+  ✓ it records checkout_started once across multiple draft sync steps    0.15s  
+  ✓ it uses checkout_visited for return visits without duplicating chec… 0.08s  
+  ✓ it shows a single checkout started label in journey timeline after…  0.21s  
+  ✓ it does not enqueue activecampaign dispatches for checkout_started…  0.08s  
+
+  Tests:    14 passed (45 assertions)
+  Duration: 83.71s
+

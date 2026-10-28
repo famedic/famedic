@@ -1,0 +1,17 @@
+
+  [41;1m ERROR [49;22m Test case `Tests\TestCase` can not be used. The folder `/var/www/html/tests/Unit/CartJourneyDatabaseConfigurationTest.php` already uses the test case `Tests\TestCase`
+
+Location: /var/www/html/vendor/pestphp/pest/src/Repositories/TestRepository.php:179
+
+#0 /var/www/html/vendor/pestphp/pest/src/Repositories/TestRepository.php(161): Pest\Repositories\TestRepository->make(Object(Pest\Factories\TestCaseFactory))
+#1 /var/www/html/vendor/pestphp/pest/overrides/Runner/TestSuiteLoader.php(91): Pest\Repositories\TestRepository->makeIfNeeded('/var/www/html/t...')
+#2 /var/www/html/vendor/pestphp/pest/overrides/Runner/TestSuiteLoader.php(92): PHPUnit\Runner\TestSuiteLoader::PHPUnit\Runner\{closure}()
+#3 /var/www/html/vendor/phpunit/phpunit/src/TextUI/Configuration/TestSuiteBuilder.php(114): PHPUnit\Runner\TestSuiteLoader->load('/var/www/html/t...')
+#4 /var/www/html/vendor/phpunit/phpunit/src/TextUI/Configuration/TestSuiteBuilder.php(58): PHPUnit\TextUI\Configuration\TestSuiteBuilder->testSuiteFromPath('/var/www/html/t...', Array)
+#5 /var/www/html/vendor/phpunit/phpunit/src/TextUI/Application.php(399): PHPUnit\TextUI\Configuration\TestSuiteBuilder->build(Object(PHPUnit\TextUI\Configuration\Configuration))
+#6 /var/www/html/vendor/phpunit/phpunit/src/TextUI/Application.php(112): PHPUnit\TextUI\Application->buildTestSuite(Object(PHPUnit\TextUI\Configuration\Configuration))
+#7 /var/www/html/vendor/pestphp/pest/src/Kernel.php(103): PHPUnit\TextUI\Application->run(Array)
+#8 /var/www/html/vendor/pestphp/pest/bin/pest(91): Pest\Kernel->handle(Array, Array)
+#9 /var/www/html/vendor/pestphp/pest/bin/pest(99): {closure}()
+#10 /var/www/html/vendor/bin/pest(119): include('/var/www/html/v...')
+#11 {main}.

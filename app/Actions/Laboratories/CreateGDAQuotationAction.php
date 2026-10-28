@@ -2,16 +2,17 @@
 
 namespace App\Actions\Laboratories;
 
-use App\Exceptions\GdaOrderResultUncertainException;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Customer;
 use App\Support\GDA\GdaApiUrl;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
+use App\Exceptions\GdaOrderDefinitiveException;
+use App\Exceptions\GdaOrderResultUncertainException;
+use App\Services\Laboratory\GdaOrderConfirmation;
+use Throwable;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Throwable;
 
 class CreateGDAQuotationAction
 {
@@ -38,27 +39,20 @@ class CreateGDAQuotationAction
 
         if (GdaApiUrl::shouldSimulateOrders()) {
             $currentEnv = strtolower((string) config('app.env'));
-            $generatedId = strtoupper(uniqid('GDA'));
-            $generatedConsecutive = random_int(10000000, 99999999);
-
-            Log::warning('CreateGDAQuotationAction: Entorno no productivo, retornando orden simulada', [
+            Log::warning('CreateGDAQuotationAction: Entorno no productivo, retornando ID simulado', [
                 'app_env' => config('app.env'),
                 'normalized_env' => $currentEnv,
-                'generated_id' => $generatedId,
-                'generated_consecutive' => $generatedConsecutive,
+                'generated_id' => uniqid(),
             ]);
 
-            return [
-                'id' => $generatedId,
-                'infogda_consecutivo' => $generatedConsecutive,
-                'gda_mensaje' => 'simulated',
-            ];
+            return ['id' => strtoupper(uniqid('GDA')), 'infogda_consecutivo' => random_int(10000000, 99999999)];
         }
 
         $url = GdaApiUrl::endpoint('service-request');
         
         Log::info('CreateGDAQuotationAction: URL configurada', ['url' => $url]);
 
+        try {
         // Construir payload
         $payload = [
             "header" => [
@@ -94,78 +88,25 @@ class CreateGDAQuotationAction
             ],
         ];
 
-        // Log del payload (con información sensible parcialmente oculta)
-        $logPayload = $payload;
-        if (isset($logPayload['header']['token'])) {
-            $logPayload['header']['token'] = '***OCULTO***';
+        } catch (Throwable) {
+            throw new GdaOrderDefinitiveException;
         }
-        //Log::info('CreateGDAQuotationAction: Payload enviado a API', $logPayload);
 
         try {
-            Log::info('CreateGDAQuotationAction: Enviando petición a API GDA');
             $response = Http::post($url, $payload);
-
             $responseData = $this->decodeJsonResponse($response, (int) $laboratoryPurchaseId);
-            $responseSummary = $this->summarizeResponse($responseData);
-
-            Log::info('CreateGDAQuotationAction: Respuesta recibida de API GDA', [
-                'status_code' => $response->status(),
-                'success' => $response->successful(),
-                'failed' => $response->failed(),
-                'response_summary' => $responseSummary,
-            ]);
-
-            if ($response->failed()) {
-                Log::warning('CreateGDAQuotationAction: La API GDA respondió sin confirmación confiable', [
-                    'status' => $response->status(),
-                    'response_summary' => $responseSummary,
-                    'laboratoryPurchaseId' => $laboratoryPurchaseId,
-                ]);
-
+            if (! $response->successful()) {
                 throw GdaOrderResultUncertainException::forResponse(
-                    reason: 'gda_http_failed',
-                    laboratoryPurchaseId: (int) $laboratoryPurchaseId,
-                    httpStatus: $response->status(),
-                    responseSummary: $responseSummary,
+                    'gda_http_failed', (int) $laboratoryPurchaseId, $response->status(), $this->summarizeResponse($responseData),
                 );
             }
-
             $this->assertSemanticSuccess($responseData, (int) $laboratoryPurchaseId, $response->status());
-
-            Log::info('CreateGDAQuotationAction: Proceso completado exitosamente', [
-                'response_id' => $responseData['id'] ?? null,
-                'infogda_consecutivo' => $responseData['infogda_consecutivo'] ?? null,
-                'laboratoryPurchaseId' => $laboratoryPurchaseId
-            ]);
-
             return $responseData;
-
-        } catch (GdaOrderResultUncertainException $e) {
-            Log::warning('CreateGDAQuotationAction: Resultado GDA incierto', $e->context());
-            throw $e;
-        } catch (ConnectionException $e) {
-            Log::warning('CreateGDAQuotationAction: Error de conexión con GDA', [
-                'message' => $e->getMessage(),
-                'laboratoryPurchaseId' => $laboratoryPurchaseId,
-            ]);
-
-            throw GdaOrderResultUncertainException::forResponse(
-                reason: 'gda_connection_error',
-                laboratoryPurchaseId: (int) $laboratoryPurchaseId,
-                previous: $e,
-            );
-        } catch (Throwable $e) {
-            Log::warning('CreateGDAQuotationAction: Excepción inesperada durante creación GDA', [
-                'message' => $e->getMessage(),
-                'exception' => $e::class,
-                'laboratoryPurchaseId' => $laboratoryPurchaseId,
-            ]);
-
-            throw GdaOrderResultUncertainException::forResponse(
-                reason: 'gda_unexpected_exception',
-                laboratoryPurchaseId: (int) $laboratoryPurchaseId,
-                previous: $e,
-            );
+        } catch (Throwable $exception) {
+            $safe = $exception instanceof GdaOrderResultUncertainException
+                ? $exception : new GdaOrderResultUncertainException;
+            \App\Services\Laboratory\GdaPaymentDiagnostics::record('warning', 'gda_order_request_uncertain', $safe->context());
+            throw $safe;
         }
     }
 
@@ -196,10 +137,7 @@ class CreateGDAQuotationAction
      */
     private function assertSemanticSuccess(array $responseData, int $laboratoryPurchaseId, int $httpStatus): void
     {
-        $folio = $this->normalizeRequiredValue($responseData['id'] ?? null);
-        $consecutive = $this->normalizeRequiredValue($responseData['infogda_consecutivo'] ?? null);
-
-        if ($folio === null || $folio === '0' || $consecutive === null) {
+        if (! GdaOrderConfirmation::valid($responseData)) {
             throw GdaOrderResultUncertainException::forResponse(
                 reason: 'gda_missing_required_identifiers',
                 laboratoryPurchaseId: $laboratoryPurchaseId,
@@ -207,17 +145,6 @@ class CreateGDAQuotationAction
                 responseSummary: $this->summarizeResponse($responseData),
             );
         }
-    }
-
-    private function normalizeRequiredValue(mixed $value): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        $normalized = trim((string) $value);
-
-        return $normalized === '' ? null : $normalized;
     }
 
     /**
@@ -278,12 +205,6 @@ class CreateGDAQuotationAction
                 'name' => $laboratoryCartItem->laboratoryTest->name,
                 'price' => $laboratoryCartItem->laboratoryTest->famedic_price_cents
             ];
-            
-            Log::debug('CreateGDAQuotationAction: Item procesado', [
-                'test_id' => $laboratoryCartItem->laboratoryTest->id,
-                'gda_id' => $laboratoryCartItem->laboratoryTest->gda_id,
-                'name' => $laboratoryCartItem->laboratoryTest->name
-            ]);
             
             $details[] = $detail;
         }

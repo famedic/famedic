@@ -1,0 +1,27 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\LaboratoryPreparationGenerationDispatchTest
+  ✓ it does not dispatch when v3 and shadow are off                     77.29s  
+  ✓ it dispatches v3 after commit for a confirmed GDA order with explic… 0.11s  
+  ✓ it dispatches shadow-only evaluation without creating legacy execut… 0.10s  
+  ✓ it does not call OpenAI during the purchase fulfillment request      0.12s  
+  ✓ it does not dispatch v3 for fulfillment without a GDA consecutivo    0.10s  
+  ✓ it shadow-only dispatch evaluates deterministically without legacy…  0.05s  
+  ✓ it does not run shadow twice when the same legacy job is handled ag… 0.04s  
+  ✓ it gives active deterministic v3 precedence over shadow when both f… 0.05s  
+  ✓ it does not break purchase fulfillment when queueing the preparatio… 0.10s  
+  ✓ it preserves the purchase and falls back when v3 redaction fails     0.05s  
+  ✓ it the preparation job does not retry fidelity validation failures   0.09s  
+  ✓ it records an original fallback for transient redactor errors        0.04s  
+  ✓ it the preparation job reuses an unchanged source hash without dupl… 0.05s  
+  ✓ it skips stale deterministic v3 jobs when indications changed befor… 0.05s  
+  ✓ it skips queued deterministic v3 jobs after rollback to flag off     0.04s  
+  ✓ it a missing purchase does not create a generation execution         0.03s  
+  ✓ it allows only explicit positive payment evidence for supported pay… 0.07s  
+  ✓ it rejects pending failed refunded and unresolved payment evidence   0.05s  
+  ✓ it requires a valid GDA folio and positive consecutivo               0.04s  
+  ✓ it revalidates payment and GDA eligibility when a generation job st… 0.04s  
+
+  Tests:    20 passed (73 assertions)
+  Duration: 78.57s
+

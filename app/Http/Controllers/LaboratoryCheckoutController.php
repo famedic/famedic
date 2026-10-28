@@ -276,8 +276,8 @@ class LaboratoryCheckoutController extends Controller
                 ...$totals,
                 ...$balancePresentation,
                 'balanceCreditPresentation' => $balancePresentation,
-                'hasPayPal' => (bool) config('services.paypal.client_id'),
-                'paypalClientId' => config('services.paypal.client_id'),
+                'hasPayPal' => ! \App\Support\LocalCheckoutQa::enabled() && (bool) config('services.paypal.client_id'),
+                'paypalClientId' => \App\Support\LocalCheckoutQa::enabled() ? null : config('services.paypal.client_id'),
                 'contacts' => $request->user()->customer->contacts,
                 'genders' => Gender::casesWithLabels(),
                 'addresses' => $request->user()->customer->addresses,
@@ -286,7 +286,7 @@ class LaboratoryCheckoutController extends Controller
                 'defaultMockPaymentMethodId' => $mockTokens[0]['id'] ?? null,
                 'showAppEnvBadge' => AppEnvironmentLabel::shouldShowBadge(),
                 'appEnvLabel' => AppEnvironmentLabel::current(),
-                'hasOdessaPay' => $request->user()->customer->has_odessa_afiliate_account,
+                'hasOdessaPay' => ! \App\Support\LocalCheckoutQa::enabled() && $request->user()->customer->has_odessa_afiliate_account,
                 'mexicanStates' => config('mexicanstates'),
             ]);
         } catch (\Throwable $e) {
@@ -307,6 +307,7 @@ class LaboratoryCheckoutController extends Controller
      */
     private function resolveCheckoutPaymentMethods(\App\Models\Customer $customer, array $mockTokens = []): array
     {
+        if (\App\Support\LocalCheckoutQa::enabled()) { return $mockTokens; }
         $userTokens = $customer->efevooTokens()
             ->active()
             ->excludeMockInProduction()

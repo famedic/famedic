@@ -19,11 +19,15 @@ use App\Models\User;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Role;
 
+beforeEach(function () {
+    config(['services.gda.force_real_api' => true]);
+});
+
 function recoverGdaCustomer(): \App\Models\Customer
 {
     return User::factory()
         ->withCompleteProfile()
-        ->has(\App\Models\Customer::factory())
+        ->withRegularCustomer()
         ->create(['documentation_accepted_at' => now()])
         ->fresh(['customer'])
         ->customer;
@@ -180,7 +184,12 @@ test('recover action clones previous appointment automatically', function () {
     $purchase = recoverGdaUncertainPurchase($customer, $test);
     $coupon = recoverGdaBalanceCoupon($customer->user, 39900);
 
-    $store = LaboratoryStore::factory()->create(['brand' => LaboratoryBrand::OLAB->value]);
+    $store = LaboratoryStore::factory()->create([
+        'brand' => LaboratoryBrand::OLAB->value, 'name' => 'Sucursal QA',
+        'state' => 'Nuevo León', 'address' => 'Calle QA 1',
+        'weekly_hours' => '07:00-17:00', 'saturday_hours' => '07:00-12:00',
+        'sunday_hours' => 'Cerrado', 'google_maps_url' => 'https://example.test/map',
+    ]);
     $originalAppointment = LaboratoryAppointment::query()->create([
         'customer_id' => $customer->id,
         'brand' => LaboratoryBrand::OLAB,

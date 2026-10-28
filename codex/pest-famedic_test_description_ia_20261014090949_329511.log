@@ -1,0 +1,41 @@
+
+   PASS  Tests\Feature\PayPal\MedicalAttentionPayPalRouteTest
+  ✓ medical attention paypal create order requires authentication        0.15s  
+  ✓ medical attention paypal capture order requires authentication       0.02s  
+
+   PASS  Tests\Feature\PayPal\PayPalCreateOrderRouteTest
+  ✓ paypal create order requires authentication                          0.03s  
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\AdminCartPaymentAttemptCorrelatorTest
+  ✓ it correlates a declined Efevoo attempt by customer amount and car… 79.99s  
+  ✓ it prefers explicit cart_id payment attempts over same amount legac… 0.04s  
+  ✓ it does not assert a payment when one attempt fits multiple carts    0.04s  
+
+   PASS  Tests\Feature\Carts\CartPaymentMethodSelectedTest
+  ✓ appointment-first before confirmed appointment does not emit paymen… 0.10s  
+  ✓ appointment-first after confirmed appointment records one payment_m… 0.12s  
+  ✓ second sync with same payment method does not duplicate payment_met… 0.18s  
+  ✓ changing payment method from paypal to token creates a new payment_… 0.17s  
+  ✓ standard flow still records payment_method_selected on payment step… 0.13s  
+  ✓ partial checkout polling does not emit payment_method_selected       0.25s  
+  ✓ checkout get without draft sync does not emit payment_method_select… 0.12s  
+
+   PASS  Tests\Unit\GDA\GetGDAResultsActionPayloadIdTest
+  ✓ it gabinete: usa gda_order_id cuando cumple patrón consultable       0.03s  
+  ✓ it gabinete: no reemplaza id con requisition.value numérico          0.02s  
+  ✓ it laboratorio normal Swisslab: no usa orderId numérico si no cumpl… 0.03s  
+  ✓ it laboratorio normal: usa requisition.value cuando payload.id es n… 0.02s  
+  ✓ it laboratorio normal: usa infogda_etiqueta si cumple patrón y requ… 0.02s  
+  ✓ it laboratorio normal: ignora infogda_etiqueta con sufijo y usa req… 0.02s  
+  ✓ it lanza excepción controlada si ningún candidato cumple patrón con… 0.02s  
+  ✓ it loguea payload_id, requested_order_id y resolved_consult_id_sour… 0.03s  
+  ✓ it gabinete: loguea resolved_consult_id_source como gda_order_id     0.02s  
+  ✓ it fallback: usa payload.id consultable si orderId está vacío        0.02s  
+  ✓ it fallback: usa infogda_etiqueta consultable si orderId y payload.… 0.02s  
+  ✓ it gabinete: el request a GDA no contiene GDA_menssage               0.02s  
+  ✓ it Swisslab: el payload final enviado a GDA no usa el id numérico 2… 0.02s  
+
+  Tests:    26 passed (56 assertions)
+  Duration: 81.70s
+

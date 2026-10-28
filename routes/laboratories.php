@@ -11,6 +11,8 @@ use App\Http\Controllers\LaboratoryPurchaseController;
 use App\Http\Controllers\LaboratoryQuoteController;
 use App\Http\Controllers\LaboratoryResultController;
 use App\Http\Controllers\LaboratoryResultsController;
+use App\Http\Controllers\LaboratoryStructuredPatientAiExplanationController;
+use App\Http\Controllers\LaboratoryStructuredPatientResultController;
 use App\Http\Controllers\LaboratoryShoppingCartController;
 use App\Http\Controllers\LaboratoryStoreController;
 use App\Http\Controllers\PayPalController;
@@ -169,4 +171,22 @@ Route::middleware([
         [LaboratoryResultsController::class, 'fetch']
     )->middleware(EnsureLabResultsOtpVerified::class)
         ->name('laboratory-purchases.results.automatic-fetch');
+
+    Route::get(
+        '/laboratory-purchases/{laboratory_purchase}/structured-results',
+        [LaboratoryStructuredPatientResultController::class, 'show']
+    )->middleware(EnsureLabResultsOtpVerified::class)
+        ->name('laboratory-purchases.structured-results');
+
+    Route::post(
+        '/laboratory-purchases/{laboratory_purchase}/structured-results/observations/{observation}/explanation',
+        [LaboratoryStructuredPatientAiExplanationController::class, 'store']
+    )->middleware(EnsureLabResultsOtpVerified::class)
+        ->name('laboratory-purchases.structured-results.explanation');
+
+    Route::post(
+        '/laboratory-purchases/{laboratory_purchase}/ai-explanation-consent',
+        [LaboratoryStructuredPatientAiExplanationController::class, 'updateConsent']
+    )->middleware(EnsureLabResultsOtpVerified::class)
+        ->name('laboratory-purchases.ai-explanation-consent');
 });

@@ -44,9 +44,43 @@ class GdaResultsPurchaseViewPhase5Test extends TestCase
         Notification::fake();
         Bus::fake([TagLaboratoryEmailToActiveCampaignJob::class]);
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+        config(['permission.teams' => false]);
 
         $this->bootstrapIsolatedSchema();
         $this->ensureAdminTables();
+        foreach ([
+            'activecampaign.manage',
+            'administrators.manage',
+            'automation.manage',
+            'clinical-interpreter.manage',
+            'coupons.manage',
+            'customers.manage',
+            'documentation.manage',
+            'efevoo-tokens.manage',
+            'laboratory-notifications.monitor',
+            'laboratory-purchases.manage',
+            'laboratory-purchases.manage.vendor-payments',
+            'laboratory-stores.manage',
+            'laboratory-tests.manage',
+            'logs-general.manage',
+            'medical-attention-subscriptions.manage',
+            'monitoring-ai.manage',
+            'odessa-pre-enrollments.manage',
+            'odessa-pre-enrollments.view',
+            'odessa-reconciliation.manage',
+            'odessa-reconciliation.review',
+            'odessa-reconciliation.view',
+            'online-pharmacy-purchases.manage',
+            'online-pharmacy-purchases.manage.vendor-payments',
+            'payment-attempts.manage',
+            'simulators.manage',
+            'tax-profiles.manage',
+            'users.manage',
+            'view carts',
+            'view_config_monitor',
+        ] as $permissionName) {
+            Permission::findOrCreate($permissionName, 'web');
+        }
     }
 
     protected function tearDown(): void
@@ -327,6 +361,16 @@ class GdaResultsPurchaseViewPhase5Test extends TestCase
                 $table->id();
                 $table->foreignId('user_id')->constrained();
                 $table->timestamps();
+                $table->softDeletes();
+            });
+        }
+
+        if (! Schema::hasTable('laboratory_concierges')) {
+            Schema::create('laboratory_concierges', function ($table) {
+                $table->id();
+                $table->foreignId('administrator_id')->constrained();
+                $table->timestamps();
+                $table->softDeletes();
             });
         }
 
@@ -350,15 +394,21 @@ class GdaResultsPurchaseViewPhase5Test extends TestCase
             });
         }
 
-        foreach (['model_has_roles', 'role_has_permissions'] as $tableName) {
-            if (! Schema::hasTable($tableName)) {
-                Schema::create($tableName, function ($table) use ($tableName) {
-                    $table->unsignedBigInteger($tableName === 'model_has_roles' ? 'role_id' : 'permission_id');
-                    $table->string('model_type')->nullable();
-                    $table->unsignedBigInteger('model_id')->nullable();
-                    $table->unsignedBigInteger('role_id')->nullable();
-                });
-            }
+        if (! Schema::hasTable('model_has_roles')) {
+            Schema::create('model_has_roles', function ($table) {
+                $table->unsignedBigInteger('role_id');
+                $table->string('model_type');
+                $table->unsignedBigInteger('model_id');
+                $table->primary(['role_id', 'model_type', 'model_id']);
+            });
+        }
+
+        if (! Schema::hasTable('role_has_permissions')) {
+            Schema::create('role_has_permissions', function ($table) {
+                $table->unsignedBigInteger('permission_id');
+                $table->unsignedBigInteger('role_id');
+                $table->primary(['permission_id', 'role_id']);
+            });
         }
     }
 

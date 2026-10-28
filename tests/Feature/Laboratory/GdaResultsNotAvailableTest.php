@@ -10,6 +10,7 @@ use App\Jobs\Laboratory\SyncGdaResultPdfToStorageJob;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Storage;
@@ -28,6 +29,10 @@ class GdaResultsNotAvailableTest extends TestCase
 
         Storage::fake();
         NotificationFacade::fake();
+
+        config([
+            'services.gda.results_consult_url' => 'https://gda.test/infogda-fullV3/consult',
+        ]);
 
         $this->bootstrapIsolatedSchema();
     }
@@ -106,6 +111,80 @@ class GdaResultsNotAvailableTest extends TestCase
     }
 
     #[Test]
+    public function get_gda_results_action_rejects_successful_response_without_pdf(): void
+    {
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
+        Http::fake([$gdaUrl => Http::response(['status' => 'ok'], 200)]);
+
+        config(['services.gda.brands.olab' => [
+            'brand_id' => 1,
+            'brand_agreement_id' => 100,
+            'token' => 'test-token',
+        ]]);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('La respuesta no contiene resultados PDF');
+
+        app(GetGDAResultsAction::class)('GZ0L000423', [
+            'header' => ['marca' => 1, 'token' => ''],
+            'requisition' => ['convenio' => 100, 'value' => '1888'],
+            'id' => 'GZ0L000423',
+        ]);
+    }
+
+    #[Test]
+    public function get_gda_results_action_reports_server_error_without_real_request(): void
+    {
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
+        Http::fake([$gdaUrl => Http::response([
+            'GDA_menssage' => ['descripcion' => 'Servicio no disponible.'],
+        ], 503)]);
+
+        config(['services.gda.brands.olab' => [
+            'brand_id' => 1,
+            'brand_agreement_id' => 100,
+            'token' => 'test-token',
+        ]]);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Error GDA: Servicio no disponible.');
+
+        app(GetGDAResultsAction::class)('GZ0L000423', [
+            'header' => ['marca' => 1, 'token' => ''],
+            'requisition' => ['convenio' => 100, 'value' => '1888'],
+            'id' => 'GZ0L000423',
+        ]);
+    }
+
+    #[Test]
+    public function get_gda_results_action_propagates_timeout_without_notification(): void
+    {
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
+        Http::fake([$gdaUrl => static function () {
+            throw new ConnectionException('Connection timed out');
+        }]);
+
+        config(['services.gda.brands.olab' => [
+            'brand_id' => 1,
+            'brand_agreement_id' => 100,
+            'token' => 'test-token',
+        ]]);
+
+        try {
+            app(GetGDAResultsAction::class)('GZ0L000423', [
+                'header' => ['marca' => 1, 'token' => ''],
+                'requisition' => ['convenio' => 100, 'value' => '1888'],
+                'id' => 'GZ0L000423',
+            ]);
+            $this->fail('The GDA transport timeout should be propagated.');
+        } catch (ConnectionException $exception) {
+            $this->assertSame('Connection timed out', $exception->getMessage());
+        }
+
+        NotificationFacade::assertNothingSent();
+    }
+
+    #[Test]
     public function resolve_gda_results_pdf_action_propagates_not_available_exception(): void
     {
         $purchase = $this->seedPurchase(['gda_order_id' => 'GZ0L000423']);
@@ -163,6 +242,35 @@ class GdaResultsNotAvailableTest extends TestCase
         $notification->refresh();
         $this->assertNotNull(data_get($notification->gda_message, 'last_gda_not_available_at'));
         $this->assertEquals('No contiene resultados.', data_get($notification->gda_message, 'last_gda_not_available_message'));
+    }
+
+    #[Test]
+    public function unavailable_results_do_not_send_a_premature_notification_or_replace_existing_pdf(): void
+    {
+        $purchase = $this->seedPurchase(['gda_order_id' => 'GZ0L000423', 'results' => null]);
+        $notification = $this->seedResultsNotificationRecord($purchase);
+        $gdaUrl = app(GetGDAResultsAction::class)->resultsConsultUrl();
+
+        Http::fake([$gdaUrl => Http::response([
+            'GDA_menssage' => ['descripcion' => 'No contiene resultados.'],
+        ], 400)]);
+
+        config(['services.gda.brands.olab' => [
+            'brand_id' => 1,
+            'brand_agreement_id' => 100,
+            'token' => 'test-token',
+        ]]);
+
+        try {
+            app(SyncGdaResultPdfToStorageAction::class)->execute($purchase->id, $notification->id, force: true);
+            $this->fail('Unavailable results must not be treated as a successful refresh.');
+        } catch (GdaResultsNotAvailableException) {
+            // The job should retry later; no patient notification is sent yet.
+        }
+
+        NotificationFacade::assertNothingSent();
+        $this->assertNull($purchase->fresh()->results);
+        $this->assertNotNull(data_get($notification->fresh()->gda_message, 'last_gda_not_available_at'));
     }
 
     #[Test]

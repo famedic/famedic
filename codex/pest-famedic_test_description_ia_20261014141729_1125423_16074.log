@@ -1,0 +1,22 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\LaboratoryPreparationGenerationDispatchTest
+  ✓ it dispatches preparation summary generation after a confirmed lab… 82.00s  
+  ✓ it does not call OpenAI during the purchase fulfillment request      0.13s  
+  ✓ it dispatches deterministic v3 generation without creating a legacy… 0.13s  
+  ✓ it keeps the legacy job flow and runs deterministic v3 shadow when…  0.08s  
+  ✓ it does not run shadow twice when the same legacy job is handled ag… 0.07s  
+  ✓ it gives active deterministic v3 precedence over shadow when both f… 0.06s  
+  ✓ it does not break purchase fulfillment when queueing the preparatio… 0.14s  
+  ✓ it the preparation job supports bounded retries and records failed…  0.06s  
+  ✓ it the preparation job does not retry fidelity validation failures   0.11s  
+  ✓ it the preparation job keeps retry behavior for transient provider…  0.07s  
+  ✓ it the preparation job reuses an unchanged source hash without dupl… 0.08s  
+  ✓ it skips stale deterministic v3 jobs when indications changed befor… 0.04s  
+  ✓ it skips queued deterministic v3 jobs after rollback to flag off     0.04s  
+  ✓ it a missing purchase does not create a generation execution         0.03s  
+  ✓ it a changed source hash can be queued for regeneration              0.05s  
+
+  Tests:    15 passed (54 assertions)
+  Duration: 83.24s
+

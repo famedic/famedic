@@ -1,0 +1,18 @@
+
+   PASS  Tests\Feature\Admin\LaboratoryResultsCenterTest
+  ✓ admin autorizado puede acceder                                       4.31s  
+  ✓ usuario sin permiso no puede acceder                                 3.97s  
+  ✓ listado y paginacion funcionan                                       9.91s  
+  ✓ filtros funcionan                                                    4.45s  
+  ✓ purchase sin resultado es not available                              4.02s  
+  ✓ purchase con pdf sin report es received                              4.14s  
+  ✓ extraction pending es processing                                     4.46s  
+  ✓ report estructurado es structured                                    4.24s  
+  ✓ validation manual review es review                                   4.42s  
+  ✓ report publicado es published                                        4.09s  
+  ✓ extraction failed es failed                                          4.30s  
+  ✓ errores se sanitizan y no exponen pii ni secretos ni raw payload     4.17s  
+
+  Tests:    12 passed (151 assertions)
+  Duration: 56.57s
+

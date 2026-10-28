@@ -21,7 +21,7 @@ class ChargeOdessaAction
         $this->checkBalanceAction = $checkBalanceAction;
     }
 
-    public function __invoke(OdessaAfiliateAccount $odessaAfiliateAccount, int $centsAmount): Transaction
+    public function __invoke(OdessaAfiliateAccount $odessaAfiliateAccount, int $centsAmount, ?\App\Models\Cart $cart = null): Transaction
     {
         $token = ($this->getOdessaPrivateTokenAction)($odessaAfiliateAccount);
 
@@ -37,24 +37,51 @@ class ChargeOdessaAction
             throw new OdessaInsufficientFundsException();
         }
 
-        $response = $this->sendChargeRequest($token, $url, $centsAmount, $transaction);
-
-        logger($response->json());
-
-        if ($response->failed() || $response->json()['response']['errorCode'] != 0) {
-            throw new InvalidPaymentMethodException();
+        if ($cart) {
+            $transaction->update(['payment_status' => 'processing', 'gateway' => 'odessa',
+                'details' => ['cart_id' => $cart->id, 'laboratory_charge_started_at' => now()->toIso8601String()]]);
+        }
+        try {
+            $response = $this->sendChargeRequest($token, $url, $centsAmount, $transaction);
+        } catch (\Throwable $exception) {
+            if ($cart) {
+                throw new \App\Exceptions\LaboratoryPaymentInProgressException;
+            }
+            throw $exception;
         }
 
-        $referenceId = $response->json()['response']['transactionOds'];
-
-        $transaction->update([
-            'reference_id' => $referenceId,
-            'payment_status' => 'completed',
-            'gateway' => 'odessa',
-            'gateway_status' => 'completed',
-            'gateway_transaction_id' => $referenceId,
-            'gateway_processed_at' => now(),
-        ]);
+        $body = $response->json();
+        $errorCode = data_get($body, 'response.errorCode');
+        if ($response->successful() && $errorCode !== null && (string) $errorCode !== '0') {
+            if ($cart) {
+                $details = $transaction->details;
+                unset($details['laboratory_charge_started_at']);
+                $transaction->update(['payment_status' => 'declined', 'details' => $details]);
+            }
+            throw new InvalidPaymentMethodException();
+        }
+        $referenceId = data_get($body, 'response.transactionOds');
+        if ($response->failed() || $errorCode === null || blank($referenceId)) {
+            if ($cart) {
+                throw new \App\Exceptions\LaboratoryPaymentInProgressException;
+            }
+            throw new InvalidPaymentMethodException();
+        }
+        try {
+            $transaction->update([
+                'reference_id' => $referenceId,
+                'payment_status' => 'completed',
+                'gateway' => 'odessa',
+                'gateway_status' => 'completed',
+                'gateway_transaction_id' => $referenceId,
+                'gateway_processed_at' => now(),
+            ]);
+        } catch (\Throwable $exception) {
+            if ($cart) {
+                throw new \App\Exceptions\LaboratoryPaymentInProgressException;
+            }
+            throw $exception;
+        }
 
         return $transaction;
     }

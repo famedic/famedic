@@ -15,6 +15,7 @@ use App\Models\Contact;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryCheckoutDraft;
+use App\Models\LaboratoryCheckoutResumeLink;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
@@ -169,8 +170,19 @@ test('appointment first payment link uses step payment', function () {
 
     $url = app(PrepareLaboratoryCheckoutPaymentLinkAction::class)($appointment);
 
-    expect($url)->toContain('step=payment')
-        ->and($url)->toContain('/laboratory/'.LaboratoryBrand::OLAB->value.'/checkout');
+    $token = basename((string) parse_url($url, PHP_URL_PATH));
+    $resumeLink = LaboratoryCheckoutResumeLink::query()->where('token_hash', hash('sha256', $token))->firstOrFail();
+
+    expect($url)->toContain('/laboratory/checkout/resume/')
+        ->and(parse_url($url, PHP_URL_QUERY))->toBeNull()
+        ->and($token)->toMatch('/^[a-f0-9]{64}$/')
+        ->and($resumeLink->token_hash)->toBe(hash('sha256', $token))
+        ->and($resumeLink->expires_at->isFuture())->toBeTrue();
+
+    $this->actingAs($user)->get($url)->assertRedirect(route('laboratory.checkout', [
+        'laboratory_brand' => LaboratoryBrand::OLAB,
+        'step' => 'payment',
+    ]));
 });
 
 test('standard flow payment link uses step confirmation', function () {
@@ -183,8 +195,20 @@ test('standard flow payment link uses step confirmation', function () {
     $appointment = phase4ConfirmedAppointment($user);
 
     $url = app(PrepareLaboratoryCheckoutPaymentLinkAction::class)($appointment);
+    $token = basename((string) parse_url($url, PHP_URL_PATH));
+    $resumeLink = LaboratoryCheckoutResumeLink::query()->where('token_hash', hash('sha256', $token))->firstOrFail();
 
-    expect($url)->toContain('step=confirmation');
+    expect($url)->toContain('/laboratory/checkout/resume/')
+        ->and(parse_url($url, PHP_URL_QUERY))->toBeNull()
+        ->and($token)->toMatch('/^[a-f0-9]{64}$/')
+        ->and($resumeLink->token_hash)->toBe(hash('sha256', $token))
+        ->and($resumeLink->expires_at->isFuture())->toBeTrue();
+
+    $this->assertDatabaseHas('laboratory_checkout_drafts', [
+        'customer_id' => $user->customer->id,
+        'laboratory_brand' => LaboratoryBrand::OLAB->value,
+        'checkout_step' => 'confirmation',
+    ]);
 });
 
 test('can send pending payment email only when appointment is payable', function () {

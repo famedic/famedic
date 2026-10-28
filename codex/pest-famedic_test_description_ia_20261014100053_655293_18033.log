@@ -1,0 +1,8 @@
+
+   PASS  Tests\Feature\Coupons\CouponRevocationAdminIsolatedTest
+  ✓ endpoint cancelar pendiente requiere permiso edit                    4.90s  
+  ✓ endpoint revocar requiere permiso edit                               4.85s  
+
+  Tests:    2 passed (6 assertions)
+  Duration: 9.83s
+

@@ -4,22 +4,17 @@ namespace Tests\Feature\Laboratory;
 
 use App\Actions\Laboratories\ResolveGdaResultsPdfAction;
 use App\Actions\Laboratories\StoreLaboratoryResultPdfAction;
-use App\Actions\Laboratories\SyncGdaResultPdfToStorageAction;
-use App\Actions\Laboratory\HandleResultsNotificationAction;
 use App\Enums\Gender;
 use App\Enums\LaboratoryBrand;
-use App\Jobs\Laboratory\SyncGdaResultPdfToStorageJob;
 use App\Models\Customer;
 use App\Models\LaboratoryNotification;
 use App\Models\LaboratoryPurchase;
 use App\Models\User;
-use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
-use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Storage;
-use RuntimeException;
 use PHPUnit\Framework\Attributes\Test;
+use RuntimeException;
 use Tests\TestCase;
 
 class GdaResultsQaReviewIsolatedTest extends TestCase
@@ -34,6 +29,8 @@ class GdaResultsQaReviewIsolatedTest extends TestCase
 
         Storage::fake();
         NotificationFacade::fake();
+        config(['permission.teams' => false]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->bootstrapIsolatedSchema();
     }
@@ -513,7 +510,7 @@ class GdaResultsQaReviewIsolatedTest extends TestCase
 
     private function makeMessageSendingEvent(array $to): \Illuminate\Mail\Events\MessageSending
     {
-        $message = (new \Symfony\Component\Mime\Email())
+        $message = (new \Symfony\Component\Mime\Email)
             ->subject('Test')
             ->text('Test body');
 
@@ -596,6 +593,16 @@ class GdaResultsQaReviewIsolatedTest extends TestCase
                 $table->id();
                 $table->foreignId('user_id')->constrained();
                 $table->timestamps();
+                $table->softDeletes();
+            });
+        }
+
+        if (! \Illuminate\Support\Facades\Schema::hasTable('laboratory_concierges')) {
+            \Illuminate\Support\Facades\Schema::create('laboratory_concierges', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->id();
+                $table->foreignId('administrator_id')->constrained();
+                $table->timestamps();
+                $table->softDeletes();
             });
         }
 
@@ -649,22 +656,52 @@ class GdaResultsQaReviewIsolatedTest extends TestCase
             'password' => bcrypt('secret'),
         ]);
 
-        $admin = \Illuminate\Support\Facades\DB::table('administrators')->insertGetId([
+        \Illuminate\Support\Facades\DB::table('administrators')->insert([
             'user_id' => $user->id,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        $permission = \Spatie\Permission\Models\Permission::findOrCreate('laboratory-notifications.monitor', 'web');
+        $permissions = [
+            'activecampaign.manage',
+            'administrators.manage',
+            'automation.manage',
+            'clinical-interpreter.manage',
+            'coupons.manage',
+            'customers.manage',
+            'documentation.manage',
+            'efevoo-tokens.manage',
+            'laboratory-notifications.monitor',
+            'laboratory-purchases.manage',
+            'laboratory-purchases.manage.vendor-payments',
+            'laboratory-stores.manage',
+            'laboratory-tests.manage',
+            'logs-general.manage',
+            'medical-attention-subscriptions.manage',
+            'monitoring-ai.manage',
+            'odessa-pre-enrollments.manage',
+            'odessa-pre-enrollments.view',
+            'odessa-reconciliation.manage',
+            'odessa-reconciliation.review',
+            'odessa-reconciliation.view',
+            'online-pharmacy-purchases.manage',
+            'online-pharmacy-purchases.manage.vendor-payments',
+            'payment-attempts.manage',
+            'simulators.manage',
+            'tax-profiles.manage',
+            'users.manage',
+            'view carts',
+            'view_config_monitor',
+        ];
 
-        \Illuminate\Support\Facades\DB::table('model_has_permissions')->insert([
-            'permission_id' => $permission->id,
-            'model_type' => \App\Models\Administrator::class,
-            'model_id' => $admin,
-        ]);
+        foreach ($permissions as $permissionName) {
+            \Spatie\Permission\Models\Permission::findOrCreate($permissionName, 'web');
+        }
 
-        $user->load('administrator');
+        $permission = \Spatie\Permission\Models\Permission::findByName('laboratory-notifications.monitor', 'web');
+        $administrator = $user->fresh('administrator')->administrator;
+        $administrator->givePermissionTo($permission);
 
-        return $user;
+        return $user->fresh('administrator');
     }
 }

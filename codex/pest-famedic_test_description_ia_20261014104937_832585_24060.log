@@ -1,0 +1,238 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\CartJourneyCheckoutFlowTest
+  ✓ it shows payment method selected in journey and timeline without m… 77.68s  
+  ✓ it shows appointment requested via checkout contact sync as waiting… 0.16s  
+  ✓ it shows confirmed appointment in journey for explicit cart appoint… 0.13s  
+  ✓ it does not contaminate current cart journey with historical purcha… 0.27s  
+  ✓ it shows call_requested from current cart in timeline                0.17s  
+  ✓ it records appointment_pending_5m for current cart appointment       0.14s  
+  ✓ it refuses tests when database is not the testing sqlite database    0.02s  
+  ✓ it derives journey payment method from checkout draft when event is… 0.14s  
+  ✓ it does not use historical payment attempt without cart_id in curre… 0.14s  
+  ✓ it does not use historical appointment without cart_id in current c… 0.13s  
+  ✓ it records checkout_started once across multiple draft sync steps    0.12s  
+  ✓ it uses checkout_visited for return visits without duplicating chec… 0.07s  
+  ✓ it shows a single checkout started label in journey timeline after…  0.19s  
+  ✓ it does not enqueue activecampaign dispatches for checkout_started…  0.07s  
+
+   PASS  Tests\Feature\Carts\CartAbandonmentEpisodeTest
+  ✓ internal cart updated_at bump without user event does not reset aba… 0.11s  
+  ✓ recordCheckoutVisit updates abandonment reference without creating…  0.09s  
+  ✓ recordAbandoned does not write user activity events                  0.08s  
+  ✓ confirmation starts a fresh abandonment window from confirmed_at     0.09s  
+  ✓ monitoring snapshot sync updating updated_at does not count as user… 0.06s  
+  ✓ cart_abandoned episode is idempotent per episode number              0.08s  
+
+   PASS  Tests\Feature\Carts\CartAbandonmentRegressionTest
+  ✓ appointment-first pending appointment excludes abandonment           0.06s  
+  ✓ appointment-first confirmed under threshold excludes abandonment     0.07s  
+  ✓ appointment-first confirmed after threshold abandons at payment sta… 0.08s  
+  ✓ standard flow customer with three purchases still abandons normally  0.08s  
+  ✓ lab cart without appointment requirement abandons normally           0.09s  
+  ✓ pharmacy cart abandons normally                                      0.04s  
+  ✓ pending appointment on another cart does not exclude current cart    0.08s  
+  ✓ soft deleted pending appointment does not exclude abandonment        0.08s  
+  ✓ empty active cart is not eligible for abandonment                    0.04s  
+  ✓ completed cart is not eligible for abandonment                       0.05s  
+
+   PASS  Tests\Feature\Carts\CartResumeRecoveredTest
+  ✓ full checkout get with open episode records one cart_resumed         0.29s  
+  ✓ second full checkout reload does not duplicate cart_resumed          0.21s  
+  ✓ partial inertia reload header does not record checkout visit activi… 0.11s  
+  ✓ admin appointment confirmation does not emit cart_resumed            0.08s  
+  ✓ purchase recovery records cart_recovered once                        0.11s  
+  ✓ checkout visit without open episode does not emit cart_resumed       0.13s  
+  ✓ full checkout get records checkout visit user activity               0.13s  
+
+   PASS  Tests\Feature\CartActiveCampaignAppointmentCallSignalsTest
+  ✓ it does not record appointment_pending_5m when appointment is confi… 0.09s  
+  ✓ it records appointment_pending_5m after threshold for unconfirmed a… 0.08s  
+  ✓ it records appointment_pending_5m only once when detector runs twic… 0.09s  
+  ✓ it reconciles appointment pending dispatches via sync command        0.08s  
+  ✓ it removes pending tag and sends confirmed site event on appointmen… 0.09s  
+  ✓ it does not record pending for completed or empty carts              0.07s  
+  ✓ it does not contaminate journey with appointment pending from anoth… 0.17s  
+  ✓ it records call_requested with tag and site event outbox entries     0.08s  
+  ✓ it records call_attempted with tag and site event outbox entries     0.07s  
+  ✓ it allows distinct call events for repeated legitimate interactions  0.09s  
+  ✓ it retries pending dispatch without duplicating rows for same inter… 0.08s  
+  ✓ it marks call signal dispatches skipped without http when email is…  0.07s  
+  ✓ it processes appointment pending site event job successfully         0.09s  
+  ✓ it runs delayed check appointment pending job path                   0.08s  
+  ✓ it shows appointment and call timeline labels in cart drawer         0.15s  
+  ✓ it detects stale pending appointments via artisan command            0.08s  
+  ✓ it does not mark appointment pending at 4 minutes 59 seconds         0.07s  
+  ✓ it marks appointment pending at exactly 5 minutes                    0.08s  
+  ✓ it emits only one confirmed site event when admin confirms twice     0.08s  
+  ✓ it does not record pending when check job runs after confirmation    0.09s  
+  ✓ it does not enqueue pending tag remove on cart completion without p… 0.10s  
+  ✓ it does not duplicate call_requested when callback data is unchange… 0.09s  
+  ✓ it does not duplicate call_attempted on rapid phone intent retry     0.11s  
+  ✓ it keeps the thirty second call_attempted dedupe window while allow… 0.14s  
+  ✓ it records whatsapp contact intent with checkout metadata before ex… 0.11s  
+  ✓ it does not trust contact metadata ids from another customer         0.11s  
+  ✓ it does not duplicate appointment_confirmed outbox when confirmatio… 0.11s  
+
+   PASS  Tests\Feature\CartActiveCampaignOutboxTest
+  ✓ it creates a single dispatch when cart_abandoned episode 1 is recor… 0.10s  
+  ✓ it does not duplicate dispatch when outbox enqueue runs twice        0.09s  
+  ✓ it creates a different dispatch for cart_abandoned episode 2         0.13s  
+  ✓ it marks dispatch synced on successful outbound job and updates leg… 0.09s  
+  ✓ it keeps failed dispatch with last_error and retries using the same… 0.10s  
+  ✓ it skips dispatch when cart user has no eligible email               0.08s  
+  ✓ it does not create dispatch for empty monitoring cart abandonment a… 0.03s  
+  ✓ it does not run legacy tag command when cart outbox is enabled       0.02s  
+  ✓ it shows outbound dispatch status in admin cart drawer               0.16s  
+  ✓ it does not call trackEvent during outbound cart abandoned processi… 0.10s  
+  ✓ it does not enqueue activecampaign dispatches for payment_method_se… 0.10s  
+
+   PASS  Tests\Feature\CartActiveCampaignSiteEventsTest
+  ✓ it creates site event dispatch for cart_abandoned episode 1          0.09s  
+  ✓ it does not duplicate site event dispatch when enqueue runs twice    0.10s  
+  ✓ it creates a second site event dispatch for cart_abandoned episode…  0.12s  
+  ✓ it creates tag_remove and site event dispatches for cart_resumed     0.12s  
+  ✓ it creates recovered cleanup dispatches including tag remove and si… 0.10s  
+  ✓ it retries failed site event using the same dispatch row             0.09s  
+  ✓ it keeps tag and site event dispatches independent on partial failu… 0.10s  
+  ✓ it skips outbound dispatches without http when email is not eligibl… 0.09s  
+  ✓ it generates two famedic_cart_abandoned site events across abandon…  0.11s  
+  ✓ it reconciles missing dispatches without duplicating existing ones   0.15s  
+  ✓ it shows tag and site event separately in admin cart drawer          0.15s  
+  ✓ it does not call trackcmp when cart site events flag is disabled     0.09s  
+  ✓ it marks site event dispatch synced only when trackEvent succeeds    0.10s  
+  ✓ it does not update cart_abandoned_tagged_at from site event dispatc… 0.10s  
+
+   FAIL  Tests\Feature\BackfillAppointmentCartLinksCommandTest
+  ✓ it proposes a unique high-confidence match in dry-run without modif… 0.05s  
+  ✓ it applies cart_id and creates appointment_requested on apply        0.07s  
+  ✓ it is idempotent on second apply run                                 0.07s  
+  ✓ it does not modify appointments that already have cart_id            0.04s  
+  ✓ it classifies two similar candidate carts as ambiguous               0.04s  
+  ✓ it does not match when brand differs from cart items                 0.04s  
+  ✓ it does not match appointments from another customer                 0.04s  
+  ✓ it does not enqueue activecampaign dispatches during backfill        0.06s  
+  ✓ it limits analysis with --appointment filter                         0.04s  
+  ✓ it blocks apply in production without force-production flag          0.03s  
+  ✓ it allows apply in production when force-production is provided      0.03s  
+  ✓ it respects forced cart filter when evidence is sufficient           0.04s  
+  ⨯ it runs only against testing sqlite database                         0.03s  
+
+   PASS  Tests\Feature\Laboratory\EmptyLaboratoryCartRedirectTest
+  ✓ laboratory checkout get redirects to laboratory tests when cart is…  0.07s  
+  ✓ duplicate laboratory checkout store redirects to recent purchase in… 0.07s  
+  ✓ laboratory checkout store with empty cart and no recent purchase re… 0.06s  
+
+   PASS  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstFlowTest
+  ✓ appointment first draft sync advances address to appointment         0.12s  
+  ✓ appointment first checkout rejects payment step before confirmed ap… 0.16s  
+  ✓ appointment first checkout rejects confirmation deep link before co… 0.15s  
+  ✓ appointment first checkout allows payment after confirmed appointme… 0.19s  
+  ✓ appointment first checkout advances appointment step to payment aft… 0.12s  
+  ✓ legacy draft at payment without appointment is normalized to appoin… 0.16s  
+  ✓ legacy draft with confirmed appointment opens payment step           0.11s  
+  ✓ appointment first draft sync rejects payment step before confirmed…  0.10s  
+  ✓ appointment first purchase store is blocked without confirmed appoi… 0.05s  
+  ✓ appointment first paypal create order is blocked without confirmed…  0.11s  
+  ✓ recurrent customer with three purchases keeps standard checkout flo… 0.19s  
+  ✓ appointment first appointment sync does not overwrite saved payment… 0.08s  
+  ✓ appointment sync reuses pending appointment instead of creating dup… 0.11s  
+  ✓ appointment sync creates exactly one appointment when cart has none  0.09s  
+  ✓ appointment sync reuses pending active cart appointment              0.10s  
+  ✓ appointment sync reuses valid confirmed active cart appointment      0.10s  
+  ✓ checkout does not create a new appointment when confirmed active ap… 0.23s  
+  ✓ repeated checkout get creates no more than one active appointment    0.28s  
+  ✓ multiple consecutive appointment sync calls do not increase active…  0.18s  
+  ✓ soft deleted appointment permits exactly one new active appointment  0.13s  
+  ✓ expired confirmed appointment progress has appointment but blocks p… 0.09s  
+  ✓ admin row still shows expired appointment payment blocked            0.08s  
+  ✓ step guard next draft step uses appointment after address in appoin… 0.05s  
+  ✓ step guard next draft step uses payment after address in standard f… 0.06s  
+
+   PASS  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase4Test
+  ✓ appointment first payment link uses step payment                     0.14s  
+  ✓ standard flow payment link uses step confirmation                    0.08s  
+  ✓ can send pending payment email only when appointment is payable      0.05s  
+  ✓ paid purchase suppresses pending payment email eligibility           0.07s  
+  ✓ appointment first notification uses confirmed subject                0.08s  
+  ✓ first confirmation transition is detected only once                  0.06s  
+  ✓ confirmed more than 24 hours ago but future appointment remains pay… 0.05s  
+  ✓ expired scheduled appointment blocks payment                         0.06s  
+  ✓ soft deleted appointment blocks payment link                         0.05s  
+  ✓ appointment from another cart does not unlock payment                0.05s  
+  ✓ legacy appointment without cart id remains payable when it is the o… 0.05s  
+  ✓ checkout deep link to payment redirects when appointment cancelled   0.17s  
+  ✓ confirmed appointment with future date allows checkout payment step  0.14s  
+  ✓ reprogramming confirmed appointment does not duplicate appointment_… 0.06s  
+  ✓ uses appointment first flow eligibility unchanged for phase four     0.05s  
+
+   PASS  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase5Test
+  ✓ confirmed appointment without scheduled date blocks payment          0.06s  
+  ✓ confirmed appointment with future date allows payment                0.07s  
+  ✓ paypal uses the same payment validity rule for missing schedule      0.11s  
+  ✓ checkout redirects to appointment when confirmed without scheduled…  0.12s  
+  ✓ appointment first email keeps confirmed copy                         0.09s  
+  ✓ standard flow email uses confirmed not pay to confirm copy           0.07s  
+  ✓ pending appointment excludes cart from abandonment detection         0.06s  
+  ✓ confirmed appointment resets abandonment reference to confirmed_at   0.06s  
+  ✓ confirmed unpaid appointment can be abandoned after threshold from…  0.07s  
+  ✓ cart resumed on checkout return after abandonment episode            0.17s  
+
+   PASS  Tests\Feature\Laboratory\LaboratoryCheckoutFlowEligibilityTest
+  ✓ uses appointment first flow with zero valid purchases and cart requ… 0.05s  
+  ✓ does not use appointment first flow with one valid purchase and car… 0.05s  
+  ✓ does not use appointment first flow with two valid purchases and ca… 0.05s  
+  ✓ does not use appointment first flow with three or more valid purcha… 0.06s  
+  ✓ does not use appointment first flow when cart does not require appo… 0.05s  
+  ✓ does not count soft-deleted purchases                                0.05s  
+  ✓ does not count cancelled purchases                                   0.05s  
+  ✓ does not count incomplete purchases without checkout transaction     0.06s  
+  ✓ does not count purchases with failed or pending transactions         0.05s  
+  ✓ counts zero total purchases completed with coupon balance            0.05s  
+  ✓ counts refunded purchases because checkout was completed             0.05s  
+  ✓ does not count simulated checkout transactions                       0.06s  
+  ✓ counts purchases globally across olab and swisslab brands            0.06s  
+  ✓ checkout exposes usesAppointmentFirstFlow for first-time customers…  0.20s  
+  ✓ checkout exposes usesAppointmentFirstFlow as false when cart does n… 0.20s  
+
+   PASS  Tests\Feature\LaboratoryCheckoutResumeLinkTest
+  ✓ it generates an opaque resume url without customer cart contact or…  0.08s  
+  ✓ it redirects the owner to protected checkout with the saved step an… 0.12s  
+  ✓ it keeps the laboratory brand from the cart when resuming checkout   0.16s  
+  ✓ it preserves the intended resume destination when the user is not a… 0.08s  
+  ✓ it rejects expired tokens safely                                     0.11s  
+  ✓ it rejects random tokens safely                                      0.06s  
+  ✓ it rejects manipulated tokens safely                                 0.09s  
+  ✓ it prevents another customer from using a valid resume token         0.11s  
+  ✓ it allows the same valid link to be opened more than once while the… 0.13s  
+  ✓ it resumes a pending cart instead of redirecting to an unrelated hi… 0.14s  
+  ✓ it resumes a pending cart at the saved confirmation step             0.11s  
+  ✓ it sends a completed cart without an explicit purchase to the purch… 0.11s  
+  ✓ it rejects revoked tokens without marking them as used               0.12s  
+  ✓ it prefers the explicitly associated purchase over a newer unrelate… 0.12s  
+  ✓ it does not reopen checkout when the cart already has a purchase     0.12s  
+  ✓ it reuses the same database row for repeated generations of the sam… 0.13s  
+  ✓ it uses the secure resume url when preparing pending checkout links… 0.10s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\BackfillAppointmentCartLinksCommandTest > it runs o…   
+  Failed asserting that two strings are identical.
+  -'sqlite'
+  +'mysql'
+  
+
+  at tests/Feature/BackfillAppointmentCartLinksCommandTest.php:295
+    291▕ });
+    292▕ 
+    293▕ it('runs only against testing sqlite database', function () {
+    294▕     expect(app()->environment())->toBe('testing')
+  ➜ 295▕         ->and(config('database.default'))->toBe('sqlite')
+    296▕         ->and(strtolower((string) config('database.connections.sqlite.database')))->toContain('test');
+    297▕ });
+    298▕
+
+  1   tests/Feature/BackfillAppointmentCartLinksCommandTest.php:295
+
+
+  Tests:    1 failed, 185 passed (626 assertions)
+  Duration: 95.68s
+

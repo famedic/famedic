@@ -1,0 +1,27 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase4Test
+  ✓ appointment first payment link uses step payment                    82.47s  
+  ⨯ standard flow payment link uses step confirmation                    0.12s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase4…   
+  Failed asserting that two strings are equal.
+  -'http://localhost/laboratory/olab/checkout?step=confirmation'
+  +'http://localhost/laboratory-purchases/1'
+  
+
+  at tests/Feature/Laboratory/LaboratoryCheckoutAppointmentFirstPhase4Test.php:207
+    203▕         ->and($token)->toMatch('/^[a-f0-9]{64}$/')
+    204▕         ->and($resumeLink->token_hash)->toBe(hash('sha256', $token))
+    205▕         ->and($resumeLink->expires_at->isFuture())->toBeTrue();
+    206▕ 
+  ➜ 207▕     $this->actingAs($user)->get($url)->assertRedirect(route('laboratory.checkout', [
+    208▕         'laboratory_brand' => LaboratoryBrand::OLAB,
+    209▕         'step' => 'confirmation',
+    210▕     ]));
+    211▕ });
+
+
+  Tests:    1 failed, 1 passed (14 assertions)
+  Duration: 82.66s
+

@@ -1,0 +1,151 @@
+
+   PASS  Tests\Feature\Admin\LaboratoryPreparationMonitorTest
+  ✓ administrador puede ver monitor con metricas v3 y pendientes         2.14s  
+  ✓ metricas usan ids de summary y el mismo universo filtrado que la ta… 2.84s  
+  ✓ acceso requiere rol administrador exclusivo                          1.87s  
+  ✓ filtros por regla estado openai modo y paginacion funcionan          3.07s  
+  ✓ detalle muestra indicaciones sanitiza secretos y explica flag apaga… 1.77s  
+  ✓ monitor no invoca openai real                                        3.47s  
+
+   PASS  Tests\Feature\Admin\LaboratoryResultsCenterTest
+  ✓ admin autorizado puede acceder                                       3.90s  
+  ✓ usuario sin permiso no puede acceder                                 4.52s  
+  ✓ listado y paginacion funcionan                                       5.09s  
+  ✓ filtros funcionan                                                    4.33s  
+  ✓ purchase sin resultado es not available                              4.07s  
+  ✓ purchase con pdf sin report es received                              4.05s  
+  ✓ extraction pending es processing                                     4.08s  
+  ✓ report estructurado es structured                                    4.44s  
+  ✓ validation manual review es review                                   4.10s  
+  ✓ report publicado es published                                        4.02s  
+  ✓ extraction failed es failed                                          4.09s  
+  ✓ errores se sanitizan y no exponen pii ni secretos ni raw payload     6.41s  
+
+   PASS  Tests\Feature\Admin\LaboratoryBilling\LaboratoryBillingModuleIsolatedTest
+  ✓ access allows invoice and manage permissions                         1.98s  
+  ✓ metrics count pending completed overdue and in progress              2.02s  
+  ✓ cancelled purchases are excluded from billing queries metrics and e… 2.03s  
+  ✓ requests query searches by folio and rfc and filters documents       1.86s  
+  ✓ invoices query distinguishes complete and missing xml                1.91s  
+  ✓ tax profiles query tracks usage soft delete and hides paths          1.88s  
+  ✓ authorized user can open module pages and unauthorized gets 403      2.24s  
+  ✓ automatic reports authorize superadmin manage and reports permissio… 2.06s  
+  ✓ invoice manager cannot submit automatic report actions directly      1.86s  
+  ✓ failed jobs screen lists failures for log admins only                1.96s  
+  ✓ invoice manager does not see failed jobs navigation                  1.87s  
+  ✓ automatic report index exposes summary cards without loading full c… 1.97s  
+  ✓ automatic report preview is read only authorized and uses report da… 2.03s  
+  ✓ automatic report form rejects invalid email normalizes recipients a… 1.91s  
+  ✓ completed invoice stays in original period after document replace    1.86s  
+  ✓ invoice permission allows upload manage and superadmin deny others   1.95s  
+  ✓ invoice admin can store and replace invoice documents via http       2.01s  
+  ✓ export invoices uses completed at not created at as completion       1.86s  
+  ✓ automatic report limits pending and overdue to selected period       1.96s  
+  ✓ automatic report uses one period cohort for preview email excel and… 2.45s  
+  ✓ automatic report notification attaches excel from storage disk       1.95s  
+  ✓ automatic report notification logs missing attachment without local… 1.90s  
+  ✓ automatic report notification has no attachment when excel is not i… 1.80s  
+  ✓ automatic report schedule calculates next run and paused has no nex… 1.84s  
+  ✓ dispatcher creates one scheduled run for due configuration           1.79s  
+  ✓ report job generates excel and sends notification without real mail  5.85s  
+  ✓ automatic report handles legacy complete invoices filters stores an… 6.12s  
+  ✓ automatic report labels missing store without blank excel cells      1.97s  
+  ✓ automatic report can filter requests without store                   1.91s  
+  ✓ report job uses link for large excel and exports expected sheets     1.94s  
+  ✓ sent report job is not delivered again                               1.83s  
+  ✓ failed report job records sanitized error without sending mail       1.90s  
+  ✓ manual and test runs do not change the scheduled next run            1.86s  
+  ✓ manual custom range persists dates filters and does not change sche… 1.87s  
+  ✓ manual custom range validation rejects invalid future and too large… 1.87s  
+  ✓ custom range is rejected for test runs and schedule configuration    1.81s  
+  ✓ manual idempotency token prevents duplicate direct clicks            1.86s  
+  ✓ custom preview is read only and uses selected range                  1.85s  
+  ✓ job notification excel and history use manual run stored period      1.99s  
+  ✓ paused schedule is not dispatched                                    1.75s  
+  ✓ report download requires permission signature live link and existin… 1.96s  
+  ✓ prune report files deletes expired excel and keeps history           1.76s  
+  ✓ historical complete backfill uses least of created and updated       1.83s  
+Migration completed. Updated 0 subscriptions, skipped 0.
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\Admin\CouponAuthorizationInboxTest
+  ⨯ it permite al autorizador ver la bandeja de autorizaciones
+  ✓ it bloquea la bandeja a usuarios sin rol autorizador                76.57s  
+  ✓ it comparte navegación de autorizador solo para autorizadores        0.21s  
+  ✓ it muestra detalle de solicitud pendiente                            0.11s  
+  ✓ it impide al creador aprobar su propia solicitud                     0.12s  
+  ✓ it aprueba un maestro pendiente con OTP válido                       0.11s  
+  ✓ it rechaza un maestro pendiente con motivo obligatorio               0.08s  
+  ✓ it exige motivo mínimo al rechazar                                   0.08s  
+  ✓ it no permite doble aprobación del mismo autorizador en asignación   0.11s  
+  ✓ it bloquea promo codes cuyo maestro está pendiente en checkout       0.04s  
+  ✓ it rechaza OTP inválido al verificar aprobación                      0.08s  
+  ✓ it lista códigos promocionales pendientes en la bandeja              0.13s  
+  ✓ it envía notificación al aprobar maestro pendiente                   0.09s  
+
+   PASS  Tests\Feature\Admin\CouponAssignCreditTypesTest
+  ✓ assign puede crear código promocional compartido                     0.09s  
+  ✓ assign normaliza código promocional                                  0.07s  
+  ✓ assign rechaza código promocional duplicado                          0.06s  
+  ✓ assign exige max_redemptions para código promocional                 0.07s  
+  ✓ saldo a favor no exige vigencia en assign                            0.08s  
+  ✓ endpoint check-code indica disponibilidad                            0.07s  
+  ✓ generador backend produce código legible único                       0.02s  
+
+   PASS  Tests\Feature\Admin\CouponAssignOtpTest
+  ✓ el servicio OTP de cupones está habilitado por configuración         0.02s  
+  ✓ crear cupón nuevo exige token OTP cuando está habilitado             0.04s  
+  ✓ flujo OTP completo permite crear cupón y notifica autorizadores      0.07s  
+  ✓ OTP inválido rechaza verificación                                    0.07s  
+  ✓ OTP verificado no puede reutilizarse para crear otro cupón           0.07s  
+  ✓ hash OTP coincide con beneficiarios y tipos mixtos del request       0.02s  
+  ✓ OTP de laboratorio no permite verificar asignación de cupón          0.03s  
+  ✓ OTP de otro usuario no permite crear cupón                           0.04s  
+  ✓ reenvío OTP respeta rate limit                                       0.04s  
+  ✓ demasiados intentos fallidos bloquean validación OTP                 0.05s  
+  ✓ no se notifica a autorizadores si el cupón no se creó                0.05s  
+  ✓ cupón existente no exige OTP al asignar                              0.05s  
+  ✓ endpoint HTTP de envío OTP responde JSON                             0.04s  
+  ✓ notificador envía correo a autorizadores tras crear cupón            0.04s  
+
+   PASS  Tests\Feature\Admin\PromoCodeAdminTest
+  ✓ admin puede ver listado de promo codes                               0.13s  
+  ✓ admin puede crear código compartido                                  0.07s  
+  ✓ el código se normaliza al crear                                      0.08s  
+  ✓ no permite código duplicado                                          0.08s  
+  ✓ no permite monto inválido                                            0.07s  
+  ✓ no permite max_redemptions inválido                                  0.07s  
+  ✓ no permite expiración anterior a inicio                              0.07s  
+  ✓ admin puede ver detalle con historial de redenciones                 0.12s  
+  ✓ admin puede desactivar código                                        0.07s  
+  ✓ usuario sin cuenta admin no puede acceder a crear promo codes        0.04s  
+  ✓ usuario sin cuenta admin no puede desactivar promo codes             0.05s  
+  ✓ administrador sin permiso cupones.create no puede crear promo codes  0.07s  
+  ✓ administrador sin permiso cupones.edit no puede desactivar promo co… 0.07s  
+  ✓ creación exige OTP cuando está habilitado                            0.07s  
+  ✓ creación consume OTP verificado cuando está habilitado               0.08s  
+  ✓ correo a autorizadores incluye código promocional y máx usos         0.05s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Admin\CouponAuthorizationInboxTest…   QueryException   
+  SQLSTATE[42S01]: Base table or view already exists: 1050 Table 'laboratory_notifications' already exists (Connection: mysql, SQL: create table `laboratory_notifications` (`id` bigint unsigned not null auto_increment primary key, `laboratory_quote_id` bigint unsigned null, `laboratory_purchase_id` bigint unsigned null, `gda_order_id` varchar(255) null, `gda_external_id` varchar(255) null, `gda_acuse` varchar(255) null, `notification_type` varchar(255) not null, `status` varchar(255) not null, `gda_status` varchar(255) null, `resource_type` varchar(255) null, `payload` json not null, `gda_message` json null, `results_pdf_base64` longtext null, `results_received_at` timestamp null, `created_at` timestamp null, `updated_at` timestamp null, `deleted_at` timestamp null) default character set utf8mb4 collate 'utf8mb4_unicode_ci')
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:571
+    567▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    568▕ 
+    569▕             $this->recordsHaveBeenModified();
+    570▕ 
+  ➜ 571▕             return $statement->execute();
+    572▕         });
+    573▕     }
+    574▕ 
+    575▕     /**
+
+      [2m+8 vendor frames [22m
+  9   database/migrations/2025_11_21_171026_create_laboratory_notifications_table.php:14
+      [2m+37 vendor frames [22m
+  47  tests/TestCase.php:95
+
+
+  Tests:    1 failed, 110 passed (995 assertions)
+  Duration: 255.03s
+

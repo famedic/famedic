@@ -1,0 +1,17 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Unit\LaboratoryNotificationPdfRefreshTest
+  ✓ it refreshes cached pdf when a newer results notification exists f… 78.96s  
+  ✓ it does not refresh when results are stored on purchase              0.05s  
+  ✓ it refreshes pdf that came from webhook payload instead of consult…  0.03s  
+  ✓ it shows updated results badge when a newer notification arrives af… 0.03s  
+  ✓ it hides updated results badge after patient accessed the latest no… 0.03s  
+  ✓ it does not mark results updated when only the purchase pdf hash ch… 0.04s  
+
+   PASS  Tests\Unit\ResolveLaboratoryPurchasePdfPathHashTest
+  ✓ it keeps purchase pdf hash stable when only preparation metadata ch… 0.05s  
+  ✓ it rotates purchase pdf hash when visible preparation content chang… 0.04s  
+
+  Tests:    8 passed (8 assertions)
+  Duration: 79.31s
+

@@ -1,0 +1,169 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Unit\LaboratoryNotificationPdfRefreshTest
+  ⨯ it refreshes cached pdf when a newer results notification exists for the same order
+  ⨯ it does not refresh when results are stored on purchase
+  ⨯ it refreshes pdf that came from webhook payload instead of consult api
+  ⨯ it shows updated results badge when a newer notification arrives after patient access
+  ⨯ it hides updated results badge after patient accessed the latest notification
+  ⨯ it does not mark results updated when only the purchase pdf hash changes
+
+   FAIL  Tests\Unit\ResolveLaboratoryPurchasePdfPathHashTest
+  ⨯ it keeps purchase pdf hash stable when only preparation metadata changes
+  ⨯ it rotates purchase pdf hash when visible preparation content changes
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 4163 User-level lock name 'famedic-test-db:famedic_test_description_ia_20261014083756_247902' should not exceed 64 characters. (Connection: mysql, SQL: SELECT GET_LOCK(famedic-test-db:famedic_test_description_ia_20261014083756_247902, 0) as acquired)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:412
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕ 
+  ➜ 412▕             $statement->execute();
+    413▕ 
+    414▕             return $statement->fetchAll();
+    415▕         });
+    416▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/TestCase.php:138
+  9   tests/TestCase.php:79
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 4163 User-level lock name 'famedic-test-db:famedic_test_description_ia_20261014083756_247902' should not exceed 64 characters. (Connection: mysql, SQL: SELECT GET_LOCK(famedic-test-db:famedic_test_description_ia_20261014083756_247902, 0) as acquired)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:412
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕ 
+  ➜ 412▕             $statement->execute();
+    413▕ 
+    414▕             return $statement->fetchAll();
+    415▕         });
+    416▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/TestCase.php:138
+  9   tests/TestCase.php:79
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 4163 User-level lock name 'famedic-test-db:famedic_test_description_ia_20261014083756_247902' should not exceed 64 characters. (Connection: mysql, SQL: SELECT GET_LOCK(famedic-test-db:famedic_test_description_ia_20261014083756_247902, 0) as acquired)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:412
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕ 
+  ➜ 412▕             $statement->execute();
+    413▕ 
+    414▕             return $statement->fetchAll();
+    415▕         });
+    416▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/TestCase.php:138
+  9   tests/TestCase.php:79
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 4163 User-level lock name 'famedic-test-db:famedic_test_description_ia_20261014083756_247902' should not exceed 64 characters. (Connection: mysql, SQL: SELECT GET_LOCK(famedic-test-db:famedic_test_description_ia_20261014083756_247902, 0) as acquired)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:412
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕ 
+  ➜ 412▕             $statement->execute();
+    413▕ 
+    414▕             return $statement->fetchAll();
+    415▕         });
+    416▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/TestCase.php:138
+  9   tests/TestCase.php:79
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 4163 User-level lock name 'famedic-test-db:famedic_test_description_ia_20261014083756_247902' should not exceed 64 characters. (Connection: mysql, SQL: SELECT GET_LOCK(famedic-test-db:famedic_test_description_ia_20261014083756_247902, 0) as acquired)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:412
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕ 
+  ➜ 412▕             $statement->execute();
+    413▕ 
+    414▕             return $statement->fetchAll();
+    415▕         });
+    416▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/TestCase.php:138
+  9   tests/TestCase.php:79
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\LaboratoryNotificationPdfRefreshTest >…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 4163 User-level lock name 'famedic-test-db:famedic_test_description_ia_20261014083756_247902' should not exceed 64 characters. (Connection: mysql, SQL: SELECT GET_LOCK(famedic-test-db:famedic_test_description_ia_20261014083756_247902, 0) as acquired)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:412
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕ 
+  ➜ 412▕             $statement->execute();
+    413▕ 
+    414▕             return $statement->fetchAll();
+    415▕         });
+    416▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/TestCase.php:138
+  9   tests/TestCase.php:79
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\ResolveLaboratoryPurchasePdfPathHashTe…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 4163 User-level lock name 'famedic-test-db:famedic_test_description_ia_20261014083756_247902' should not exceed 64 characters. (Connection: mysql, SQL: SELECT GET_LOCK(famedic-test-db:famedic_test_description_ia_20261014083756_247902, 0) as acquired)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:412
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕ 
+  ➜ 412▕             $statement->execute();
+    413▕ 
+    414▕             return $statement->fetchAll();
+    415▕         });
+    416▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/TestCase.php:138
+  9   tests/TestCase.php:79
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Unit\ResolveLaboratoryPurchasePdfPathHashTe…  QueryException   
+  SQLSTATE[42000]: Syntax error or access violation: 4163 User-level lock name 'famedic-test-db:famedic_test_description_ia_20261014083756_247902' should not exceed 64 characters. (Connection: mysql, SQL: SELECT GET_LOCK(famedic-test-db:famedic_test_description_ia_20261014083756_247902, 0) as acquired)
+
+  at vendor/laravel/framework/src/Illuminate/Database/Connection.php:412
+    408▕             );
+    409▕ 
+    410▕             $this->bindValues($statement, $this->prepareBindings($bindings));
+    411▕ 
+  ➜ 412▕             $statement->execute();
+    413▕ 
+    414▕             return $statement->fetchAll();
+    415▕         });
+    416▕     }
+
+      [2m+7 vendor frames [22m
+  8   tests/TestCase.php:138
+  9   tests/TestCase.php:79
+
+
+  Tests:    8 failed (0 assertions)
+  Duration: 90.15s
+

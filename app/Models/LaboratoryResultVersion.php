@@ -6,6 +6,7 @@ use App\Enums\LaboratoryResultPdfClassification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LaboratoryResultVersion extends Model
 {
@@ -42,5 +43,10 @@ class LaboratoryResultVersion extends Model
     public function laboratoryNotification(): BelongsTo
     {
         return $this->belongsTo(LaboratoryNotification::class);
+    }
+
+    public function resultReports(): HasMany
+    {
+        return $this->hasMany(LaboratoryResultReport::class);
     }
 }

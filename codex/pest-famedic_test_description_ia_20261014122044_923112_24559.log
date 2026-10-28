@@ -1,0 +1,65 @@
+
+   PASS  Tests\Feature\Admin\LaboratoryBilling\LaboratoryBillingModuleIsolatedTest
+  ✓ access allows invoice and manage permissions                         2.13s  
+  ✓ metrics count pending completed overdue and in progress              2.04s  
+  ✓ cancelled purchases are excluded from billing queries metrics and e… 2.03s  
+  ✓ requests query searches by folio and rfc and filters documents       1.86s  
+  ✓ invoices query distinguishes complete and missing xml                1.83s  
+  ✓ tax profiles query tracks usage soft delete and hides paths          1.88s  
+  ✓ authorized user can open module pages and unauthorized gets 403      2.40s  
+  ✓ automatic reports authorize superadmin manage and reports permissio… 2.02s  
+  ✓ invoice manager cannot submit automatic report actions directly      1.87s  
+  ✓ failed jobs screen lists failures for log admins only                2.04s  
+  ✓ invoice manager does not see failed jobs navigation                  1.80s  
+  ✓ automatic report index exposes summary cards without loading full c… 1.96s  
+  ✓ automatic report preview is read only authorized and uses report da… 1.96s  
+  ✓ automatic report form rejects invalid email normalizes recipients a… 4.49s  
+  ✓ completed invoice stays in original period after document replace    1.82s  
+  ✓ invoice permission allows upload manage and superadmin deny others   1.93s  
+  ✓ invoice admin can store and replace invoice documents via http       1.89s  
+  ✓ export invoices uses completed at not created at as completion       1.91s  
+  ✓ automatic report limits pending and overdue to selected period       1.88s  
+  ✓ automatic report uses one period cohort for preview email excel and… 2.42s  
+  ✓ automatic report notification attaches excel from storage disk       1.94s  
+  ✓ automatic report notification logs missing attachment without local… 1.95s  
+  ✓ automatic report notification has no attachment when excel is not i… 1.93s  
+  ✓ automatic report schedule calculates next run and paused has no nex… 2.08s  
+  ✓ dispatcher creates one scheduled run for due configuration           2.12s  
+  ✓ report job generates excel and sends notification without real mail  2.36s  
+  ✓ automatic report handles legacy complete invoices filters stores an… 6.53s  
+  ✓ automatic report labels missing store without blank excel cells      1.81s  
+  ✓ automatic report can filter requests without store                   1.94s  
+  ✓ report job uses link for large excel and exports expected sheets     1.93s  
+  ✓ sent report job is not delivered again                               1.80s  
+  ✓ failed report job records sanitized error without sending mail       1.91s  
+  ✓ manual and test runs do not change the scheduled next run            1.89s  
+  ✓ manual custom range persists dates filters and does not change sche… 1.81s  
+  ✓ manual custom range validation rejects invalid future and too large… 1.86s  
+  ✓ custom range is rejected for test runs and schedule configuration    1.87s  
+  ✓ manual idempotency token prevents duplicate direct clicks            1.80s  
+  ✓ custom preview is read only and uses selected range                  1.84s  
+  ✓ job notification excel and history use manual run stored period      5.86s  
+  ✓ paused schedule is not dispatched                                    2.14s  
+  ✓ report download requires permission signature live link and existin… 2.06s  
+  ✓ prune report files deletes expired excel and keeps history           1.81s  
+  ✓ historical complete backfill uses least of created and updated       1.79s  
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Admin\CouponAuthorizationInboxTest
+  ✓ it permite al autorizador ver la bandeja de autorizaciones          74.99s  
+  ✓ it bloquea la bandeja a usuarios sin rol autorizador                 0.06s  
+  ✓ it comparte navegación de autorizador solo para autorizadores        0.19s  
+  ✓ it muestra detalle de solicitud pendiente                            0.11s  
+  ✓ it impide al creador aprobar su propia solicitud                     0.12s  
+  ✓ it aprueba un maestro pendiente con OTP válido                       0.10s  
+  ✓ it rechaza un maestro pendiente con motivo obligatorio               0.08s  
+  ✓ it exige motivo mínimo al rechazar                                   0.08s  
+  ✓ it no permite doble aprobación del mismo autorizador en asignación   0.11s  
+  ✓ it bloquea promo codes cuyo maestro está pendiente en checkout       0.05s  
+  ✓ it rechaza OTP inválido al verificar aprobación                      0.07s  
+  ✓ it lista códigos promocionales pendientes en la bandeja              0.13s  
+  ✓ it envía notificación al aprobar maestro pendiente                   0.10s  
+
+  Tests:    56 passed (496 assertions)
+  Duration: 171.44s
+

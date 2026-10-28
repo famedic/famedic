@@ -22,14 +22,24 @@
         <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
         <env name="BCRYPT_ROUNDS" value="4" force="true"/>
         <env name="CACHE_STORE" value="array" force="true"/>
-        <env name="DB_CONNECTION" value="sqlite" force="true"/>
-        <env name="DB_DATABASE" value="test_db.sqlite" force="true"/>
+        <env name="TEST_DB_CONNECTION" value="mysql"/>
+        <env name="TEST_DB_DATABASE" value="famedic_test_description_ia"/>
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_DATABASE" value="famedic_test_description_ia"/>
+        <env name="DB_HOST" value="mysql"/>
+        <env name="DB_USERNAME" value="famedic"/>
+        <env name="DB_PASSWORD" value="famedic"/>
         <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="ACTIVE_CAMPAIGN_ENABLED" value="false" force="true"/>
+        <env name="ACTIVECAMPAIGN_CART_OUTBOX_ENABLED" value="false" force="true"/>
+        <env name="ACTIVECAMPAIGN_TAG_ABANDONED_CARTS_ENABLED" value="false" force="true"/>
         <env name="PULSE_ENABLED" value="false" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>
         <env name="TELESCOPE_ENABLED" value="false" force="true"/>
         <env name="SCOUT_DRIVER" value="null" force="true"/>
         <env name="COUPON_CREATION_OTP_REQUIRED" value="true" force="true"/>
+        <env name="LAB_PREPARATION_DETERMINISTIC_V3_ENABLED" value="false" force="true"/>
+        <env name="LAB_PREPARATION_DETERMINISTIC_V3_SHADOW_ENABLED" value="false" force="true"/>
     </php>
 </phpunit>

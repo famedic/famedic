@@ -1,0 +1,84 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   FAIL  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase4Test
+  ⨯ appointment first payment link uses step payment                    79.83s  
+  ⨯ standard flow payment link uses step confirmation                    0.09s  
+  ✓ can send pending payment email only when appointment is payable      0.06s  
+  ✓ paid purchase suppresses pending payment email eligibility           0.06s  
+  ✓ appointment first notification uses confirmed subject                0.06s  
+  ✓ first confirmation transition is detected only once                  0.07s  
+  ✓ confirmed more than 24 hours ago but future appointment remains pay… 0.06s  
+  ✓ expired scheduled appointment blocks payment                         0.07s  
+  ✓ soft deleted appointment blocks payment link                         0.07s  
+  ✓ appointment from another cart does not unlock payment                0.06s  
+  ✓ legacy appointment without cart id remains payable when it is the o… 0.06s  
+  ✓ checkout deep link to payment redirects when appointment cancelled   0.21s  
+  ✓ confirmed appointment with future date allows checkout payment step  0.25s  
+  ✓ reprogramming confirmed appointment does not duplicate appointment_… 0.06s  
+  ✓ uses appointment first flow eligibility unchanged for phase four     0.06s  
+
+   PASS  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase5Test
+  ✓ confirmed appointment without scheduled date blocks payment          0.08s  
+  ✓ confirmed appointment with future date allows payment                0.07s  
+  ✓ paypal uses the same payment validity rule for missing schedule      0.12s  
+  ✓ checkout redirects to appointment when confirmed without scheduled…  0.11s  
+  ✓ appointment first email keeps confirmed copy                         0.06s  
+  ✓ standard flow email uses confirmed not pay to confirm copy           0.05s  
+  ✓ pending appointment excludes cart from abandonment detection         0.06s  
+  ✓ confirmed appointment resets abandonment reference to confirmed_at   0.07s  
+  ✓ confirmed unpaid appointment can be abandoned after threshold from…  0.07s  
+  ✓ cart resumed on checkout return after abandonment episode            0.16s  
+
+   PASS  Tests\Feature\LaboratoryCheckoutResumeLinkTest
+  ✓ it generates an opaque resume url without customer cart contact or…  0.09s  
+  ✓ it redirects the owner to protected checkout with the saved step an… 0.11s  
+  ✓ it keeps the laboratory brand from the cart when resuming checkout   0.11s  
+  ✓ it preserves the intended resume destination when the user is not a… 0.08s  
+  ✓ it rejects expired tokens safely                                     0.10s  
+  ✓ it rejects random tokens safely                                      0.05s  
+  ✓ it rejects manipulated tokens safely                                 0.10s  
+  ✓ it prevents another customer from using a valid resume token         0.10s  
+  ✓ it allows the same valid link to be opened more than once while the… 0.12s  
+  ✓ it does not reopen checkout when the cart already has a purchase     0.10s  
+  ✓ it reuses the same database row for repeated generations of the sam… 0.11s  
+  ✓ it uses the secure resume url when preparing pending checkout links… 0.10s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\LaboratoryChecko…  ModelNotFoundException   
+  No query results for model [App\Models\LaboratoryCheckoutResumeLink].
+
+  at vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:689
+    685▕         if (! is_null($model = $this->first($columns))) {
+    686▕             return $model;
+    687▕         }
+    688▕ 
+  ➜ 689▕         throw (new ModelNotFoundException)->setModel(get_class($this->model));
+    690▕     }
+    691▕ 
+    692▕     /**
+    693▕      * Execute the query and get the first result or call a callback.
+
+      [2m+1 vendor frames [22m
+  2   tests/Feature/Laboratory/LaboratoryCheckoutAppointmentFirstPhase4Test.php:174
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\Laboratory\LaboratoryChecko…  ModelNotFoundException   
+  No query results for model [App\Models\LaboratoryCheckoutResumeLink].
+
+  at vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php:689
+    685▕         if (! is_null($model = $this->first($columns))) {
+    686▕             return $model;
+    687▕         }
+    688▕ 
+  ➜ 689▕         throw (new ModelNotFoundException)->setModel(get_class($this->model));
+    690▕     }
+    691▕ 
+    692▕     /**
+    693▕      * Execute the query and get the first result or call a callback.
+
+      [2m+1 vendor frames [22m
+  2   tests/Feature/Laboratory/LaboratoryCheckoutAppointmentFirstPhase4Test.php:199
+
+
+  Tests:    2 failed, 35 passed (94 assertions)
+  Duration: 83.18s
+

@@ -1,0 +1,9 @@
+Migration completed. Updated 0 subscriptions, skipped 0.
+
+   PASS  Tests\Feature\Laboratory\LaboratoryCheckoutAppointmentFirstPhase4Test
+  ✓ appointment first payment link uses step payment                    86.44s  
+  ✓ standard flow payment link uses step confirmation                    0.10s  
+
+  Tests:    2 passed (13 assertions)
+  Duration: 86.61s
+

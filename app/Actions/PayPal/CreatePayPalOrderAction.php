@@ -18,7 +18,6 @@ use App\Services\Carts\CartEventRecorder;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use App\Services\PromoCodeService;
 use App\Services\PayPalService;
-use App\Services\Laboratory\UncertainGdaPaymentGuard;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -32,7 +31,6 @@ class CreatePayPalOrderAction
         private PromoCodeService $promoCodeService,
         private SyncMonitoringCartService $syncMonitoringCartService,
         private CartEventRecorder $cartEventRecorder,
-        private UncertainGdaPaymentGuard $uncertainGdaPaymentGuard,
     ) {
     }
 
@@ -107,8 +105,12 @@ class CreatePayPalOrderAction
 
         $this->syncMonitoringCartService->syncLaboratory($customer, $clientContext);
         $monitoringCart = $this->syncMonitoringCartService->activeLaboratoryCart($customer, $laboratoryBrand);
-
-        return $this->uncertainGdaPaymentGuard->withCartLock($monitoringCart, function () use (
+        return app(\App\Services\Laboratory\UncertainGdaPaymentGuard::class)->withCartLock($monitoringCart, function () use (
+            $customer, $address, $contact, $laboratoryBrand, $laboratoryAppointment, $totalCents,
+            $couponId, $promoValidationToken, $cartHash, $discountCents, $amountToChargeCents, $amount, $clientContext, $monitoringCart,
+        ) {
+        return DB::transaction(function () use (
+            $monitoringCart,
             $customer,
             $address,
             $contact,
@@ -123,76 +125,62 @@ class CreatePayPalOrderAction
             $amount,
             $clientContext,
         ) {
-            return DB::transaction(function () use (
-                $customer,
-                $address,
-                $contact,
-                $laboratoryBrand,
-                $laboratoryAppointment,
-                $totalCents,
-                $couponId,
-                $promoValidationToken,
-                $cartHash,
-                $discountCents,
-                $amountToChargeCents,
-                $amount,
-                $clientContext,
-            ) {
-                $tempReference = 'PAYPAL-PENDING-' . Str::uuid()->toString();
+            $tempReference = 'PAYPAL-PENDING-' . Str::uuid()->toString();
 
-                $transaction = Transaction::create([
-                    'transaction_amount_cents' => $amountToChargeCents,
-                    'payment_method' => 'paypal',
-                    'payment_provider' => 'paypal',
-                    'gateway' => 'paypal',
-                    'reference_id' => $tempReference,
-                    'payment_status' => 'pending',
-                    'details' => array_filter([
-                        'customer_id' => $customer->id,
-                        'contact_id' => $contact?->id,
-                        'address_id' => $address->id,
-                        'laboratory_brand' => $laboratoryBrand->value,
-                        'laboratory_appointment_id' => $laboratoryAppointment?->id,
-                        'total_cents' => $totalCents,
-                        'cart_hash' => $cartHash,
-                        'coupon_id' => $couponId,
-                        'promo_validation_token' => $promoValidationToken,
-                        'coupon_amount_cents' => $discountCents,
-                        'promo_discount_cents' => $promoValidationToken !== null ? $discountCents : null,
-                        'original_total_cents' => $totalCents,
-                        'amount_charged_cents' => $amountToChargeCents,
-                    ], fn ($value) => $value !== null),
-                ]);
-
-                $customId = 'fp-' . $transaction->id;
-
-                $paypal = $this->payPalService->createOrder(
-                    $amount,
-                    'MXN',
-                    $customId,
-                    'Laboratorio ' . $laboratoryBrand->value
-                );
-
-                $transaction->update([
-                    'reference_id' => $paypal['order_id'],
-                    'provider_order_id' => $paypal['order_id'],
-                    'raw_response' => $paypal['raw'],
-                    'gateway_response' => $paypal['raw'],
-                ]);
-
-                Log::info('[PayPal] Orden creada', [
-                    'transaction_id' => $transaction->id,
-                    'paypal_order_id' => $paypal['order_id'],
+            $transaction = Transaction::create([
+                'transaction_amount_cents' => $amountToChargeCents,
+                'payment_method' => 'paypal',
+                'payment_provider' => 'paypal',
+                'gateway' => 'paypal',
+                'reference_id' => $tempReference,
+                'payment_status' => 'pending',
+                'details' => array_filter([
                     'customer_id' => $customer->id,
-                ]);
+                    'cart_id' => $monitoringCart->id,
+                    'contact_id' => $contact?->id,
+                    'address_id' => $address->id,
+                    'laboratory_brand' => $laboratoryBrand->value,
+                    'laboratory_appointment_id' => $laboratoryAppointment?->id,
+                    'total_cents' => $totalCents,
+                    'cart_hash' => $cartHash,
+                    'coupon_id' => $couponId,
+                    'promo_validation_token' => $promoValidationToken,
+                    'coupon_amount_cents' => $discountCents,
+                    'promo_discount_cents' => $promoValidationToken !== null ? $discountCents : null,
+                    'original_total_cents' => $totalCents,
+                    'amount_charged_cents' => $amountToChargeCents,
+                ], fn ($value) => $value !== null),
+            ]);
 
-                $this->recordPaymentStarted($customer, $laboratoryBrand, $transaction, $amountToChargeCents, $clientContext);
+            $customId = 'fp-' . $transaction->id;
 
-                return [
-                    'order_id' => $paypal['order_id'],
-                    'transaction_id' => $transaction->id,
-                ];
-            });
+            $paypal = $this->payPalService->createOrder(
+                $amount,
+                'MXN',
+                $customId,
+                'Laboratorio ' . $laboratoryBrand->value
+            );
+
+            $transaction->update([
+                'reference_id' => $paypal['order_id'],
+                'provider_order_id' => $paypal['order_id'],
+                'raw_response' => $paypal['raw'],
+                'gateway_response' => $paypal['raw'],
+            ]);
+
+            Log::info('[PayPal] Orden creada', [
+                'transaction_id' => $transaction->id,
+                'paypal_order_id' => $paypal['order_id'],
+                'customer_id' => $customer->id,
+            ]);
+
+            $this->recordPaymentStarted($customer, $laboratoryBrand, $transaction, $amountToChargeCents, $clientContext);
+
+            return [
+                'order_id' => $paypal['order_id'],
+                'transaction_id' => $transaction->id,
+            ];
+        });
         });
     }
 

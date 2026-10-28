@@ -43,6 +43,10 @@ class ActiveCampaignServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if (\App\Support\LocalCheckoutQa::enabled()) {
+            return;
+        }
+
         // Observers relacionados con ActiveCampaign
         Contact::observe(ContactObserver::class);
         LaboratoryPurchase::observe(LaboratoryPurchaseObserver::class);
