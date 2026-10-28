@@ -944,6 +944,7 @@ export default function Carts({
 	usingDefaultPeriod = false,
 	abandonedThresholdMinutes = 30,
 	canViewCartDetails = true,
+	canReleaseCartPaymentBarrier = false,
 	canExport = false,
 }) {
 	const { data, setData, get, processing } = useForm({
@@ -970,6 +971,9 @@ export default function Carts({
 	const [cartDetail, setCartDetail] = useState(null);
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState(false);
+	const [releasingPaymentBarrier, setReleasingPaymentBarrier] = useState(false);
+	const [releasePaymentBarrierError, setReleasePaymentBarrierError] =
+		useState(null);
 
 	const updateResults = (e) => {
 		e.preventDefault();
@@ -1072,8 +1076,45 @@ export default function Carts({
 		setSelectedCartId(cart.id);
 		setCartDetail(null);
 		setDetailError(false);
+		setReleasePaymentBarrierError(null);
 		setDetailOpen(true);
 		loadCartDetail(cart.id);
+	};
+
+	const releasePaymentBarrier = async (note = null) => {
+		if (!selectedCartId || releasingPaymentBarrier) {
+			return;
+		}
+
+		setReleasingPaymentBarrier(true);
+		setReleasePaymentBarrierError(null);
+
+		try {
+			const response = await axios.post(
+				route("admin.carts.release-payment-barrier", {
+					cart: selectedCartId,
+				}),
+				{ note },
+				{
+					headers: {
+						Accept: "application/json",
+						"X-Requested-With": "XMLHttpRequest",
+						"X-CSRF-TOKEN":
+							document.querySelector('meta[name="csrf-token"]')
+								?.content || "",
+					},
+				},
+			);
+			setCartDetail(response.data?.data ?? null);
+		} catch (error) {
+			setReleasePaymentBarrierError(
+				error.response?.data?.message ||
+					error.response?.data?.errors?.cart?.[0] ||
+					"No se pudo liberar el bloqueo de pago.",
+			);
+		} finally {
+			setReleasingPaymentBarrier(false);
+		}
 	};
 
 	const retryCartDetail = () => {
@@ -1640,6 +1681,10 @@ export default function Carts({
 					detail={cartDetail}
 					loading={detailLoading}
 					error={detailError}
+					canReleasePaymentBarrier={canReleaseCartPaymentBarrier}
+					releasingPaymentBarrier={releasingPaymentBarrier}
+					releasePaymentBarrierError={releasePaymentBarrierError}
+					onReleasePaymentBarrier={releasePaymentBarrier}
 					onClose={() => setDetailOpen(false)}
 					onRetry={retryCartDetail}
 				/>

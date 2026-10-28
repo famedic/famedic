@@ -121,6 +121,7 @@ return [
         '_absolute' => [
             ['view carts' => 'Ver listado de carritos (monitoreo)'],
             ['view cart details' => 'Ver detalle de un carrito'],
+            ['release cart payment barrier' => 'Liberar bloqueo de pago en carritos'],
             ['view_config_monitor' => 'Ver monitor de configuración (solo lectura)'],
         ],
     ],

@@ -6,6 +6,7 @@ use App\Enums\CartEventType;
 use App\Enums\LaboratoryBrand;
 use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
+use App\Actions\Admin\Carts\ReleaseCartPaymentBarrierAction;
 use App\Http\Controllers\Controller;
 use App\Models\ActiveCampaignDispatch;
 use App\Models\Cart;
@@ -22,6 +23,7 @@ use App\Services\ActiveCampaign\ActiveCampaignWebActivitySyncService;
 use App\Services\Carts\CartAdminStageInterpreter;
 use App\Services\Carts\CartOperationalInsightResolver;
 use App\Services\Carts\CartPaymentAttemptCorrelator;
+use App\Services\Carts\CartPaymentBarrierInspector;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -167,6 +169,7 @@ class CartController extends Controller
             'usingDefaultPeriod' => $usingDefaultPeriod,
             'abandonedThresholdMinutes' => Cart::ABANDONED_AFTER_MINUTES,
             'canViewCartDetails' => $request->user()->administrator->hasPermissionTo('view cart details'),
+            'canReleaseCartPaymentBarrier' => $request->user()->administrator->hasPermissionTo('release cart payment barrier'),
             'canExport' => $request->user()->administrator->hasPermissionTo('view carts'),
         ]);
     }
@@ -176,7 +179,48 @@ class CartController extends Controller
         $request->user()->administrator->hasPermissionTo('view cart details') || abort(403);
 
         $this->attachPreviousPurchaseCounts($cart);
+        $this->loadCart360Relations($cart);
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'data' => $this->serializeCart360Detail($cart, $request),
+            ]);
+        }
+
+        return Inertia::render('Admin/CartShow', [
+            'cart' => $this->serializeCartDetail($cart),
+        ]);
+    }
+
+    public function releasePaymentBarrier(
+        Request $request,
+        Cart $cart,
+        ReleaseCartPaymentBarrierAction $releaseCartPaymentBarrierAction,
+    ) {
+        $request->user()->administrator->hasPermissionTo('release cart payment barrier') || abort(403);
+
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $this->attachPreviousPurchaseCounts($cart);
+        $result = $releaseCartPaymentBarrierAction(
+            $cart,
+            $request->user(),
+            $validated['note'] ?? null,
+        );
+
+        $cart->refresh();
+        $this->loadCart360Relations($cart);
+
+        return response()->json([
+            'released' => $result['released'],
+            'data' => $this->serializeCart360Detail($cart, $request),
+        ]);
+    }
+
+    private function loadCart360Relations(Cart $cart): void
+    {
         $cart->load([
             'items',
             'events',
@@ -188,16 +232,6 @@ class CartController extends Controller
             'user.customer.laboratoryCheckoutDrafts.address',
             'user.customer.laboratoryPurchases.transactions',
             'user.customer.onlinePharmacyPurchases',
-        ]);
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'data' => $this->serializeCart360Detail($cart, $request),
-            ]);
-        }
-
-        return Inertia::render('Admin/CartShow', [
-            'cart' => $this->serializeCartDetail($cart),
         ]);
     }
 
@@ -637,6 +671,7 @@ class CartController extends Controller
             ],
             'journey' => $journey,
             'payment' => $this->serialize360Payment($paymentInsight),
+            'payment_barrier' => $this->serialize360PaymentBarrier($cart, $request),
             'final_payment' => $finalPayment,
             'payment_history' => $this->serialize360PaymentHistory($cart, $paymentInsight, $finalPayment),
             'appointment' => $appointment ? $this->serialize360Appointment($appointment) : null,
@@ -777,6 +812,20 @@ class CartController extends Controller
                 'detail' => $isCompleted ? 'Compra registrada' : 'Sin compra',
             ],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serialize360PaymentBarrier(Cart $cart, Request $request): array
+    {
+        $barrier = app(CartPaymentBarrierInspector::class)->inspect($cart);
+        $administrator = $request->user()->administrator;
+
+        return array_merge($barrier, [
+            'can_release' => $administrator->hasPermissionTo('release cart payment barrier')
+                && ($barrier['can_release'] ?? false),
+        ]);
     }
 
     /**

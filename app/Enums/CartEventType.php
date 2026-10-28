@@ -27,6 +27,7 @@ enum CartEventType: string
     case PaymentDeclined = 'payment_declined';
     case PaymentError = 'payment_error';
     case PaymentApproved = 'payment_approved';
+    case PaymentBarrierReleased = 'payment_barrier_released';
     case PurchaseCreated = 'purchase_created';
     case CartCompleted = 'cart_completed';
 }

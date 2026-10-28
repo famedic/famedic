@@ -654,11 +654,88 @@ function ErrorState({ onRetry }) {
 	);
 }
 
+function PaymentBarrierSection({
+	paymentBarrier,
+	canReleasePaymentBarrier = false,
+	releasingPaymentBarrier = false,
+	releasePaymentBarrierError = null,
+	onReleasePaymentBarrier,
+}) {
+	if (!paymentBarrier?.blocked) {
+		return null;
+	}
+
+	const barriers = paymentBarrier.barriers || [];
+	const canRelease =
+		canReleasePaymentBarrier && paymentBarrier.can_release === true;
+
+	return (
+		<Section title="Bloqueo de checkout" icon={CreditCardIcon}>
+			<div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+				<p className="font-medium">
+					{paymentBarrier.summary ||
+						"Este carrito no puede iniciar un nuevo pago."}
+				</p>
+				{barriers.length ? (
+					<ul className="space-y-2 text-xs leading-relaxed">
+						{barriers.map((barrier) => (
+							<li
+								key={`${barrier.entity_type}-${barrier.entity_id}-${barrier.code}`}
+								className="rounded-md border border-amber-200/80 bg-white/70 px-2.5 py-2 dark:border-amber-900/60 dark:bg-zinc-900/40"
+							>
+								<p className="font-medium">{barrier.label}</p>
+								<p className="mt-0.5 text-amber-900/80 dark:text-amber-100/80">
+									{barrier.detail}
+								</p>
+								{barrier.releasable ? (
+									<p className="mt-1 text-green-700 dark:text-green-300">
+										Se puede liberar de forma segura.
+									</p>
+								) : (
+									<p className="mt-1 text-red-700 dark:text-red-300">
+										Requiere conciliacion manual.
+									</p>
+								)}
+							</li>
+						))}
+					</ul>
+				) : null}
+				{releasePaymentBarrierError ? (
+					<p className="text-sm text-red-700 dark:text-red-300">
+						{releasePaymentBarrierError}
+					</p>
+				) : null}
+				{canRelease ? (
+					<Button
+						color="famedic-dark"
+						className="w-full"
+						disabled={releasingPaymentBarrier}
+						onClick={() => onReleasePaymentBarrier?.()}
+					>
+						{releasingPaymentBarrier
+							? "Liberando bloqueo..."
+							: "Liberar bloqueo de pago"}
+					</Button>
+				) : canReleasePaymentBarrier ? (
+					<p className="text-xs text-amber-900/80 dark:text-amber-100/70">
+						Hay barreras que no se pueden liberar desde aqui. Revisa
+						la compra, PayPal u Odessa antes de habilitar otro cobro.
+					</p>
+				) : null}
+			</div>
+		</Section>
+	);
+}
+
 export default function CartDetailDrawer({
 	open,
 	detail,
 	loading = false,
 	error = false,
+	canReleasePaymentBarrier = false,
+	releasingPaymentBarrier = false,
+	releasePaymentBarrierError = null,
+	onReleasePaymentBarrier,
 	onClose,
 	onRetry,
 }) {
@@ -666,6 +743,7 @@ export default function CartDetailDrawer({
 	const customer = detail?.customer;
 	const operationalInsight = detail?.operational_insight;
 	const payment = detail?.payment;
+	const paymentBarrier = detail?.payment_barrier;
 	const finalPayment = detail?.final_payment;
 	const paymentHistory = detail?.payment_history || [];
 	const appointment = detail?.appointment;
@@ -767,6 +845,22 @@ export default function CartDetailDrawer({
 										</div>
 									</div>
 								</Section>
+
+								<PaymentBarrierSection
+									paymentBarrier={paymentBarrier}
+									canReleasePaymentBarrier={
+										canReleasePaymentBarrier
+									}
+									releasingPaymentBarrier={
+										releasingPaymentBarrier
+									}
+									releasePaymentBarrierError={
+										releasePaymentBarrierError
+									}
+									onReleasePaymentBarrier={
+										onReleasePaymentBarrier
+									}
+								/>
 
 								<Section
 									title="Resumen"
