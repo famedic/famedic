@@ -9,6 +9,7 @@ export const TAX_PROFILE_EXTRACTION_CODES = {
 	RATE_LIMITED: "TAX_CERTIFICATE_RATE_LIMITED",
 	ALREADY_PROCESSING: "TAX_CERTIFICATE_ALREADY_PROCESSING",
 	INCONSISTENT_DATA: "TAX_CERTIFICATE_INCONSISTENT_DATA",
+	SESSION_EXPIRED: "TAX_CERTIFICATE_SESSION_EXPIRED",
 };
 
 /**
@@ -117,6 +118,15 @@ export function mapTaxProfileExtractionError(code, fallbackMessage = null, httpS
 			allowManual: true,
 			allowRetry: true,
 			clearExtractedData: true,
+		},
+		[TAX_PROFILE_EXTRACTION_CODES.SESSION_EXPIRED]: {
+			title: "Sesión expirada",
+			message:
+				"Tu sesión expiró mientras se procesaba la constancia. Actualiza la página e inténtalo nuevamente.",
+			variant: "warning",
+			allowManual: false,
+			allowRetry: true,
+			clearExtractedData: false,
 		},
 		[TAX_PROFILE_EXTRACTION_CODES.EXTRACTION_FAILED]: {
 			title: "No fue posible procesar la constancia",

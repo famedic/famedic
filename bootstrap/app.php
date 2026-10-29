@@ -46,6 +46,15 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->respond(function (Response $response) {
             if ($response->getStatusCode() === 419) {
+                if (request()->expectsJson() || request()->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'code' => 'TAX_CERTIFICATE_SESSION_EXPIRED',
+                        'message' => 'La sesión expiró. Actualiza la página e inténtalo nuevamente.',
+                        'data' => null,
+                    ], 419);
+                }
+
                 return redirect()->route('home');
             }
 

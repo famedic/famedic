@@ -550,28 +550,51 @@ export default function TaxProfileForm({
 			generation === extractionGenerationRef.current;
 
 		try {
-			const formData = new FormData();
-			formData.append("fiscal_certificate", uploadedFile);
-
-			const csrfToken = document
+			let csrfToken = document
 				.querySelector('meta[name="csrf-token"]')
 				?.getAttribute("content");
-			if (csrfToken) formData.append("_token", csrfToken);
 
-			const response = await fetch(
-				extractUrl || route("tax-profiles.extract-data"),
-				{
+			const submitExtraction = (token) => {
+				const formData = new FormData();
+				formData.append("fiscal_certificate", uploadedFile);
+				if (token) formData.append("_token", token);
+
+				return fetch(extractUrl || route("tax-profiles.extract-data"), {
 					method: "POST",
 					body: formData,
 					credentials: "include",
 					headers: {
 						"X-Requested-With": "XMLHttpRequest",
 						Accept: "application/json",
-						...(csrfToken ? { "X-CSRF-TOKEN": csrfToken } : {}),
+						...(token ? { "X-CSRF-TOKEN": token } : {}),
 					},
 					signal: controller.signal,
-				},
-			);
+				});
+			};
+
+			let response = await submitExtraction(csrfToken);
+
+			// A page can remain open after the session/CSRF token rotates. Refresh
+			// the token from the current page and retry the upload once.
+			if (response.status === 419) {
+				const refreshResponse = await fetch(window.location.href, {
+					credentials: "include",
+					headers: { Accept: "text/html" },
+					signal: controller.signal,
+				});
+				const html = await refreshResponse.text();
+				const refreshedToken = html.match(
+					/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i,
+				)?.[1];
+
+				if (refreshedToken) {
+					csrfToken = refreshedToken;
+					document
+						.querySelector('meta[name="csrf-token"]')
+						?.setAttribute("content", refreshedToken);
+					response = await submitExtraction(refreshedToken);
+				}
+			}
 
 			if (!isCurrentGeneration()) return;
 
