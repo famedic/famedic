@@ -45,6 +45,7 @@ return [
         ],
         'otp-movements' => [
             ['test-sms' => 'Enviar SMS real de diagnóstico Vonage'],
+            ['otp-reveal' => 'Revelar OTP login Akúbica en staging (diagnóstico RC1, un solo uso)'],
         ],
         'logs-general' => [
             ['manage' => 'Ver y descargar logs'],

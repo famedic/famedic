@@ -72,6 +72,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Staging RC1 — revelación OTP login (admin, un solo uso; NUNCA producción)
+    |--------------------------------------------------------------------------
+    |
+    | Requiere APP_ENV=staging + permiso otp-movements.otp-reveal.
+    | Deshabilitar tras validación Newman.
+    |
+    */
+
+    'staging_diagnostic' => [
+        'code_reveal_enabled' => $otpEnvBool('OTP_STAGING_DIAGNOSTIC_CODE_REVEAL_ENABLED', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Legacy OTP defaults (current production behaviour)
     |--------------------------------------------------------------------------
     |

@@ -198,6 +198,8 @@ Route::prefix('admin')->middleware([
             ->name('otp-movements-monitor.index');
         Route::post('otp-movements-monitor/test-sms', [OtpMovementsMonitorController::class, 'testSms'])
             ->name('otp-movements-monitor.test-sms');
+        Route::post('otp-movements-monitor/reveal-login-otp', [OtpMovementsMonitorController::class, 'revealLoginOtp'])
+            ->name('otp-movements-monitor.reveal-login-otp');
         Route::get('otp-movements-monitor/{movementKey}', [OtpMovementsMonitorController::class, 'show'])
             ->name('otp-movements-monitor.show')
             ->where('movementKey', '.+');

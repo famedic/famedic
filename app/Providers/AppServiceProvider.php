@@ -134,6 +134,7 @@ class AppServiceProvider extends ServiceProvider
             };
         });
         $this->app->bind(AkubicaSecureOtpDeliveryOrchestrator::class);
+        $this->app->singleton(\App\Services\Otp\Staging\AkubicaStagingOtpDiagnosticVault::class);
 
         $this->app->register(\App\Providers\EfevooPayServiceProvider::class);
         $this->app->register(\App\Providers\ActiveCampaignServiceProvider::class);

@@ -5,15 +5,20 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\Otp\Monitoring\OtpMovementQueryService;
 use App\Services\Otp\Monitoring\VonageSmsConnectionTestService;
+use App\Services\Otp\Staging\AkubicaStagingOtpDiagnosticVault;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 class OtpMovementsMonitorController extends Controller
 {
     public function __construct(
         private readonly OtpMovementQueryService $queryService,
         private readonly VonageSmsConnectionTestService $smsConnectionTestService,
+        private readonly AkubicaStagingOtpDiagnosticVault $stagingOtpVault,
     ) {}
 
     public function index(Request $request)
@@ -72,8 +77,59 @@ class OtpMovementsMonitorController extends Controller
         $request->user()->administrator->hasPermissionTo('otp-movements.monitor') || abort(403);
 
         $detail = $this->queryService->showMovement(urldecode($movementKey));
+        $administrator = $request->user()?->administrator;
+
+        $detail['staging_otp_reveal'] = [
+            'feature_enabled' => $this->stagingOtpVault->isFeatureEnabled(),
+            'can_reveal' => $administrator?->hasPermissionTo('otp-movements.otp-reveal') ?? false,
+            'challenge_id' => $detail['identifiers']['challenge_id'] ?? null,
+            'correlation_id' => $detail['identifiers']['correlation_id'] ?? null,
+        ];
 
         return Inertia::render('Admin/OtpMovements/Show', $detail);
+    }
+
+    public function revealLoginOtp(Request $request): JsonResponse
+    {
+        $administrator = $request->user()?->administrator;
+        if (! $administrator?->hasPermissionTo('otp-movements.otp-reveal')) {
+            abort(403);
+        }
+
+        if (! $this->stagingOtpVault->isFeatureEnabled()) {
+            abort(404);
+        }
+
+        $rateKey = 'otp-staging-reveal:admin:'.$administrator->id;
+        if (RateLimiter::tooManyAttempts($rateKey, 5)) {
+            throw new TooManyRequestsHttpException(
+                RateLimiter::availableIn($rateKey),
+                'Demasiados intentos de revelación OTP. Espera unos minutos.',
+            );
+        }
+
+        $validated = $request->validate([
+            'challenge_id' => ['required', 'uuid'],
+            'correlation_id' => ['nullable', 'uuid'],
+        ]);
+
+        RateLimiter::hit($rateKey, 600);
+
+        $payload = $this->stagingOtpVault->reveal(
+            (int) $administrator->id,
+            (string) $validated['challenge_id'],
+            isset($validated['correlation_id']) ? (string) $validated['correlation_id'] : null,
+        );
+
+        return response()
+            ->json([
+                'data' => [
+                    'code' => $payload['code'],
+                    'expires_at' => $payload['expires_at'],
+                    'warning' => 'Solo staging · un solo uso · no compartir ni registrar en evidencia pública.',
+                ],
+            ])
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function testSms(Request $request)

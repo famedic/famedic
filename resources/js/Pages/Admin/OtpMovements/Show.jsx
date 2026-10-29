@@ -4,6 +4,8 @@ import { Text } from "@/Components/Catalyst/text";
 import { Badge } from "@/Components/Catalyst/badge";
 import { Button } from "@/Components/Catalyst/button";
 import { Link } from "@inertiajs/react";
+import axios from "axios";
+import { useState } from "react";
 
 function copyToClipboard(value) {
 	if (!value) {
@@ -31,7 +33,53 @@ export default function OtpMovementsShow({
 	timeline,
 	identifiers,
 	subject,
+	staging_otp_reveal,
 }) {
+	const [revealState, setRevealState] = useState({
+		loading: false,
+		code: null,
+		error: null,
+		expiresAt: null,
+	});
+
+	const canShowRevealPanel =
+		staging_otp_reveal?.feature_enabled &&
+		staging_otp_reveal?.can_reveal &&
+		staging_otp_reveal?.challenge_id;
+
+	async function handleRevealOtp() {
+		if (!staging_otp_reveal?.challenge_id) {
+			return;
+		}
+		setRevealState({ loading: true, code: null, error: null, expiresAt: null });
+		try {
+			const response = await axios.post(
+				route("admin.otp-movements-monitor.reveal-login-otp"),
+				{
+					challenge_id: staging_otp_reveal.challenge_id,
+					correlation_id: staging_otp_reveal.correlation_id || undefined,
+				},
+			);
+			setRevealState({
+				loading: false,
+				code: response.data?.data?.code ?? null,
+				error: null,
+				expiresAt: response.data?.data?.expires_at ?? null,
+			});
+		} catch (err) {
+			const message =
+				err.response?.data?.message ||
+				err.response?.statusText ||
+				"No se pudo revelar el OTP.";
+			setRevealState({
+				loading: false,
+				code: null,
+				error: message,
+				expiresAt: null,
+			});
+		}
+	}
+
 	return (
 		<AdminLayout title="Detalle movimiento OTP">
 			<div className="space-y-6">
@@ -105,6 +153,48 @@ export default function OtpMovementsShow({
 							{subject.name || "Usuario"} · ID {subject.user_id || "—"}
 							{subject.customer_id ? ` · Customer ${subject.customer_id}` : ""}
 						</Text>
+					</div>
+				)}
+
+				{canShowRevealPanel && (
+					<div className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/40">
+						<Text className="text-sm font-medium text-amber-900 dark:text-amber-100">
+							Diagnóstico staging RC1 — OTP login (un solo uso)
+						</Text>
+						<Text className="mt-2 text-sm text-amber-800 dark:text-amber-200">
+							Solo ambiente staging. No copies el código en reportes Newman ni en Git.
+							Desactiva{" "}
+							<code className="text-xs">OTP_STAGING_DIAGNOSTIC_CODE_REVEAL_ENABLED</code>{" "}
+							tras las pruebas.
+						</Text>
+						<div className="mt-3 flex flex-wrap items-center gap-3">
+							<Button
+								outline
+								disabled={revealState.loading || revealState.code}
+								onClick={handleRevealOtp}
+							>
+								{revealState.loading
+									? "Revelando…"
+									: revealState.code
+										? "OTP ya revelado"
+										: "Revelar OTP"}
+							</Button>
+							{revealState.code && (
+								<Text className="text-lg font-mono font-semibold tracking-widest">
+									{revealState.code}
+								</Text>
+							)}
+						</div>
+						{revealState.expiresAt && (
+							<Text className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+								Expira: {revealState.expiresAt}
+							</Text>
+						)}
+						{revealState.error && (
+							<Text className="mt-2 text-sm text-red-700 dark:text-red-300">
+								{revealState.error}
+							</Text>
+						)}
 					</div>
 				)}
 

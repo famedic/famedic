@@ -16,6 +16,7 @@ use App\Exceptions\Otp\OtpRateLimitExceededException;
 use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
+use App\Services\Otp\Staging\AkubicaStagingOtpDiagnosticVault;
 use App\Services\Otp\Delivery\OtpDeliveryOutcome;
 use App\Services\Api\V1\Auth\ContactRecognitionContext;
 use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
@@ -53,6 +54,7 @@ class AkubicaLoginOtpService
         private readonly AkubicaSecureOtpDeliveryOrchestrator $deliveryOrchestrator,
         private readonly MexicoPhoneNormalizer $phoneNormalizer,
         private readonly OtpDiagnosticContext $otpDiagnostics,
+        private readonly AkubicaStagingOtpDiagnosticVault $stagingOtpVault,
     ) {}
 
     public static function isEnabled(): bool
@@ -196,6 +198,7 @@ class AkubicaLoginOtpService
         );
 
         $result = $this->abusePolicy->issue($data, $context);
+        $this->stagingOtpVault->storeLoginChallengeCode($result->challenge, $result->plainCode());
         $this->dispatchDelivery($result->challenge, $result->plainCode(), $destination);
 
         return $this->challengeResponsePayload($result->challenge->fresh(), $cooldown);
@@ -279,6 +282,7 @@ class AkubicaLoginOtpService
         );
 
         $this->abusePolicy->verify($challengePublicId, $code, $context);
+        $this->stagingOtpVault->purgeForChallenge($challengePublicId);
 
         $user = User::query()->find($userId);
         if (! $user) {
@@ -368,6 +372,7 @@ class AkubicaLoginOtpService
         );
 
         $result = $this->abusePolicy->resend($data, $context);
+        $this->stagingOtpVault->storeLoginChallengeCode($result->challenge, $result->plainCode());
         $this->dispatchDelivery($result->challenge, $result->plainCode(), $destination);
 
         return $this->challengeResponsePayload($result->challenge->fresh(), $cooldown);
