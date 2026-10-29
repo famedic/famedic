@@ -1,0 +1,55 @@
+{
+    "id": "<ID_003>",
+    "code": {
+        "coding": [
+            {
+                "code": "<STUDY_CODE_003>",
+                "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+                "display": "<STUDY_NAME_003>",
+                "infogda_orden": "<INFOGDA_ORDEN_003>",
+                "infogda_status": "completed",
+                "infogda_cexamen": 714263,
+                "infogda_muestras": [
+                    {
+                        "infogda_muestra": "<INFOGDA_MUESTRA_002>",
+                        "infogda_etiqueta": "<INFOGDA_ETIQUETA_003>",
+                        "infogda_contenedor": "TUBO TAPON LILA CON EDTA",
+                        "infogda_kmuestrasucursal": 10000003,
+                        "infogda_contenedoracronim": "TTL"
+                    }
+                ],
+                "infogda_preanaliticos": []
+            }
+        ]
+    },
+    "header": {
+        "marca": 7,
+        "token": null,
+        "registro": "<FECHA_ANONIMIZADA>",
+        "lineanegocio": "Notificaion-Resultados"
+    },
+    "intent": "order",
+    "status": "completed",
+    "subject": {
+        "reference": "<PATIENT_REF_003>"
+    },
+    "priority": "routine",
+    "requester": {
+        "display": "<REQUESTER_OMITIDO>",
+        "reference": "<REQUESTER_OMITIDO>"
+    },
+    "orderdetail": "Liberado",
+    "requisition": {
+        "value": "<REQUISITION_003>",
+        "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+        "convenio": 10000003
+    },
+    "GDA_menssage": {
+        "acuse": "<ACUSE_003>",
+        "mensaje": "error|succes",
+        "codeHttp": 0,
+        "descripcion": null
+    },
+    "resourceType": "ServiceRequest",
+    "quantityQuantity": "1"
+}

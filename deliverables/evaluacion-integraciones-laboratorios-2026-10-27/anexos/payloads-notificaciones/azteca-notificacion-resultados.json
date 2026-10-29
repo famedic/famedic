@@ -1,0 +1,86 @@
+{
+    "id": "<ID_004>",
+    "code": {
+        "coding": [
+            {
+                "code": "<STUDY_CODE_004>",
+                "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+                "display": "<STUDY_NAME_004>",
+                "infogda_orden": "<INFOGDA_ORDEN_004>",
+                "infogda_status": "completed",
+                "infogda_cexamen": 445021,
+                "infogda_muestras": [
+                    {
+                        "infogda_muestra": null,
+                        "infogda_etiqueta": "<INFOGDA_ETIQUETA_004>",
+                        "infogda_contenedor": "14X17",
+                        "infogda_kmuestrasucursal": 10000004,
+                        "infogda_contenedoracronim": "GAB"
+                    }
+                ],
+                "infogda_preanaliticos": [
+                    {
+                        "infogda_analito": "8104",
+                        "infogda_mascara": null,
+                        "infogda_pregunta": "1.- ¿Cuál es el motivo principal de su estudio?",
+                        "infogda_tipodato": "character varying()",
+                        "infogda_respuesta": null,
+                        "infogda_ordenamiento": "<INFOGDA_ORDENAMIENTO_001>",
+                        "infogda_unidadmedida": null,
+                        "infogda_tiporespuesta": "C"
+                    },
+                    {
+                        "infogda_analito": "8105",
+                        "infogda_mascara": null,
+                        "infogda_pregunta": "2.- ¿Qué molestia tiene y desde cuándo?",
+                        "infogda_tipodato": "character varying()",
+                        "infogda_respuesta": null,
+                        "infogda_ordenamiento": "<INFOGDA_ORDENAMIENTO_002>",
+                        "infogda_unidadmedida": null,
+                        "infogda_tiporespuesta": "C"
+                    },
+                    {
+                        "infogda_analito": "8106",
+                        "infogda_mascara": null,
+                        "infogda_pregunta": "3.- ¿Tiene alguna cirugía?",
+                        "infogda_tipodato": "character varying()",
+                        "infogda_respuesta": null,
+                        "infogda_ordenamiento": "<INFOGDA_ORDENAMIENTO_003>",
+                        "infogda_unidadmedida": null,
+                        "infogda_tiporespuesta": "C"
+                    }
+                ]
+            }
+        ]
+    },
+    "header": {
+        "marca": 4,
+        "token": null,
+        "registro": "<FECHA_ANONIMIZADA>",
+        "lineanegocio": "Notificaion-Resultados"
+    },
+    "intent": "order",
+    "status": "completed",
+    "subject": {
+        "reference": "<PATIENT_REF_004>"
+    },
+    "priority": "routine",
+    "requester": {
+        "display": "<REQUESTER_OMITIDO>",
+        "reference": "<REQUESTER_OMITIDO>"
+    },
+    "orderdetail": "Liberado",
+    "requisition": {
+        "value": "<REQUISITION_004>",
+        "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+        "convenio": 10000004
+    },
+    "GDA_menssage": {
+        "acuse": "<ACUSE_004>",
+        "mensaje": "error|succes",
+        "codeHttp": 0,
+        "descripcion": null
+    },
+    "resourceType": "ServiceRequest",
+    "quantityQuantity": "1"
+}

@@ -1,0 +1,65 @@
+{
+    "_metadata": {
+        "tipo": "payload persistido de notificación",
+        "marca": "olab",
+        "contexto": "laboratorio_clinico",
+        "origen": "Payload persistido en respaldo local declarado de producción por el responsable; fecha del respaldo y origen externo no verificados independientemente",
+        "fuente": "laboratory_notifications.payload",
+        "metadatos_agregados": true,
+        "id_interno": "[ID_RETIRADO]"
+    },
+    "payload": {
+        "id": "[ID_013]",
+        "code": {
+            "coding": [
+                {
+                    "code": "5121",
+                    "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+                    "display": "QUIMICA SANGUINEA 28 ELEM.",
+                    "infogda_orden": "[ID_014]",
+                    "infogda_status": "completed",
+                    "infogda_cexamen": 5121,
+                    "infogda_muestras": [
+                        {
+                            "infogda_muestra": "[ID_015]",
+                            "infogda_etiqueta": "[ID_016]",
+                            "infogda_contenedor": "[ID_017]",
+                            "infogda_kmuestrasucursal": 700018,
+                            "infogda_contenedoracronim": "[ID_019]"
+                        }
+                    ],
+                    "infogda_preanaliticos": []
+                }
+            ]
+        },
+        "header": {
+            "marca": 1,
+            "registro": "[FECHA_ANONIMIZADA]",
+            "lineanegocio": "Notificaion-Resultados"
+        },
+        "intent": "order",
+        "status": "completed",
+        "subject": {
+            "reference": "[ID_020]"
+        },
+        "priority": "routine",
+        "requester": {
+            "display": "FAMEDIC FAMEDIC FAMEDIC",
+            "reference": "[ID_011]"
+        },
+        "orderdetail": "Liberado",
+        "requisition": {
+            "value": "[ID_021]",
+            "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+            "convenio": 17682
+        },
+        "GDA_menssage": {
+            "acuse": "[ID_022]",
+            "mensaje": "error|succes",
+            "codeHttp": 0,
+            "descripcion": null
+        },
+        "resourceType": "ServiceRequest",
+        "quantityQuantity": "1"
+    }
+}

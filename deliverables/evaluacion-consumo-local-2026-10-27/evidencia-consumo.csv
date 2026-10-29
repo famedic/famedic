@@ -1,0 +1,10 @@
+tipo_evidencia,marca,estado,fuente,tabla_o_archivo,campo_o_ruta,conteo_o_presencia,periodo_agregado,origen,transformación,limitación
+base local,todas,confirmado,database/test_db.sqlite,tablas de laboratorio y resultados,conteos de filas,0 registros en tablas revisadas,mtime 2026-10-12,base local,consulta SELECT COUNT(*),no demuestra ser copia de producción
+notificación,todas,pendiente,database/test_db.sqlite,laboratory_notifications,filas,0,no disponible,proveedor/FAMEDIC,no aplica,no hay recepción persistida
+compra,todas,pendiente,database/test_db.sqlite,laboratory_purchases,filas,0,no disponible,FAMEDIC,no aplica,no hay órdenes para asociar resultados
+resultado versionado,todas,pendiente,database/test_db.sqlite,laboratory_result_versions,filas,0,no disponible,FAMEDIC,no aplica,no hay versiones
+reporte estructurado,todas,pendiente,database/test_db.sqlite,laboratory_result_reports,filas,0,no disponible,FAMEDIC,no aplica,no hay reportes de extracción
+observaciones,todas,pendiente,database/test_db.sqlite,laboratory_result_observations,filas,0,no disponible,PDF/FAMEDIC,no aplica,no hay analitos efectivos
+PDF con nombre GDA,indeterminada,indicio,storage/app/results,archivos físicos,nombre y tamaño,5 de 11 archivos,2026-03-30 a 2026-08-03,GDA o fixture,no se abrió contenido,procedencia y relación DB no comprobadas
+PDF total,indeterminada,indicio,storage/app/results,archivos físicos,presencia,11 archivos / 2127487 bytes,2026-03-30 a 2026-08-03,GDA o fixture,no se abrió contenido,no prueba consumo real
+marca,OLAB; Swisslab; Jenner; Liacsa; Azteca,pendiente,código local,app/Enums/LaboratoryBrand.php,enum,implementadas,no aplica,FAMEDIC,configuración declarativa,no hay filas locales por marca

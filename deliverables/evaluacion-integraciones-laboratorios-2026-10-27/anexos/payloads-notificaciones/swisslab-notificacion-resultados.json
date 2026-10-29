@@ -1,0 +1,55 @@
+{
+    "id": "<ID_002>",
+    "code": {
+        "coding": [
+            {
+                "code": "<STUDY_CODE_002>",
+                "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+                "display": "<STUDY_NAME_002>",
+                "infogda_orden": "<INFOGDA_ORDEN_002>",
+                "infogda_status": "completed",
+                "infogda_cexamen": 510070,
+                "infogda_muestras": [
+                    {
+                        "infogda_muestra": "<INFOGDA_MUESTRA_001>",
+                        "infogda_etiqueta": "<INFOGDA_ETIQUETA_002>",
+                        "infogda_contenedor": "TUBO TAPON ORO-GEL",
+                        "infogda_kmuestrasucursal": 10000002,
+                        "infogda_contenedoracronim": "TTOG"
+                    }
+                ],
+                "infogda_preanaliticos": []
+            }
+        ]
+    },
+    "header": {
+        "marca": 5,
+        "token": null,
+        "registro": "<FECHA_ANONIMIZADA>",
+        "lineanegocio": "Notificaion-Resultados"
+    },
+    "intent": "order",
+    "status": "completed",
+    "subject": {
+        "reference": "<PATIENT_REF_002>"
+    },
+    "priority": "routine",
+    "requester": {
+        "display": "<REQUESTER_OMITIDO>",
+        "reference": "<REQUESTER_OMITIDO>"
+    },
+    "orderdetail": "Liberado",
+    "requisition": {
+        "value": "<REQUISITION_002>",
+        "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+        "convenio": 10000002
+    },
+    "GDA_menssage": {
+        "acuse": "<ACUSE_002>",
+        "mensaje": "error|succes",
+        "codeHttp": 0,
+        "descripcion": null
+    },
+    "resourceType": "ServiceRequest",
+    "quantityQuantity": "1"
+}

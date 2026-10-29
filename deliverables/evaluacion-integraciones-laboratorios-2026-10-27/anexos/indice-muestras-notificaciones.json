@@ -1,0 +1,16 @@
+{
+    "label": "Payload persistido en respaldo local declarado de producción por el responsable; fecha del respaldo y origen externo no verificados independientemente.",
+    "source": "laboratory_notifications.payload",
+    "sample_type": "Webhook de resultados persistido; no es respuesta HTTP de consulta GDA.",
+    "anonymization": {
+        "replaced": ["identificadores de paciente, compra, folio, orden GDA, acuse, external_id y consecutivos con marcadores consistentes", "nombres, correos, teléfonos, domicilios, RFC/CURP y solicitante con marcadores", "tokens y URLs con marcadores"],
+        "omitted": ["valores Base64/PDF y campos pesados de referencia", "payloads originales y valores clínicos no necesarios para la matriz"],
+        "preserved": ["estructura JSON, nombres de claves y tipos de datos cuando fue seguro"]
+    },
+    "files": {
+        "olab": "anexos/payloads-notificaciones/olab-notificacion-resultados.json",
+        "swisslab": "anexos/payloads-notificaciones/swisslab-notificacion-resultados.json",
+        "jenner": "anexos/payloads-notificaciones/jenner-notificacion-resultados.json",
+        "azteca": "anexos/payloads-notificaciones/azteca-notificacion-resultados.json"
+    }
+}

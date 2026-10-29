@@ -1,0 +1,12 @@
+integración,marca,campo solicitado,disponibilidad,ubicación,origen,transformación,evidencia,limitación o pendiente
+GDA webhook,OLAB,identificador de paciente,parcial,subject.reference,proveedor recibido por FAMEDIC,se conserva como referencia,LaboratoryWebhookController.php:62-64,confirmar semántica y muestra real
+GDA webhook,OLAB,folio u orden,confirmado,requisition.value; id; infogda_orden,GDA/FAMEDIC,resolución de ID consultable,GetGDAResultsAction.php:57-90; migración gda_consecutivo,distinguir folio orden solicitud y consecutivo
+GDA webhook,OLAB,fechas,parcial,header.registro; report timestamps,mixto,se registra recepción y consulta,LaboratoryWebhookController.php:48-50; reports migration,confirmar solicitud/toma/emisión/recepción
+GDA PDF,OLAB,estudio o panel,parcial,code.coding.*.display y PDF,mixto,conserva código/display y extrae texto,LaboratoryWebhookController.php:59-61,validar cobertura real
+GDA PDF,OLAB,analito,parcial,laboratory_result_observations.analyte_name_raw/display,PDF extraído por FAMEDIC,normalización y catálogo,observations migration:16-18,validar cobertura
+GDA PDF,OLAB,valor,parcial,numeric_value/text_value,PDF extraído por FAMEDIC,parseo numérico/textual,observations migration:18-20,validar PDF/OCR real
+GDA PDF,OLAB,unidad,parcial,unit/unit_raw,PDF y FAMEDIC,normalización conserva raw,observations migration:21-22,puede faltar
+GDA PDF,OLAB,rango de referencia,parcial,reference_low/reference_high/reference_text,PDF y FAMEDIC,parseo de rangos/inequaciones,observations migration:23-25; text parser:725-757,referencias cualitativas sin límites
+GDA PDF,OLAB,banderas de anormalidad,parcial,reference_status/abnormal_flag/abnormal_source,FAMEDIC,comparación contra referencia; no bandera original,observations migration:26-28,confirmar si GDA envía bandera
+GDA PDF,OLAB,URL/ruta/referencia PDF,confirmado,results; laboratory_result_versions.storage_path,GDA entrega base64; FAMEDIC almacena,validación SHA-256 y versionado,StoreGdaResultsPdfToStorageAction.php:30-69; versions migration:20-28,no URL pública localizada
+GDA webhook,Swisslab; Jenner; Liacsa; Azteca,los mismos campos,pendiente por marca,configuración común GDA,mixto,misma ruta no prueba cobertura,LaboratoryBrand.php:7-14; services.php:123-152,solicitar muestras reales por marca

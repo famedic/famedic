@@ -1,0 +1,230 @@
+{
+    "olab": {
+        "status": "sample_written",
+        "notification_created_at": "2026-10-17 16:00:24",
+        "results_received_at_internal": "2026-10-17 16:00:24",
+        "notification_type": "Notificaion-Resultados",
+        "lineanegocio": "Notificaion-Resultados",
+        "fields": {
+            "paciente": {
+                "ruta": "subject.reference",
+                "estado": "presente"
+            },
+            "folio_orden": {
+                "ruta": "requisition.value; id; code.coding.*.infogda_orden",
+                "estado": "presente"
+            },
+            "fechas_payload": {
+                "ruta": "header.registro",
+                "estado": "presente"
+            },
+            "estudio_panel": {
+                "ruta": "code.coding.*.code; code.coding.*.display",
+                "estado": "presente"
+            },
+            "analitos": {
+                "ruta": "analito/analyte/observations",
+                "estado": "vacío/ausente"
+            },
+            "valor": {
+                "ruta": "value/numeric_value/text_value",
+                "estado": "ausente"
+            },
+            "unidad": {
+                "ruta": "unit/unit_raw",
+                "estado": "vacío/ausente"
+            },
+            "rango": {
+                "ruta": "reference/reference_low/reference_high/reference_text",
+                "estado": "ausente"
+            },
+            "banderas": {
+                "ruta": "flag/abnormal/abnormal_flag",
+                "estado": "vacío/ausente"
+            },
+            "pdf_base64_webhook": {
+                "ruta": "infogda_resultado_b64",
+                "estado": "vacío/ausente"
+            },
+            "pdf_base64_columna_notificacion": {
+                "ruta": "laboratory_notifications.results_pdf_base64",
+                "estado": "vacío/ausente"
+            },
+            "referencia_pdf_interna": {
+                "ruta": "laboratory_purchases.results",
+                "estado": "presente"
+            }
+        }
+    },
+    "swisslab": {
+        "status": "sample_written",
+        "notification_created_at": "2026-10-18 17:37:23",
+        "results_received_at_internal": "2026-10-18 17:37:23",
+        "notification_type": "Notificaion-Resultados",
+        "lineanegocio": "Notificaion-Resultados",
+        "fields": {
+            "paciente": {
+                "ruta": "subject.reference",
+                "estado": "presente"
+            },
+            "folio_orden": {
+                "ruta": "requisition.value; id; code.coding.*.infogda_orden",
+                "estado": "presente"
+            },
+            "fechas_payload": {
+                "ruta": "header.registro",
+                "estado": "presente"
+            },
+            "estudio_panel": {
+                "ruta": "code.coding.*.code; code.coding.*.display",
+                "estado": "presente"
+            },
+            "analitos": {
+                "ruta": "analito/analyte/observations",
+                "estado": "vacío/ausente"
+            },
+            "valor": {
+                "ruta": "value/numeric_value/text_value",
+                "estado": "ausente"
+            },
+            "unidad": {
+                "ruta": "unit/unit_raw",
+                "estado": "vacío/ausente"
+            },
+            "rango": {
+                "ruta": "reference/reference_low/reference_high/reference_text",
+                "estado": "ausente"
+            },
+            "banderas": {
+                "ruta": "flag/abnormal/abnormal_flag",
+                "estado": "vacío/ausente"
+            },
+            "pdf_base64_webhook": {
+                "ruta": "infogda_resultado_b64",
+                "estado": "vacío/ausente"
+            },
+            "pdf_base64_columna_notificacion": {
+                "ruta": "laboratory_notifications.results_pdf_base64",
+                "estado": "vacío/ausente"
+            },
+            "referencia_pdf_interna": {
+                "ruta": "laboratory_purchases.results",
+                "estado": "presente"
+            }
+        }
+    },
+    "jenner": {
+        "status": "sample_written",
+        "notification_created_at": "2026-10-07 20:01:29",
+        "results_received_at_internal": "2026-10-07 20:01:29",
+        "notification_type": "Notificaion-Resultados",
+        "lineanegocio": "Notificaion-Resultados",
+        "fields": {
+            "paciente": {
+                "ruta": "subject.reference",
+                "estado": "presente"
+            },
+            "folio_orden": {
+                "ruta": "requisition.value; id; code.coding.*.infogda_orden",
+                "estado": "presente"
+            },
+            "fechas_payload": {
+                "ruta": "header.registro",
+                "estado": "presente"
+            },
+            "estudio_panel": {
+                "ruta": "code.coding.*.code; code.coding.*.display",
+                "estado": "presente"
+            },
+            "analitos": {
+                "ruta": "analito/analyte/observations",
+                "estado": "vacío/ausente"
+            },
+            "valor": {
+                "ruta": "value/numeric_value/text_value",
+                "estado": "ausente"
+            },
+            "unidad": {
+                "ruta": "unit/unit_raw",
+                "estado": "vacío/ausente"
+            },
+            "rango": {
+                "ruta": "reference/reference_low/reference_high/reference_text",
+                "estado": "ausente"
+            },
+            "banderas": {
+                "ruta": "flag/abnormal/abnormal_flag",
+                "estado": "vacío/ausente"
+            },
+            "pdf_base64_webhook": {
+                "ruta": "infogda_resultado_b64",
+                "estado": "vacío/ausente"
+            },
+            "pdf_base64_columna_notificacion": {
+                "ruta": "laboratory_notifications.results_pdf_base64",
+                "estado": "vacío/ausente"
+            },
+            "referencia_pdf_interna": {
+                "ruta": "laboratory_purchases.results",
+                "estado": "presente"
+            }
+        }
+    },
+    "azteca": {
+        "status": "sample_written",
+        "notification_created_at": "2026-10-05 20:00:42",
+        "results_received_at_internal": "2026-10-05 20:00:42",
+        "notification_type": "Notificaion-Resultados",
+        "lineanegocio": "Notificaion-Resultados",
+        "fields": {
+            "paciente": {
+                "ruta": "subject.reference",
+                "estado": "presente"
+            },
+            "folio_orden": {
+                "ruta": "requisition.value; id; code.coding.*.infogda_orden",
+                "estado": "presente"
+            },
+            "fechas_payload": {
+                "ruta": "header.registro",
+                "estado": "presente"
+            },
+            "estudio_panel": {
+                "ruta": "code.coding.*.code; code.coding.*.display",
+                "estado": "presente"
+            },
+            "analitos": {
+                "ruta": "analito/analyte/observations",
+                "estado": "vacío/ausente"
+            },
+            "valor": {
+                "ruta": "value/numeric_value/text_value",
+                "estado": "ausente"
+            },
+            "unidad": {
+                "ruta": "unit/unit_raw",
+                "estado": "vacío/ausente"
+            },
+            "rango": {
+                "ruta": "reference/reference_low/reference_high/reference_text",
+                "estado": "ausente"
+            },
+            "banderas": {
+                "ruta": "flag/abnormal/abnormal_flag",
+                "estado": "vacío/ausente"
+            },
+            "pdf_base64_webhook": {
+                "ruta": "infogda_resultado_b64",
+                "estado": "vacío/ausente"
+            },
+            "pdf_base64_columna_notificacion": {
+                "ruta": "laboratory_notifications.results_pdf_base64",
+                "estado": "vacío/ausente"
+            },
+            "referencia_pdf_interna": {
+                "ruta": "laboratory_purchases.results",
+                "estado": "presente"
+            }
+        }
+    }
+}

@@ -1,0 +1,52 @@
+{
+  "header": {
+    "lineanegocio": "Notificaion-Resultados",
+    "registro": "<FECHA_ANONIMIZADA>",
+    "marca": 1,
+    "token": "<TOKEN_OMITIDO>"
+  },
+  "resourceType": "ServiceRequest",
+  "id": "<ID_GDA_ANONIMIZADO>",
+  "requisition": {
+    "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+    "value": "<FOLIO_GDA_ANONIMIZADO>",
+    "convenio": 10001
+  },
+  "status": "completed",
+  "intent": "order",
+  "priority": "routine",
+  "code": {
+    "coding": [
+      {
+        "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+        "code": "<CODIGO_ESTUDIO_ANONIMIZADO>",
+        "display": "<NOMBRE_ESTUDIO_ANONIMIZADO>",
+        "infogda_status": "completed",
+        "infogda_cexamen": "<CODIGO_ESTUDIO_ANONIMIZADO>",
+        "infogda_orden": "<CONSECUTIVO_ANONIMIZADO>",
+        "infogda_muestras": [
+          {
+            "infogda_etiqueta": "<ETIQUETA_ANONIMIZADA>",
+            "infogda_contenedor": "<CONTENEDOR_ANONIMIZADO>",
+            "infogda_kmuestrasucursal": 10000001
+          }
+        ]
+      }
+    ]
+  },
+  "orderdetail": "Liberado",
+  "quantityQuantity": "1",
+  "subject": {
+    "reference": "Patient/<PACIENTE_ANONIMIZADO>"
+  },
+  "requester": {
+    "reference": "Practitioner/<PRACTICANTE_ANONIMIZADO>",
+    "display": "<SOLICITANTE_ANONIMIZADO>"
+  },
+  "GDA_menssage": {
+    "codeHttp": 200,
+    "mensaje": "success",
+    "descripcion": "Resultado Obtenido Exitosamente"
+  },
+  "infogda_resultado_b64": "<PDF_BASE64_OMITIDO>"
+}

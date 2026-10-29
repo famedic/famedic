@@ -1,0 +1,65 @@
+{
+    "_metadata": {
+        "tipo": "payload persistido de notificación",
+        "marca": "azteca",
+        "contexto": "laboratorio_clinico",
+        "origen": "Payload persistido en respaldo local declarado de producción por el responsable; fecha del respaldo y origen externo no verificados independientemente",
+        "fuente": "laboratory_notifications.payload",
+        "metadatos_agregados": true,
+        "id_interno": "[ID_RETIRADO]"
+    },
+    "payload": {
+        "id": "[ID_046]",
+        "code": {
+            "coding": [
+                {
+                    "code": "439001",
+                    "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+                    "display": "BIOMETRIA HEMATICA",
+                    "infogda_orden": "[ID_047]",
+                    "infogda_status": "completed",
+                    "infogda_cexamen": 439001,
+                    "infogda_muestras": [
+                        {
+                            "infogda_muestra": "[ID_048]",
+                            "infogda_etiqueta": "[ID_049]",
+                            "infogda_contenedor": "[ID_034]",
+                            "infogda_kmuestrasucursal": 700050,
+                            "infogda_contenedoracronim": "[ID_036]"
+                        }
+                    ],
+                    "infogda_preanaliticos": []
+                }
+            ]
+        },
+        "header": {
+            "marca": 4,
+            "registro": "[FECHA_ANONIMIZADA]",
+            "lineanegocio": "Notificaion-Resultados"
+        },
+        "intent": "order",
+        "status": "completed",
+        "subject": {
+            "reference": "[ID_051]"
+        },
+        "priority": "routine",
+        "requester": {
+            "display": "FAMEDIC FAMEDIC FAMEDIC",
+            "reference": "[ID_011]"
+        },
+        "orderdetail": "Liberado",
+        "requisition": {
+            "value": "[ID_052]",
+            "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+            "convenio": 17683
+        },
+        "GDA_menssage": {
+            "acuse": "[ID_053]",
+            "mensaje": "error|succes",
+            "codeHttp": 0,
+            "descripcion": null
+        },
+        "resourceType": "ServiceRequest",
+        "quantityQuantity": "1"
+    }
+}

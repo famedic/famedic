@@ -1,0 +1,96 @@
+{
+    "_metadata": {
+        "tipo": "payload persistido de notificación",
+        "marca": "olab",
+        "contexto": "gabinete",
+        "origen": "Payload persistido en respaldo local declarado de producción por el responsable; fecha del respaldo y origen externo no verificados independientemente",
+        "fuente": "laboratory_notifications.payload",
+        "metadatos_agregados": true,
+        "id_interno": "[ID_RETIRADO]"
+    },
+    "payload": {
+        "id": "[ID_001]",
+        "code": {
+            "coding": [
+                {
+                    "code": "165022",
+                    "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+                    "display": "RM RODILLA SIMPLE",
+                    "infogda_orden": "[ID_002]",
+                    "infogda_status": "completed",
+                    "infogda_cexamen": 165022,
+                    "infogda_muestras": [
+                        {
+                            "infogda_muestra": null,
+                            "infogda_etiqueta": "[ID_003]",
+                            "infogda_contenedor": "[ID_004]",
+                            "infogda_kmuestrasucursal": 700005,
+                            "infogda_contenedoracronim": "[ID_006]"
+                        }
+                    ],
+                    "infogda_preanaliticos": [
+                        {
+                            "infogda_analito": "5470",
+                            "infogda_mascara": null,
+                            "infogda_pregunta": "1.- ¿Cuál es el motivo principal de su estudio?",
+                            "infogda_tipodato": "character varying()",
+                            "infogda_respuesta": null,
+                            "infogda_ordenamiento": "[ID_007]",
+                            "infogda_unidadmedida": null,
+                            "infogda_tiporespuesta": "C"
+                        },
+                        {
+                            "infogda_analito": "5471",
+                            "infogda_mascara": null,
+                            "infogda_pregunta": "2.- ¿Qué molestia tiene y desde cuándo?",
+                            "infogda_tipodato": "character varying()",
+                            "infogda_respuesta": null,
+                            "infogda_ordenamiento": "[ID_008]",
+                            "infogda_unidadmedida": null,
+                            "infogda_tiporespuesta": "C"
+                        },
+                        {
+                            "infogda_analito": "5472",
+                            "infogda_mascara": null,
+                            "infogda_pregunta": "3.- ¿Tiene alguna cirugía?",
+                            "infogda_tipodato": "character varying()",
+                            "infogda_respuesta": null,
+                            "infogda_ordenamiento": "[ID_009]",
+                            "infogda_unidadmedida": null,
+                            "infogda_tiporespuesta": "C"
+                        }
+                    ]
+                }
+            ]
+        },
+        "header": {
+            "marca": 1,
+            "registro": "[FECHA_ANONIMIZADA]",
+            "lineanegocio": "Notificaion-Resultados"
+        },
+        "intent": "order",
+        "status": "completed",
+        "subject": {
+            "reference": "[ID_010]"
+        },
+        "priority": "routine",
+        "requester": {
+            "display": "FAMEDIC FAMEDIC FAMEDIC",
+            "reference": "[ID_011]"
+        },
+        "orderdetail": "Liberado",
+        "requisition": {
+            "value": "[ID_003]",
+            "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+            "convenio": 17682
+        },
+        "GDA_menssage": {
+            "acuse": "[ID_012]",
+            "mensaje": "error|succes",
+            "codeHttp": 0,
+            "descripcion": null
+        },
+        "resourceType": "ServiceRequest",
+        "quantityQuantity": "1"
+    }
+}

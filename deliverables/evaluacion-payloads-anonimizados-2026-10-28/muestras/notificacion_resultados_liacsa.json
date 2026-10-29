@@ -1,0 +1,65 @@
+{
+    "_metadata": {
+        "tipo": "payload persistido de notificación",
+        "marca": "liacsa",
+        "contexto": "no_clasificado",
+        "origen": "Payload persistido en respaldo local declarado de producción por el responsable; fecha del respaldo y origen externo no verificados independientemente",
+        "fuente": "laboratory_notifications.payload",
+        "metadatos_agregados": true,
+        "id_interno": "[ID_RETIRADO]"
+    },
+    "payload": {
+        "id": "[ID_054]",
+        "code": {
+            "coding": [
+                {
+                    "code": "1501246",
+                    "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+                    "display": "RESISTENCIA A LA INSULINA INDICE HOMA",
+                    "infogda_orden": "[ID_055]",
+                    "infogda_status": "completed",
+                    "infogda_cexamen": 1501246,
+                    "infogda_muestras": [
+                        {
+                            "infogda_muestra": "[ID_015]",
+                            "infogda_etiqueta": "[ID_056]",
+                            "infogda_contenedor": "[ID_017]",
+                            "infogda_kmuestrasucursal": 700057,
+                            "infogda_contenedoracronim": "[ID_019]"
+                        }
+                    ],
+                    "infogda_preanaliticos": []
+                }
+            ]
+        },
+        "header": {
+            "marca": 15,
+            "registro": "[FECHA_ANONIMIZADA]",
+            "lineanegocio": "Notificaion-Resultados"
+        },
+        "intent": "order",
+        "status": "completed",
+        "subject": {
+            "reference": "[ID_058]"
+        },
+        "priority": "routine",
+        "requester": {
+            "display": "FAMEDIC FAMEDIC FAMEDIC",
+            "reference": "[ID_011]"
+        },
+        "orderdetail": "Liberado",
+        "requisition": {
+            "value": "[ID_059]",
+            "system": "urn:oid:2.16.840.1.113883.3.215.5.59",
+            "convenio": 17659
+        },
+        "GDA_menssage": {
+            "acuse": "[ID_060]",
+            "mensaje": "error|succes",
+            "codeHttp": 0,
+            "descripcion": null
+        },
+        "resourceType": "ServiceRequest",
+        "quantityQuantity": "1"
+    }
+}
