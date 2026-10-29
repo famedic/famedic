@@ -9,6 +9,11 @@
 /database/test_db.sqlite
 .env
 .newman-rc1-staging.env.local
+docs/Akubica/v1.3.0-rc1/.rc1-staging-run-state.local.json
+docs/Akubica/v1.3.0-rc1/newman-staging-phase-*-raw.json
+docs/Akubica/v1.3.0-rc1/newman-staging-report*.json
+docs/Akubica/v1.3.0-rc1/newman-staging-summary.json
+docs/Akubica/v1.3.0-rc1/newman-staging-junit*.xml
 # Claves SSH deben vivir en ~/.ssh del sistema, no en el repo.
 id_ed25519_famedic
 id_ed25519_famedic.pub

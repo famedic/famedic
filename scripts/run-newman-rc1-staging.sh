@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Corrida completa RC1 staging: Fase A → (OTP manual) → Fase B si OTP_CODE está definido.
+# Recomendado: scripts/run-newman-rc1-staging-phase-a.sh luego phase-b.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -64,12 +66,30 @@ ENV_ARGS=(
 )
 [[ -n "${RC1_STAGING_PHONE:-}" ]] && ENV_ARGS+=(--env-var "phone=${RC1_STAGING_PHONE}")
 [[ -n "${RC1_STAGING_UNKNOWN_PHONE:-}" ]] && ENV_ARGS+=(--env-var "unknown_phone=${RC1_STAGING_UNKNOWN_PHONE}")
-[[ -n "${OTP_CODE:-}" ]] && ENV_ARGS+=(--env-var "otp_code=${OTP_CODE}")
-[[ -n "${BEARER_TOKEN:-}" ]] && ENV_ARGS+=(--env-var "access_token=${BEARER_TOKEN}")
+uuidgen_cmd() {
+  if command -v uuidgen >/dev/null 2>&1; then uuidgen; else python3 -c 'import uuid; print(uuid.uuid4())'; fi
+}
+RUN_CONV="${RC1_CONTEXT_CONVERSATION_ID:-$(uuidgen_cmd | tr '[:upper:]' '[:lower:]')}"
+RUN_EVENT="${RC1_CONTEXT_CHANNEL_EVENT_ID:-$(uuidgen_cmd | tr '[:upper:]' '[:lower:]')}"
+ENV_ARGS+=(
+  --env-var "rc1_phase=A"
+  --env-var "conversation_id=${RUN_CONV}"
+  --env-var "channel_event_id=${RUN_EVENT}"
+)
+
+FOLDERS=(--folder "00 - RC1 Fase A (staging OTP)" --folder "01 - ATIX phone lookup (contratos)")
+if [[ -n "${OTP_CODE:-}" ]]; then
+  ENV_ARGS+=(--env-var "otp_code=${OTP_CODE}")
+  FOLDERS+=(--folder "02 - RC1 Fase B (Bearer y carrito)")
+else
+  echo "Aviso: OTP_CODE vacío — se omitirá Fase B (verify-code y endpoints protegidos)."
+  echo "Ejecute Fase A, obtenga OTP en monitor, luego: OTP_CODE=... bash scripts/run-newman-rc1-staging-phase-b.sh"
+fi
 
 set +e
 $NEWMAN run "$COLLECTION" -e "$ENV_FILE" \
   "${ENV_ARGS[@]}" \
+  "${FOLDERS[@]}" \
   --reporters cli,json,junit \
   --reporter-json-export "$JSON_RAW" \
   --reporter-junit-export "$OUT_DIR/newman-staging-junit-raw.xml" \
