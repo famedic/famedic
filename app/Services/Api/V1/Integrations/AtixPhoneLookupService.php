@@ -3,10 +3,11 @@
 namespace App\Services\Api\V1\Integrations;
 
 use App\Http\Responses\ApiResponse;
-use App\Models\OtpChallenge;
+use App\Models\User;
 use App\Services\Api\V1\Auth\AccountContextTokenService;
 use App\Services\Api\V1\Auth\ContactRecognitionContext;
 use App\Services\Otp\AkubicaLoginOtpService;
+use App\Support\Api\V1\AtixPhoneLookupRecognitionPayload;
 use Illuminate\Http\JsonResponse;
 
 final class AtixPhoneLookupService
@@ -24,43 +25,28 @@ final class AtixPhoneLookupService
             return ApiResponse::error('VALIDATION_ERROR', 'El telefono no es valido.', 422, ['phone' => ['Formato E.164 requerido.']], null, false);
         }
 
-        $user = $this->otp->findEligibleUser($phone);
-        if ($user === null) {
-            return ApiResponse::success($this->otp->decoyRequestResponse($phone), null, 202);
-        }
-
         $context = new ContactRecognitionContext(
             (string) $data['conversation_id'],
             (string) $data['channel_event_id'],
-            (string) $data['channel'],
+            strtolower(trim((string) $data['channel'])),
             (bool) data_get($data, 'personalization.allowed', false),
             (string) $data['audience'],
         );
-        $payload = $this->otp->request($user, $phone, request()->ip(), $context);
-        $challenge = OtpChallenge::query()->where('public_id', $payload['challenge_id'])->firstOrFail();
-        $this->contexts->issuePreOtp(
-            $user,
-            hash_hmac('sha256', $phone->comparisonKey(), config('app.key')),
-            $context->binding(config('app.key')),
-            $challenge->id,
-        );
 
-        if ($context->isPersonalizationAllowed()) {
-            $payload['personalization'] = [
-                'allowed' => true,
-                'first_name' => $this->firstName($user),
-            ];
-        } else {
-            $payload['personalization'] = ['allowed' => false];
+        $user = $this->otp->findEligibleUser($phone);
+        if (! $user instanceof User) {
+            return ApiResponse::success(AtixPhoneLookupRecognitionPayload::unknown(), null, 202);
         }
 
-        return ApiResponse::success($payload, null, 202);
-    }
+        $phoneHash = hash_hmac('sha256', $phone->comparisonKey(), (string) config('app.key'));
+        $binding = $context->binding((string) config('app.key'));
 
-    private function firstName(object $user): ?string
-    {
-        $name = trim((string) ($user->name ?? ''));
-        if ($name === '') return null;
-        return preg_split('/\s+/', $name)[0] ?? null;
+        $this->contexts->ensurePreOtpContext($user, $phoneHash, $binding);
+
+        return ApiResponse::success(
+            AtixPhoneLookupRecognitionPayload::recognized($user, $context->isPersonalizationAllowed()),
+            null,
+            202,
+        );
     }
 }

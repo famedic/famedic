@@ -30,6 +30,7 @@ final class AkubicaMembershipsM1IsolatedTest extends TestCase
         $this->runId = (string) random_int(10000000, 99999999);
         $this->clientIp = '10.'.random_int(1, 254).'.'.random_int(1, 254).'.'.random_int(1, 254);
         enableLoginOtpWithFakeDelivery();
+        config()->set('atix.sandbox.keys', ['sandbox-test' => 'sandbox-secret']);
         $this->app->instance(\App\Contracts\Otp\OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
     }
 
@@ -118,8 +119,11 @@ final class AkubicaMembershipsM1IsolatedTest extends TestCase
         $payload = [
             'phone' => $this->phone('80'), 'conversation_id' => 'm1-otp-conversation-'.$this->runId,
             'channel_event_id' => 'm1-otp-event-'.$this->runId, 'channel' => 'whatsapp',
+            'audience' => 'leo',
             'personalization' => ['allowed' => true],
         ];
+
+        $this->atixLookup($payload);
 
         $start = $this->otpPost('/api/v1/auth/login/request-code', $payload)
             ->assertStatus(202)
@@ -133,9 +137,11 @@ final class AkubicaMembershipsM1IsolatedTest extends TestCase
             'challenge_id' => $challengeId, 'code' => '123456',
         ])->assertOk()
             ->assertJsonPath('data.otp_verified', true)
+            ->assertJsonPath('data.assurance_level', 'otp_verified')
             ->assertJsonPath('data.personalization.first_name', 'Ada')
-            ->assertJsonMissingPath('data.account_context_token')
-            ->assertJsonMissingPath('data.token');
+            ->assertJsonPath('data.token_type', 'Bearer')
+            ->assertJsonStructure(['data' => ['token', 'expires_in', 'expires_at', 'user']])
+            ->assertJsonMissingPath('data.account_context_token');
 
         $this->assertNotNull($context->fresh()->verified_at);
         $this->assertSame(1, OtpChallenge::query()->where('public_id', $challengeId)->count());
@@ -152,13 +158,18 @@ final class AkubicaMembershipsM1IsolatedTest extends TestCase
         $unknown = $this->otpPost('/api/v1/auth/login/request-code', [
             'phone' => $this->phone('90'), 'conversation_id' => 'm1-private-unknown-'.$this->runId,
             'channel_event_id' => 'm1-private-event-'.$this->runId, 'channel' => 'whatsapp',
+            'audience' => 'leo',
             'personalization' => ['allowed' => true],
         ])->assertStatus(202)->json('data');
-        $known = $this->otpPost('/api/v1/auth/login/request-code', [
+        $knownPayload = [
             'phone' => $this->phone('81'), 'conversation_id' => 'm1-private-known-'.$this->runId,
             'channel_event_id' => 'm1-private-event-known-'.$this->runId, 'channel' => 'whatsapp',
+            'audience' => 'leo',
             'personalization' => ['allowed' => true],
-        ])->assertStatus(202)->json('data');
+        ];
+        $this->atixLookup($knownPayload);
+        $known = $this->otpPost('/api/v1/auth/login/request-code', $knownPayload)
+            ->assertStatus(202)->json('data');
 
         $this->assertSame(array_keys($unknown), array_keys($known));
         $this->getJson('/api/v1/memberships/status')->assertUnauthorized();
@@ -183,5 +194,31 @@ final class AkubicaMembershipsM1IsolatedTest extends TestCase
     private function otpPost(string $uri, array $payload)
     {
         return $this->withServerVariables(['REMOTE_ADDR' => $this->clientIp])->postJson($uri, $payload);
+    }
+
+    private function atixLookup(array $loginPayload): void
+    {
+        $atixPayload = [
+            'phone' => '+52'.$loginPayload['phone'],
+            'conversation_id' => $loginPayload['conversation_id'],
+            'channel_event_id' => $loginPayload['channel_event_id'],
+            'channel' => $loginPayload['channel'],
+            'audience' => $loginPayload['audience'] ?? 'leo',
+            'personalization' => $loginPayload['personalization'] ?? ['allowed' => false],
+        ];
+        $body = json_encode($atixPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $nonce = 'm1-atix-'.$this->runId;
+        $canonical = implode("\n", ['POST', '/api/v1/integrations/atix/phone-lookups', (string) now()->timestamp, $nonce, hash('sha256', (string) $body)]);
+        $this->withServerVariables(['REMOTE_ADDR' => $this->clientIp])
+            ->withHeaders([
+                'X-Integration-Key-Id' => 'sandbox-test',
+                'X-Timestamp' => (string) now()->timestamp,
+                'X-Nonce' => $nonce,
+                'X-Signature' => hash_hmac('sha256', $canonical, 'sandbox-secret'),
+                'X-Correlation-ID' => 'corr-m1-'.$this->runId,
+                'Idempotency-Key' => 'idem-m1-'.$this->runId,
+            ])
+            ->postJson('/api/v1/integrations/atix/phone-lookups', $atixPayload)
+            ->assertStatus(202);
     }
 }

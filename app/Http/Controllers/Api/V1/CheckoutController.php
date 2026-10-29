@@ -54,6 +54,8 @@ class CheckoutController extends Controller
                     'requires_invoice_data' => false,
                 ],
                 'warnings' => [],
+                'assistant_can_pay' => false,
+                'can_continue_on_platform' => true,
                 'can_continue_to_payment_platform' => false,
             ]);
         }

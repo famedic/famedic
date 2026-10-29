@@ -14,6 +14,7 @@ beforeEach(function () {
     disableAllAkubicaOtpFeatures();
     enableLoginOtpWithFakeDelivery();
     config()->set('otp.p0a.account_context.ttl_minutes', 10);
+    config()->set('atix.sandbox.keys', ['sandbox-test' => 'sandbox-secret']);
     $this->app->instance(\App\Contracts\Otp\OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
 });
 
@@ -22,8 +23,10 @@ afterEach(function () {
     disableAllAkubicaOtpFeatures();
 });
 
-function contactUser(string $phone = '5512345678', array $attributes = []): User
+function contactUser(?string $phone = null, array $attributes = []): User
 {
+    $phone ??= '551'.str_pad((string) random_int(1000000, 9999999), 7, '0', STR_PAD_LEFT);
+
     return User::factory()->withRegularCustomer()->create(array_merge([
         'phone' => $phone,
         'phone_country' => 'MX',
@@ -32,25 +35,77 @@ function contactUser(string $phone = '5512345678', array $attributes = []): User
     ], $attributes));
 }
 
-function contactPayload(string $phone = '5512345678', array $extra = []): array
+function contactPayload(?string $phone = null, array $extra = []): array
 {
+    $phone ??= '551'.str_pad((string) random_int(1000000, 9999999), 7, '0', STR_PAD_LEFT);
+
     return array_merge([
         'phone' => $phone,
         'conversation_id' => 'conversation-001',
         'channel_event_id' => 'event-001',
         'channel' => 'whatsapp',
+        'audience' => 'leo',
         'personalization' => ['allowed' => true],
     ], $extra);
 }
 
+function contactAtixLookupPayload(?string $phone = null, array $extra = []): array
+{
+    $phone ??= '551'.str_pad((string) random_int(1000000, 9999999), 7, '0', STR_PAD_LEFT);
+
+    return array_merge([
+        'phone' => '+52'.$phone,
+        'conversation_id' => 'conversation-001',
+        'channel_event_id' => 'event-001',
+        'channel' => 'whatsapp',
+        'audience' => 'leo',
+        'personalization' => ['allowed' => true],
+    ], $extra);
+}
+
+function contactAtixHeaders(array $payload, string $nonce = 'nonce-contact-atix'): array
+{
+    $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $canonical = implode("\n", ['POST', '/api/v1/integrations/atix/phone-lookups', (string) now()->timestamp, $nonce, hash('sha256', $body)]);
+
+    return [
+        'X-Integration-Key-Id' => 'sandbox-test',
+        'X-Timestamp' => (string) now()->timestamp,
+        'X-Nonce' => $nonce,
+        'X-Signature' => hash_hmac('sha256', $canonical, 'sandbox-secret'),
+        'X-Correlation-ID' => 'corr-contact-atix',
+        'Idempotency-Key' => 'idem-'.$nonce,
+    ];
+}
+
+function performContactAtixLookup(array $payload, string $nonce = 'nonce-contact-atix'): void
+{
+    test()->withHeaders(contactAtixHeaders($payload, $nonce))
+        ->postJson('/api/v1/integrations/atix/phone-lookups', $payload)
+        ->assertStatus(202);
+}
+
 function requestContactChallenge(array $payload): string
 {
+    $phone = (string) ($payload['phone'] ?? '');
+    if ($phone !== '' && ! str_starts_with($phone, '+')) {
+        performContactAtixLookup(contactAtixLookupPayload($phone, [
+            'conversation_id' => $payload['conversation_id'] ?? 'conversation-001',
+            'channel_event_id' => $payload['channel_event_id'] ?? 'event-001',
+            'channel' => $payload['channel'] ?? 'whatsapp',
+            'audience' => $payload['audience'] ?? 'leo',
+            'personalization' => $payload['personalization'] ?? ['allowed' => true],
+        ]));
+    }
+
     return test()->postJson('/api/v1/auth/login/request-code', $payload)
         ->assertStatus(202)
         ->json('data.challenge_id');
 }
 
 test('does not enumerate nonexistent, unverified, inactive, or ambiguous contacts', function () {
+    $challengesBefore = OtpChallenge::query()->count();
+
     $unknown = $this->postJson('/api/v1/auth/login/request-code', contactPayload('5599999999'))
         ->assertStatus(202)->json('data');
 
@@ -68,14 +123,16 @@ test('does not enumerate nonexistent, unverified, inactive, or ambiguous contact
     expect($unknown)->toHaveKeys(['requires_otp', 'challenge_id', 'purpose', 'channel', 'destination_masked', 'expires_at', 'resend_available_at'])
         ->and($unverifiedResponse)->toHaveKeys(array_keys($unknown))
         ->and($inactiveResponse)->toHaveKeys(array_keys($unknown))
-        ->and(OtpChallenge::query()->count())->toBe(0)
+        ->and(OtpChallenge::query()->count())->toBe($challengesBefore)
         ->and($unverified->exists)->toBeTrue()
         ->and($inactive->exists)->toBeTrue();
 });
 
 test('contextual login verifies OTP, returns only allowed first name, and never exposes context token', function () {
     $user = contactUser();
-    $start = $this->postJson('/api/v1/auth/login/request-code', contactPayload())
+    $phone = $user->getRawOriginal('phone');
+    performContactAtixLookup(contactAtixLookupPayload($phone));
+    $start = $this->postJson('/api/v1/auth/login/request-code', contactPayload($phone))
         ->assertStatus(202)
         ->assertJsonPath('data.personalization.allowed', true)
         ->assertJsonPath('data.personalization.first_name', 'Ada');
@@ -93,11 +150,13 @@ test('contextual login verifies OTP, returns only allowed first name, and never 
     ])->assertOk();
 
     $response->assertJsonPath('data.otp_verified', true)
+        ->assertJsonPath('data.assurance_level', 'otp_verified')
         ->assertJsonPath('data.personalization.allowed', true)
         ->assertJsonPath('data.personalization.first_name', 'Ada')
-        ->assertJsonMissingPath('data.token')
-        ->assertJsonMissingPath('data.account_context_token')
-        ->assertJsonMissingPath('data.user');
+        ->assertJsonPath('data.token_type', 'Bearer')
+        ->assertJsonPath('data.user.id', $user->id)
+        ->assertJsonStructure(['data' => ['token', 'expires_in', 'expires_at']])
+        ->assertJsonMissingPath('data.account_context_token');
 
     expect(AccountContext::query()->where('user_id', $user->id)->count())->toBe(1)
         ->and(AccountContext::query()->where('user_id', $user->id)->sole()->fresh()->verified_at)->not->toBeNull()
@@ -105,8 +164,9 @@ test('contextual login verifies OTP, returns only allowed first name, and never 
 });
 
 test('contextual login suppresses personalization when not allowed', function () {
-    contactUser();
-    $challengeId = requestContactChallenge(contactPayload(extra: [
+    $user = contactUser();
+    $phone = $user->getRawOriginal('phone');
+    $challengeId = requestContactChallenge(contactPayload($phone, extra: [
         'personalization' => ['allowed' => false],
     ]));
 
@@ -159,7 +219,16 @@ test('contact recognition context fields must be supplied together', function ()
         'conversation_id' => 'conversation-001',
     ])->assertStatus(422)
         ->assertJsonPath('error.fields.channel_event_id.0', 'El contexto conversacional requiere todos sus identificadores.')
-        ->assertJsonPath('error.fields.channel.0', 'El contexto conversacional requiere todos sus identificadores.');
+        ->assertJsonPath('error.fields.channel.0', 'El contexto conversacional requiere todos sus identificadores.')
+        ->assertJsonPath('error.fields.audience.0', 'El contexto conversacional requiere todos sus identificadores.');
+});
+
+test('contextual request code without prior recognition is rejected for eligible users', function () {
+    $user = contactUser();
+    $phone = $user->getRawOriginal('phone');
+    $this->postJson('/api/v1/auth/login/request-code', contactPayload($phone))
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'ACCOUNT_CONTEXT_REQUIRED');
 });
 
 test('unique phone constraint prevents multiple active account matches', function () {

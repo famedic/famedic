@@ -88,10 +88,12 @@ test('prepares medical checkout without payment or activation side effects', fun
         ->assertJsonPath('data.service_line', 'medical_services')
         ->assertJsonPath('data.cart.totals.total_cents', 30000)
         ->assertJsonPath('data.can_continue_to_payment_platform', false)
+        ->assertJsonPath('data.assistant_can_pay', false)
+        ->assertJsonPath('data.can_continue_on_platform', true)
         ->assertJsonPath('data.requirements.has_items', true);
 
     expect($user->customer->medicalAttentionSubscriptions()->count())->toBe(0)
-        ->and(MedicalServiceCartItem::query()->count())->toBe(1);
+        ->and($user->customer->medicalServiceCarts()->first()->items()->count())->toBe(1);
 });
 
 test('blocks adding a plan when an individual membership is active', function () {

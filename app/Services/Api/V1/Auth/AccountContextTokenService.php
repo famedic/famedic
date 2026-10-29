@@ -14,9 +14,92 @@ final class AccountContextTokenService implements AccountContextTokenIssuer
         return $this->create($user, $phoneHash, $binding, $otpChallengeId, now());
     }
 
-    public function issuePreOtp(User $user, string $phoneHash, ContactRecognitionBinding $binding, int $otpChallengeId): string
+    public function issuePreOtp(User $user, string $phoneHash, ContactRecognitionBinding $binding, ?int $otpChallengeId = null): string
     {
         return $this->create($user, $phoneHash, $binding, $otpChallengeId, null);
+    }
+
+    public function ensurePreOtpContext(User $user, string $phoneHash, ContactRecognitionBinding $binding): AccountContext
+    {
+        $existing = $this->findActivePreOtp($phoneHash, $binding);
+        if ($existing instanceof AccountContext && (int) $existing->user_id === (int) $user->id) {
+            $existing->forceFill([
+                'expires_at' => $this->expiresAt(),
+            ])->save();
+
+            return $existing->fresh() ?? $existing;
+        }
+
+        if ($existing instanceof AccountContext) {
+            $existing->forceFill(['invalidated_at' => now()])->save();
+        }
+
+        $token = Str::random(64);
+        $context = AccountContext::query()->create([
+            'user_id' => $user->id,
+            'otp_challenge_id' => null,
+            'token_hash' => $this->tokenHash($token),
+            'phone_hash' => $phoneHash,
+            'conversation_hash' => $binding->conversationHash,
+            'channel_event_hash' => $binding->channelEventHash,
+            'channel' => $binding->channel,
+            'audience' => $binding->audience,
+            'expires_at' => $this->expiresAt(),
+            'verified_at' => null,
+        ]);
+
+        return $context;
+    }
+
+    public function findActivePreOtp(string $phoneHash, ContactRecognitionBinding $binding): ?AccountContext
+    {
+        return AccountContext::query()
+            ->where('phone_hash', $phoneHash)
+            ->where('conversation_hash', $binding->conversationHash)
+            ->where('channel_event_hash', $binding->channelEventHash)
+            ->where('channel', $binding->channel)
+            ->where('audience', $binding->audience)
+            ->whereNull('verified_at')
+            ->whereNull('invalidated_at')
+            ->where('expires_at', '>', now())
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    public function attachOtpChallenge(AccountContext $accountContext, int $otpChallengeId): bool
+    {
+        if ($accountContext->invalidated_at !== null || ! $accountContext->isActive()) {
+            return false;
+        }
+
+        return $accountContext->forceFill([
+            'otp_challenge_id' => $otpChallengeId,
+        ])->save();
+    }
+
+    public function findPreOtpForChallenge(int $otpChallengeId, string $phoneHash, ContactRecognitionBinding $binding): ?AccountContext
+    {
+        $accountContext = AccountContext::query()
+            ->where('otp_challenge_id', $otpChallengeId)
+            ->whereNull('verified_at')
+            ->whereNull('invalidated_at')
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if (! $accountContext instanceof AccountContext) {
+            return null;
+        }
+
+        if (! hash_equals($accountContext->phone_hash, $phoneHash)
+            || ! hash_equals($accountContext->conversation_hash, $binding->conversationHash)
+            || ! hash_equals($accountContext->channel_event_hash, $binding->channelEventHash)
+            || ! hash_equals($accountContext->channel, $binding->channel)
+            || ! hash_equals($accountContext->audience, $binding->audience)
+        ) {
+            return null;
+        }
+
+        return $accountContext;
     }
 
     public function elevateForChallenge(int $otpChallengeId, User $user): bool
@@ -30,7 +113,7 @@ final class AccountContextTokenService implements AccountContextTokenIssuer
             ->update(['verified_at' => now()]) === 1;
     }
 
-    private function create(User $user, string $phoneHash, ContactRecognitionBinding $binding, int $otpChallengeId, mixed $verifiedAt): string
+    private function create(User $user, string $phoneHash, ContactRecognitionBinding $binding, ?int $otpChallengeId, mixed $verifiedAt): string
     {
         $token = Str::random(64);
 
@@ -43,7 +126,7 @@ final class AccountContextTokenService implements AccountContextTokenIssuer
             'channel_event_hash' => $binding->channelEventHash,
             'channel' => $binding->channel,
             'audience' => $binding->audience,
-            'expires_at' => now()->addMinutes((int) config('otp.p0a.account_context.ttl_minutes', 10)),
+            'expires_at' => $this->expiresAt(),
             'verified_at' => $verifiedAt,
         ]);
 
@@ -115,4 +198,8 @@ final class AccountContextTokenService implements AccountContextTokenIssuer
         return hash('sha256', $token);
     }
 
+    private function expiresAt(): \Illuminate\Support\Carbon
+    {
+        return now()->addMinutes((int) config('otp.p0a.account_context.ttl_minutes', 10));
+    }
 }

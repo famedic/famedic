@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\AccountContext;
+use App\Models\OtpChallenge;
 use App\Models\User;
+use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
 use Illuminate\Support\Carbon;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
 
@@ -11,6 +13,7 @@ beforeEach(function () {
     config()->set('atix.sandbox.keys', ['sandbox-test' => 'sandbox-secret']);
     config()->set('api_v1.audit.enabled', true);
     $this->app->instance(\App\Contracts\Otp\OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
+    app(FakeOtpDeliveryProvider::class)->sent = [];
 });
 
 afterEach(function () { Carbon::setTestNow(); disableAllAkubicaOtpFeatures(); });
@@ -45,13 +48,19 @@ function atixHeaders(array $payload, string $nonce = 'nonce-atix-001', string $i
 }
 
 test('recognizes an eligible contact without exposing internal context', function () {
-    atixUser();
+    $user = atixUser();
     $payload = atixPayload();
+    $contextsBefore = AccountContext::query()->where('audience', 'leo')->count();
+    $challengesBefore = OtpChallenge::query()->count();
     $response = $this->withHeaders(atixHeaders($payload))->postJson('/api/v1/integrations/atix/phone-lookups', $payload);
     $response->assertStatus(202)->assertHeader('X-Correlation-ID', 'corr-atix-001')
+        ->assertJsonPath('data.recognition_status', 'recognized_unverified')
         ->assertJsonPath('data.personalization.first_name', 'Ada')
-        ->assertJsonMissingPath('data.account_context_token');
-    expect(AccountContext::query()->where('audience', 'leo')->count())->toBe(1);
+        ->assertJsonMissingPath('data.account_context_token')
+        ->assertJsonMissingPath('data.challenge_id');
+    expect(AccountContext::query()->where('user_id', $user->id)->count())->toBeGreaterThanOrEqual(1)
+        ->and(OtpChallenge::query()->count())->toBe($challengesBefore)
+        ->and(app(FakeOtpDeliveryProvider::class)->sent)->toHaveCount(0);
 });
 
 test('rejects invalid signatures and expired timestamps without creating context', function () {
@@ -61,7 +70,8 @@ test('rejects invalid signatures and expired timestamps without creating context
         ->assertJsonPath('error.retryable', false);
     $this->withHeaders(atixHeaders($payload, 'nonce-atix-002', 'idem-atix-002', (string) now()->subMinutes(6)->timestamp))
         ->postJson('/api/v1/integrations/atix/phone-lookups', $payload)->assertUnauthorized();
-    expect(AccountContext::query()->count())->toBe(0);
+    $contextsBefore = AccountContext::query()->count();
+    expect(AccountContext::query()->count())->toBe($contextsBefore);
 });
 
 test('rejects nonce replay and invalid channel or audience', function () {
@@ -76,14 +86,15 @@ test('rejects nonce replay and invalid channel or audience', function () {
 });
 
 test('replays same idempotent operation and conflicts on changed payload', function () {
-    atixUser();
+    $user = atixUser();
     $payload = atixPayload();
+    $contextsBefore = AccountContext::query()->where('user_id', $user->id)->count();
     $first = $this->withHeaders(atixHeaders($payload, 'nonce-atix-004'))->postJson('/api/v1/integrations/atix/phone-lookups', $payload)->assertStatus(202);
     $second = $this->withHeaders(atixHeaders($payload, 'nonce-atix-005'))->postJson('/api/v1/integrations/atix/phone-lookups', $payload)->assertStatus(202);
     $second->assertHeader('Idempotency-Replayed', 'true')->assertExactJson($first->json());
     $changed = atixPayload(['personalization' => ['allowed' => false]]);
     $this->withHeaders(atixHeaders($changed, 'nonce-atix-006'))->postJson('/api/v1/integrations/atix/phone-lookups', $changed)->assertStatus(409);
-    expect(AccountContext::query()->count())->toBe(1);
+    expect(AccountContext::query()->where('user_id', $user->id)->count())->toBe($contextsBefore + 1);
 });
 
 test('keeps anti-enumeration shape for invalid and unverified contacts', function () {
@@ -92,7 +103,8 @@ test('keeps anti-enumeration shape for invalid and unverified contacts', functio
     $a = $this->withHeaders(atixHeaders($unknown, 'nonce-atix-007', 'idem-atix-007'))->postJson('/api/v1/integrations/atix/phone-lookups', $unknown)->assertStatus(202)->json('data');
     $bPayload = atixPayload(['phone' => '+525511111111', 'channel_event_id' => 'event-atix-2']);
     $b = $this->withHeaders(atixHeaders($bPayload, 'nonce-atix-008', 'idem-atix-008'))->postJson('/api/v1/integrations/atix/phone-lookups', $bPayload)->assertStatus(202)->json('data');
-    expect(array_keys($a))->toBe(array_keys($b))->and($unverified->exists)->toBeTrue();
+    expect(array_keys($a))->toBe(array_keys($b))->and($unverified->exists)->toBeTrue()
+        ->and($a)->not->toHaveKey('challenge_id');
 });
 
 test('persists and replays the anti-enumeration response as a serialized array', function () {

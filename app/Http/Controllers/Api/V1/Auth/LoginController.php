@@ -170,6 +170,25 @@ class LoginController extends Controller
             }
 
             $contactContext = $this->contactContextFromRequest($request);
+
+            if ($contactContext instanceof ContactRecognitionContext) {
+                $binding = $contactContext->binding((string) config('app.key'));
+                $preOtpContext = $this->accountContextTokens->findActivePreOtp(
+                    $this->bindingHash($phoneComparisonKey),
+                    $binding,
+                );
+
+                if (! $preOtpContext instanceof \App\Models\AccountContext
+                    || (int) $preOtpContext->user_id !== (int) $user->id
+                ) {
+                    return ApiResponse::error(
+                        'ACCOUNT_CONTEXT_REQUIRED',
+                        'Debe completarse el reconocimiento conversacional antes de solicitar OTP.',
+                        422,
+                    );
+                }
+            }
+
             $payload = $this->akubicaLoginOtpService->request(
                 $user,
                 $phone,
@@ -181,14 +200,14 @@ class LoginController extends Controller
                 && is_string($payload['challenge_id'] ?? null)
             ) {
                 $challenge = OtpChallenge::query()->where('public_id', $payload['challenge_id'])->first();
-                if ($challenge instanceof OtpChallenge) {
-                    // The token stays inside the server-side context boundary.
-                    $this->accountContextTokens->issuePreOtp(
-                        $user,
-                        $this->bindingHash($phoneComparisonKey),
-                        $contactContext->binding((string) config('app.key')),
-                        $challenge->id,
-                    );
+                if ($challenge instanceof OtpChallenge && isset($preOtpContext)) {
+                    if (! $this->accountContextTokens->attachOtpChallenge($preOtpContext, $challenge->id)) {
+                        return ApiResponse::error(
+                            'ACCOUNT_CONTEXT_EXPIRED',
+                            'El contexto de reconocimiento ya no es valido. Solicita un nuevo codigo.',
+                            422,
+                        );
+                    }
 
                     if ($contactContext->isPersonalizationAllowed()) {
                         $payload['personalization'] = [
@@ -273,6 +292,27 @@ class LoginController extends Controller
         $challenge = OtpChallenge::query()->where('public_id', $challengePublicId)->first();
         $contactBinding = $this->contactBindingFromChallenge($challenge);
 
+        if ($contactBinding instanceof ContactRecognitionBinding
+            && $challenge instanceof OtpChallenge
+            && is_string($challenge->subject_key)
+            && $challenge->subject_key !== ''
+        ) {
+            $phoneHash = $this->bindingHash($challenge->subject_key);
+            $preOtpContext = $this->accountContextTokens->findPreOtpForChallenge(
+                (int) $challenge->id,
+                $phoneHash,
+                $contactBinding,
+            );
+
+            if ($preOtpContext === null) {
+                return ApiResponse::error(
+                    'ACCOUNT_CONTEXT_EXPIRED',
+                    'El contexto de reconocimiento ya no es valido. Solicita un nuevo codigo.',
+                    422,
+                );
+            }
+        }
+
         try {
             $this->akubicaLoginOtpService->assertConfigurationReady();
             $payload = $this->akubicaLoginOtpService->verify(
@@ -303,12 +343,10 @@ class LoginController extends Controller
             && $challenge instanceof OtpChallenge
             && $user instanceof User
         ) {
-            // The token is intentionally retained only in the internal service boundary.
-            // It is never added to the HTTP or conversational response.
-            if (! $this->accountContextTokens->elevateForChallenge($challenge->id, $user)) {
+            if (! $this->accountContextTokens->elevateForChallenge((int) $challenge->id, $user)) {
                 return ApiResponse::error(
                     'ACCOUNT_CONTEXT_EXPIRED',
-                    'El contexto de reconocimiento ya no es válido. Solicita un nuevo código.',
+                    'El contexto de reconocimiento ya no es valido. Solicita un nuevo codigo.',
                     422,
                 );
             }
@@ -318,16 +356,23 @@ class LoginController extends Controller
                 phoneComparisonKey: $material,
                 outcome: AuditOutcome::SUCCEEDED,
                 httpStatus: 200,
-                authenticatedUser: null,
+                authenticatedUser: $user,
                 challengePublicId: $challengePublicId,
                 metadata: [
-                    'session_issued' => false,
+                    'session_issued' => true,
                     'contact_context_bound' => true,
+                    'assurance_level' => 'otp_verified',
                 ],
             );
 
             return ApiResponse::success([
+                'token' => $payload['token'],
+                'token_type' => $payload['token_type'],
+                'expires_in' => $payload['expires_in'],
+                'expires_at' => $payload['expires_at'],
+                'user' => is_array($payload['user'] ?? null) ? $payload['user'] : $this->formatUser($user),
                 'otp_verified' => true,
+                'assurance_level' => 'otp_verified',
                 'personalization' => $contactBinding->personalizationAllowed
                     ? [
                         'allowed' => true,
@@ -400,6 +445,7 @@ class LoginController extends Controller
             channelEventId: trim((string) $request->validated('channel_event_id')),
             channel: strtolower(trim((string) $request->validated('channel'))),
             personalizationAllowed: (bool) data_get($request->validated(), 'personalization.allowed', false),
+            audience: trim((string) $request->validated('audience')),
         );
     }
 

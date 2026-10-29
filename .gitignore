@@ -8,6 +8,7 @@
 /vendor
 /database/test_db.sqlite
 .env
+.newman-rc1-staging.env.local
 # Claves SSH deben vivir en ~/.ssh del sistema, no en el repo.
 id_ed25519_famedic
 id_ed25519_famedic.pub

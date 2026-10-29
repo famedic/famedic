@@ -56,8 +56,10 @@ final class AtixPhoneLookupIsolatedTest extends TestCase
         $this->atixPost($payload, $this->headers($payload))
             ->assertStatus(202)
             ->assertHeader('X-Correlation-ID', 'corr-'.$this->runId)
+            ->assertJsonPath('data.recognition_status', 'recognized_unverified')
             ->assertJsonPath('data.personalization.first_name', 'Ada')
-            ->assertJsonMissingPath('data.account_context_token');
+            ->assertJsonMissingPath('data.account_context_token')
+            ->assertJsonMissingPath('data.challenge_id');
 
         $this->assertSame(1, AccountContext::query()->where('user_id', $user->id)->count());
     }

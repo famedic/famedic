@@ -128,7 +128,9 @@ final class AkubicaMedicalServicesCartM2BIsolatedTest extends TestCase
         $response = $this->getJson('/api/v1/checkout/prepare?service_line=medical_services', authHeaders($token))
             ->assertOk()->assertJsonPath('data.service_line', 'medical_services')
             ->assertJsonPath('data.cart.totals.total_cents', 30000)
-            ->assertJsonPath('data.can_continue_to_payment_platform', false);
+            ->assertJsonPath('data.can_continue_to_payment_platform', false)
+            ->assertJsonPath('data.assistant_can_pay', false)
+            ->assertJsonPath('data.can_continue_on_platform', true);
 
         $serialized = json_encode($response->json(), JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('payment_link', $serialized);

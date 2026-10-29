@@ -19,11 +19,15 @@ final class AtixPhoneLookupController extends Controller
     {
         $data = $request->validated();
         $response = $this->service->lookup($data);
+        $recognitionStatus = $response->getStatusCode() === 202
+            ? (string) data_get($response->getData(true), 'data.recognition_status', 'unknown')
+            : 'not_processed';
+
         $this->audit->record($request, $response->getStatusCode() < 300 ? 'success' : 'failure', $response->getStatusCode(), $response->getStatusCode() >= 400 ? (string) data_get($response->getData(true), 'error.code') : null, [
                 'channel' => (string) ($data['channel'] ?? 'unknown'),
                 'audience' => (string) ($data['audience'] ?? 'unknown'),
                 'event_hash' => hash('sha256', (string) ($data['channel_event_id'] ?? 'unknown')),
-                'account_match' => $response->getStatusCode() === 202 ? 'anti_enumerated' : 'not_processed',
+                'account_match' => $recognitionStatus === 'recognized_unverified' ? 'recognized' : ($recognitionStatus === 'unknown' ? 'anti_enumerated' : 'not_processed'),
                 'personalization_allowed' => (bool) data_get($data, 'personalization.allowed', false),
         ]);
         return $response;

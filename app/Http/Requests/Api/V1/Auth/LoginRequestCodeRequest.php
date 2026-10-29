@@ -22,6 +22,7 @@ class LoginRequestCodeRequest extends ApiFormRequest
                 'conversation_id' => ['sometimes', 'string', 'max:128'],
                 'channel_event_id' => ['sometimes', 'string', 'max:128'],
                 'channel' => ['sometimes', 'string', 'max:32'],
+                'audience' => ['sometimes', 'string', 'max:64'],
                 'personalization' => ['sometimes', 'array'],
                 'personalization.allowed' => ['sometimes', 'boolean'],
             ];
@@ -39,7 +40,7 @@ class LoginRequestCodeRequest extends ApiFormRequest
                 return;
             }
 
-            $contextFields = ['conversation_id', 'channel_event_id', 'channel'];
+            $contextFields = ['conversation_id', 'channel_event_id', 'channel', 'audience'];
             $present = collect($contextFields)->filter(fn (string $field): bool => $this->filled($field))->count();
 
             if ($present === 0) {
@@ -49,6 +50,13 @@ class LoginRequestCodeRequest extends ApiFormRequest
             foreach ($contextFields as $field) {
                 if (! $this->filled($field)) {
                     $validator->errors()->add($field, 'El contexto conversacional requiere todos sus identificadores.');
+                }
+            }
+
+            if ($this->filled('audience')) {
+                $allowed = config('atix.sandbox.allowed_audiences', ['leo']);
+                if (! in_array((string) $this->input('audience'), $allowed, true)) {
+                    $validator->errors()->add('audience', 'La audiencia no es valida.');
                 }
             }
         });
