@@ -1,0 +1,722 @@
+{
+  "phase": "1C.2",
+  "created_at": "2026-11-05T20:28:40.735089+00:00",
+  "original_sha256": "a737a0c8380ac470f20d95bc3f08739cf2cd38a71092e1e80c4b1a959905010f",
+  "updated_sha256": "523a566bab22fffb4c0ad8fbb29d79cc4823e99769494b1fd135f6639094f9a4",
+  "correction_count": 33,
+  "corrections": [
+    {
+      "error_id": "error-0001",
+      "path": [
+        "paths",
+        "/auth/login/request-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/DeliveryOrConfigFailed",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 167,
+      "original_offset": 8547,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 8547
+    },
+    {
+      "error_id": "error-0002",
+      "path": [
+        "paths",
+        "/auth/login/verify-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/DeliveryOrConfigFailed",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 215,
+      "original_offset": 10128,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 10019
+    },
+    {
+      "error_id": "error-0003",
+      "path": [
+        "paths",
+        "/auth/login/resend-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/FeatureDisabled",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 258,
+      "original_offset": 11467,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 11249
+    },
+    {
+      "error_id": "error-0004",
+      "path": [
+        "paths",
+        "/auth/register",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/DeliveryOrConfigFailed",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 326,
+      "original_offset": 13805,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 13478
+    },
+    {
+      "error_id": "error-0005",
+      "path": [
+        "paths",
+        "/auth/register/verify-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/DeliveryOrConfigFailed",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 375,
+      "original_offset": 15455,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 15019
+    },
+    {
+      "error_id": "error-0006",
+      "path": [
+        "paths",
+        "/auth/register/resend-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/FeatureDisabled",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 413,
+      "original_offset": 16670,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 16125
+    },
+    {
+      "error_id": "error-0007",
+      "path": [
+        "paths",
+        "/auth/token",
+        "delete",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 438,
+      "original_offset": 17416,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 16762
+    },
+    {
+      "error_id": "error-0008",
+      "path": [
+        "paths",
+        "/secure-downloads/{token}",
+        "get",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/FeatureDisabled",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 499,
+      "original_offset": 19496,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 18733
+    },
+    {
+      "error_id": "error-0009",
+      "path": [
+        "paths",
+        "/cart",
+        "delete",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 836,
+      "original_offset": 29882,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 29010
+    },
+    {
+      "error_id": "error-0010",
+      "path": [
+        "paths",
+        "/cart/totals",
+        "get",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 867,
+      "original_offset": 30889,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 29908
+    },
+    {
+      "error_id": "error-0011",
+      "path": [
+        "paths",
+        "/cart/coupon",
+        "delete",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1209,
+      "original_offset": 41941,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 40851
+    },
+    {
+      "error_id": "error-0012",
+      "path": [
+        "paths",
+        "/checkout/prepare",
+        "get",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1240,
+      "original_offset": 42978,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 41779
+    },
+    {
+      "error_id": "error-0013",
+      "path": [
+        "paths",
+        "/laboratory-appointments/requirements",
+        "get",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1387,
+      "original_offset": 47564,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 46256
+    },
+    {
+      "error_id": "error-0014",
+      "path": [
+        "paths",
+        "/orders",
+        "get",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1546,
+      "original_offset": 52483,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 51066
+    },
+    {
+      "error_id": "error-0015",
+      "path": [
+        "paths",
+        "/orders/results",
+        "get",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1573,
+      "original_offset": 53293,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 51767
+    },
+    {
+      "error_id": "error-0016",
+      "path": [
+        "paths",
+        "/orders/invoices",
+        "get",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1600,
+      "original_offset": 54101,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 52466
+    },
+    {
+      "error_id": "error-0017",
+      "path": [
+        "paths",
+        "/orders/{order_id}/products",
+        "get",
+        "responses",
+        "404"
+      ],
+      "ref": "#/components/responses/OrderNotFound",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1632,
+      "original_offset": 55100,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 53356
+    },
+    {
+      "error_id": "error-0018",
+      "path": [
+        "paths",
+        "/orders/{order_id}/status",
+        "get",
+        "responses",
+        "404"
+      ],
+      "ref": "#/components/responses/OrderNotFound",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1662,
+      "original_offset": 56018,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 54165
+    },
+    {
+      "error_id": "error-0019",
+      "path": [
+        "paths",
+        "/orders/{order_id}/cancel",
+        "put",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1688,
+      "original_offset": 56814,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 54852
+    },
+    {
+      "error_id": "error-0020",
+      "path": [
+        "paths",
+        "/orders/{order_id}/results",
+        "get",
+        "responses",
+        "404"
+      ],
+      "ref": "#/components/responses/OrderNotFound",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1732,
+      "original_offset": 58247,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 56176
+    },
+    {
+      "error_id": "error-0021",
+      "path": [
+        "paths",
+        "/orders/{order_id}/results/step-up/request",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/FeatureDisabled",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1829,
+      "original_offset": 61451,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 59271
+    },
+    {
+      "error_id": "error-0022",
+      "path": [
+        "paths",
+        "/orders/{order_id}/results/step-up/verify",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/FeatureDisabled",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1876,
+      "original_offset": 62985,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 60696
+    },
+    {
+      "error_id": "error-0023",
+      "path": [
+        "paths",
+        "/orders/{order_id}/results/secure-link",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/FeatureDisabled",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1947,
+      "original_offset": 65367,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 62969
+    },
+    {
+      "error_id": "error-0024",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoices",
+        "get",
+        "responses",
+        "404"
+      ],
+      "ref": "#/components/responses/OrderNotFound",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 1987,
+      "original_offset": 66644,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 64137
+    },
+    {
+      "error_id": "error-0025",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoices/{invoice_id}/step-up/request",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/FeatureDisabled",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 2097,
+      "original_offset": 70305,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 67689
+    },
+    {
+      "error_id": "error-0026",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoices/{invoice_id}/step-up/verify",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/FeatureDisabled",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 2152,
+      "original_offset": 72146,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 69421
+    },
+    {
+      "error_id": "error-0027",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoices/{invoice_id}/secure-link",
+        "post",
+        "responses",
+        "503"
+      ],
+      "ref": "#/components/responses/FeatureDisabled",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 2231,
+      "original_offset": 74873,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 72039
+    },
+    {
+      "error_id": "error-0028",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoice-request/status",
+        "get",
+        "responses",
+        "404"
+      ],
+      "ref": "#/components/responses/OrderNotFound",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 2261,
+      "original_offset": 75834,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 72891
+    },
+    {
+      "error_id": "error-0029",
+      "path": [
+        "paths",
+        "/user/family",
+        "get",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 2343,
+      "original_offset": 78393,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 75341
+    },
+    {
+      "error_id": "error-0030",
+      "path": [
+        "paths",
+        "/user/payment-methods",
+        "get",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 2370,
+      "original_offset": 79223,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 76062
+    },
+    {
+      "error_id": "error-0031",
+      "path": [
+        "paths",
+        "/user/tax-profiles",
+        "post",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 2426,
+      "original_offset": 80879,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 77609
+    },
+    {
+      "error_id": "error-0032",
+      "path": [
+        "paths",
+        "/user/addresses",
+        "post",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 2567,
+      "original_offset": 85053,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 81674
+    },
+    {
+      "error_id": "error-0033",
+      "path": [
+        "paths",
+        "/user/contacts",
+        "post",
+        "responses",
+        "401"
+      ],
+      "ref": "#/components/responses/Unauthenticated",
+      "removed_headers": {
+        "X-Correlation-ID": {
+          "$ref": "#/components/headers/X-Correlation-ID"
+        }
+      },
+      "original_line": 2708,
+      "original_offset": 89183,
+      "removed_text": "          headers:\n            X-Correlation-ID:\n              $ref: '#/components/headers/X-Correlation-ID'\n",
+      "semantic_headers_equal": true,
+      "updated_offset": 85695
+    }
+  ],
+  "historical_and_prior_evidence_sha256": {
+    "docs/Akubica/akubica-openapi.yaml": "c46ec1f832f2c8a22bdc9cefc2341ab1afc63e01f94dc6cd3946a5ae34e4e2d2",
+    "docs/Akubica/akubica-openapi-v1.3.0-rc1.yaml": "bbf110ffb55f9092b7a9678561509e11bfb0eb644251efc2b44ceec3a8d1398b",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-ANALISIS-ERRORES.json": "9b14ab750a9d52fc1de770bc744919367a92ced00125c4b3eb45de937fefb640",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-DEPENDENCIAS-PROPUESTAS.json": "73c9a43ffe38fbbfafa6e09d42ba8c6066094158303258c8d235f9a05d559714",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-EJECUCION-AUTORIZADA.json": "cd52d7c810edb5fa6f2eb1dbefd15a3dd76b874b77cd5e28915874a3410cb248",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-ERRORES-CONTRACTUALES.json": "139c4e8c8a2ac3124293813926f60d6739bf1ee48c35db5f9650811e0435d799",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-INSTALACION-PENDIENTE.md": "181e8d2bd5572344f1791953a608432ecd5669bd72ad7e4449fb104619b5859e",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-OPENAPI-INTEGRAL-AUTORIZADA.json": "110d802bbae0e1174076514e1b1e6bb6b0235be6862c0ece1f51492a678277d0",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-OPENAPI-INTEGRAL.json": "74c43b6d4732ab76b0ab210f5fe4d74562d4fab288b2d95ac158f51bc6b2f0c1",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-VALIDACION-AUTORIZADA.md": "6d440dfb584d64887a936a11c979d91614139fb729cb9bbe661831fe34553230",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-VALIDACION-INTEGRAL.md": "6e3c892a36452df41097a3a4ee54e54f65f53d2d443909a4aa5515966b39e237",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-requirements-propuesto.lock": "a05290de5bf81efd7853d106a6233468827e84588e2e8b168e51765160959f81",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1B-OPENAPI-INTEGRAL.json": "e6aee02f4ad1fc3605fc6aafa518a97c581a61c2f1650e2609d815e79e773583"
+  },
+  "historical_git": {
+    "commit": "6ffb35c7cdaee26e8deb09398c85ff9bcf7c46e5",
+    "path": "docs/Akubica/akubica-openapi.yaml",
+    "sha256": "6ace97823aa528171f0d5c34c8ec9674d5730c429db2a95c18dc0c560f5b3749"
+  }
+}

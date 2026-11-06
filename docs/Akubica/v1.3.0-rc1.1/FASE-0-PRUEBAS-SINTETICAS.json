@@ -1,0 +1,55 @@
+{
+  "execution_id": "execution-0001",
+  "checks": {
+    "python_total": 31,
+    "python_failed": 0,
+    "node_total": 4,
+    "node_failed": 0
+  },
+  "cases": [
+    {
+      "case_id": "case-0001",
+      "categories": [
+        "SENSITIVE_PAIR"
+      ],
+      "result": "BLOCKED_AS_EXPECTED"
+    },
+    {
+      "case_id": "case-0002",
+      "categories": [
+        "SENSITIVE_FIELD"
+      ],
+      "result": "BLOCKED_AS_EXPECTED"
+    },
+    {
+      "case_id": "case-0003",
+      "categories": [
+        "ASSIGNMENT",
+        "BUFFER_REPRESENTATION",
+        "SENSITIVE_FIELD"
+      ],
+      "result": "BLOCKED_AS_EXPECTED"
+    },
+    {
+      "case_id": "case-0004",
+      "categories": [
+        "SENSITIVE_FIELD"
+      ],
+      "result": "BLOCKED_AS_EXPECTED"
+    },
+    {
+      "case_id": "case-0005",
+      "categories": [
+        "SENSITIVE_FIELD"
+      ],
+      "result": "BLOCKED_AS_EXPECTED"
+    },
+    {
+      "case_id": "case-0006",
+      "categories": [
+        "SENSITIVE_FIELD"
+      ],
+      "result": "BLOCKED_AS_EXPECTED"
+    }
+  ]
+}

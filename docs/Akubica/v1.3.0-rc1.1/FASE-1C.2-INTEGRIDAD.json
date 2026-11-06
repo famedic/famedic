@@ -1,0 +1,131 @@
+{
+  "result": "PASS",
+  "checked_at": "2026-11-05T20:31:55.930715+00:00",
+  "candidate_sha256": "523a566bab22fffb4c0ad8fbb29d79cc4823e99769494b1fd135f6639094f9a4",
+  "historical_and_prior_evidence": {
+    "docs/Akubica/akubica-openapi.yaml": {
+      "expected_sha256": "c46ec1f832f2c8a22bdc9cefc2341ab1afc63e01f94dc6cd3946a5ae34e4e2d2",
+      "actual_sha256": "c46ec1f832f2c8a22bdc9cefc2341ab1afc63e01f94dc6cd3946a5ae34e4e2d2",
+      "unchanged": true
+    },
+    "docs/Akubica/akubica-openapi-v1.3.0-rc1.yaml": {
+      "expected_sha256": "bbf110ffb55f9092b7a9678561509e11bfb0eb644251efc2b44ceec3a8d1398b",
+      "actual_sha256": "bbf110ffb55f9092b7a9678561509e11bfb0eb644251efc2b44ceec3a8d1398b",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-ANALISIS-ERRORES.json": {
+      "expected_sha256": "9b14ab750a9d52fc1de770bc744919367a92ced00125c4b3eb45de937fefb640",
+      "actual_sha256": "9b14ab750a9d52fc1de770bc744919367a92ced00125c4b3eb45de937fefb640",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-DEPENDENCIAS-PROPUESTAS.json": {
+      "expected_sha256": "73c9a43ffe38fbbfafa6e09d42ba8c6066094158303258c8d235f9a05d559714",
+      "actual_sha256": "73c9a43ffe38fbbfafa6e09d42ba8c6066094158303258c8d235f9a05d559714",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-EJECUCION-AUTORIZADA.json": {
+      "expected_sha256": "cd52d7c810edb5fa6f2eb1dbefd15a3dd76b874b77cd5e28915874a3410cb248",
+      "actual_sha256": "cd52d7c810edb5fa6f2eb1dbefd15a3dd76b874b77cd5e28915874a3410cb248",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-ERRORES-CONTRACTUALES.json": {
+      "expected_sha256": "139c4e8c8a2ac3124293813926f60d6739bf1ee48c35db5f9650811e0435d799",
+      "actual_sha256": "139c4e8c8a2ac3124293813926f60d6739bf1ee48c35db5f9650811e0435d799",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-INSTALACION-PENDIENTE.md": {
+      "expected_sha256": "181e8d2bd5572344f1791953a608432ecd5669bd72ad7e4449fb104619b5859e",
+      "actual_sha256": "181e8d2bd5572344f1791953a608432ecd5669bd72ad7e4449fb104619b5859e",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-OPENAPI-INTEGRAL-AUTORIZADA.json": {
+      "expected_sha256": "110d802bbae0e1174076514e1b1e6bb6b0235be6862c0ece1f51492a678277d0",
+      "actual_sha256": "110d802bbae0e1174076514e1b1e6bb6b0235be6862c0ece1f51492a678277d0",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-OPENAPI-INTEGRAL.json": {
+      "expected_sha256": "74c43b6d4732ab76b0ab210f5fe4d74562d4fab288b2d95ac158f51bc6b2f0c1",
+      "actual_sha256": "74c43b6d4732ab76b0ab210f5fe4d74562d4fab288b2d95ac158f51bc6b2f0c1",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-VALIDACION-AUTORIZADA.md": {
+      "expected_sha256": "6d440dfb584d64887a936a11c979d91614139fb729cb9bbe661831fe34553230",
+      "actual_sha256": "6d440dfb584d64887a936a11c979d91614139fb729cb9bbe661831fe34553230",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-VALIDACION-INTEGRAL.md": {
+      "expected_sha256": "6e3c892a36452df41097a3a4ee54e54f65f53d2d443909a4aa5515966b39e237",
+      "actual_sha256": "6e3c892a36452df41097a3a4ee54e54f65f53d2d443909a4aa5515966b39e237",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C-requirements-propuesto.lock": {
+      "expected_sha256": "a05290de5bf81efd7853d106a6233468827e84588e2e8b168e51765160959f81",
+      "actual_sha256": "a05290de5bf81efd7853d106a6233468827e84588e2e8b168e51765160959f81",
+      "unchanged": true
+    },
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1B-OPENAPI-INTEGRAL.json": {
+      "expected_sha256": "e6aee02f4ad1fc3605fc6aafa518a97c581a61c2f1650e2609d815e79e773583",
+      "actual_sha256": "e6aee02f4ad1fc3605fc6aafa518a97c581a61c2f1650e2609d815e79e773583",
+      "unchanged": true
+    }
+  },
+  "historical_git": {
+    "commit": "6ffb35c7cdaee26e8deb09398c85ff9bcf7c46e5",
+    "path": "docs/Akubica/akubica-openapi.yaml",
+    "sha256": "6ace97823aa528171f0d5c34c8ec9674d5730c429db2a95c18dc0c560f5b3749"
+  },
+  "modified_this_phase": [
+    ".gitignore",
+    "docs/Akubica/akubica-openapi-v1.3.0-rc1.1.yaml"
+  ],
+  "created_this_phase": [
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-CIERRE.md",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-CORRECCIONES.json",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-EJECUCION.json",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-INTEGRIDAD.json",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-OPENAPI-INTEGRAL.json",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-REGRESIONES-FINAL.json",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-REGRESIONES.json",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-VALIDACION-LOCAL.json",
+    "scripts/tests/test_openapi31_phase1c2.py"
+  ],
+  "deleted_this_phase": [],
+  "laravel_formrequest_unchanged": true,
+  "laravel_formrequest_sha256": "75e1af200172945a91300c1baa254e82c0ad664c20c1bd1c19342d26da978827",
+  "git_diff_check": {
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "environment": {
+    "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+    "architecture": "x86_64",
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "validator_class": "OpenAPIV31SpecValidator",
+    "installed": {
+      "typing-inspection": "0.4.5",
+      "PyYAML": "6.0.3",
+      "rfc3339-validator": "0.1.4",
+      "jsonschema-path": "0.5.0",
+      "rpds-py": "2026.9.1",
+      "attrs": "26.1.0",
+      "openapi-schema-validator": "0.9.0",
+      "pydantic-settings": "2.16.2",
+      "lazy-object-proxy": "1.13.0",
+      "openapi-spec-validator": "0.9.0",
+      "annotated-types": "0.8.0",
+      "jsonschema-specifications": "2025.9.1",
+      "pydantic_core": "2.50.4",
+      "six": "1.17.0",
+      "pathable": "0.6.0",
+      "referencing": "0.37.0",
+      "jsonschema": "4.26.0",
+      "typing_extensions": "4.16.0",
+      "python-dotenv": "1.2.4",
+      "pydantic": "2.14.3"
+    }
+  },
+  "head": "481a8871153cb4995e3fb05f6fba682d45ae33d4",
+  "phase0_administrative_status": "OPEN",
+  "release_authorized": false
+}

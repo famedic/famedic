@@ -1,0 +1,61 @@
+{
+  "python": {
+    "command": [
+      "/home/developer/.local/share/famedic-validation/openapi31-0.9.0-py3144/bin/python",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "scripts/tests",
+      "-p",
+      "test_*.py",
+      "-q"
+    ],
+    "started_at": "2026-11-05T20:29:45.160448+00:00",
+    "finished_at": "2026-11-05T20:29:55.062742+00:00",
+    "returncode": 1,
+    "stdout": "",
+    "stderr": "======================================================================\nFAIL: test_negative_reintroduced_pattern_is_rejected (test_openapi31_phase1c2.Phase1C2Tests.test_negative_reintroduced_pattern_is_rejected)\n----------------------------------------------------------------------\nAssertionError\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/home/developer/projects/famedic/scripts/tests/test_openapi31_phase1c2.py\", line 72, in test_negative_reintroduced_pattern_is_rejected\n    with self.assertRaisesRegex(AssertionError, 'sibling headers'):\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: \"sibling headers\" does not match \"\"\n\n======================================================================\nFAIL: test_responses_resolve_and_no_sibling_headers (test_openapi31_phase1c2.Phase1C2Tests.test_responses_resolve_and_no_sibling_headers)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/developer/projects/famedic/scripts/tests/test_openapi31_phase1c2.py\", line 66, in test_responses_resolve_and_no_sibling_headers\n    assert_response_references(self.after)\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^\n  File \"/home/developer/projects/famedic/scripts/tests/test_openapi31_phase1c2.py\", line 30, in assert_response_references\n    assert isinstance(target, dict) and 'description' in target\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n\n----------------------------------------------------------------------\nRan 80 tests in 9.413s\n\nFAILED (failures=2)\n"
+  },
+  "node": {
+    "command": [
+      "node",
+      "--test",
+      "scripts/tests/test-newman-secure.cjs"
+    ],
+    "started_at": "2026-11-05T20:29:45.161326+00:00",
+    "finished_at": "2026-11-05T20:29:45.555505+00:00",
+    "returncode": 0,
+    "stdout": "\u2714 configuration stays in memory; no CLI reporter or redirect following (15.610128ms)\n\u2714 exact staging origin only; deceptive hosts and credentialed URLs rejected (1.450007ms)\n\u2714 phase B requires explicit current challenge state and OTP (6.324003ms)\n\u2714 shell entrypoints contain no secret argv, CLI reporters or npx downloads (0.990242ms)\n\u2139 tests 4\n\u2139 suites 0\n\u2139 pass 4\n\u2139 fail 0\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 203.083386\n",
+    "stderr": ""
+  },
+  "local": {
+    "command": [
+      "/usr/bin/python3",
+      "-B",
+      "scripts/validate-akubica-rc1-artifacts.py",
+      "--contract",
+      "docs/Akubica/akubica-openapi-v1.3.0-rc1.1.yaml",
+      "--report",
+      "/home/developer/projects/famedic/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-VALIDACION-LOCAL.json"
+    ],
+    "started_at": "2026-11-05T20:29:45.161662+00:00",
+    "finished_at": "2026-11-05T20:29:48.208016+00:00",
+    "returncode": 0,
+    "stdout": "{\"result\": \"PASS_LOCAL_SCOPE\", \"checks\": {\"security_declarations_vs_routes\": true, \"e164_contract_formrequest\": true, \"nullable_reviewed_annotations_resolved\": true, \"openapi_31_parse\": true, \"candidate_version\": true, \"structure_local_refs_and_schema_meta\": true, \"historical_bytes_preserved\": true, \"operation_set_and_ids_preserved\": true, \"embedded_examples\": true, \"synthetic_response_fixtures\": true, \"postman_method_paths_and_full_mirror\": true}, \"examples\": {\"total\": 30, \"failed\": 0}, \"operations\": {\"historical\": 61, \"current_base\": 67, \"rc1\": 67, \"rc11\": 67}, \"release_ready\": false, \"runtime_e164_alignment\": \"PASS\"}\n",
+    "stderr": ""
+  },
+  "diff_check": {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "started_at": "2026-11-05T20:29:45.162921+00:00",
+    "finished_at": "2026-11-05T20:29:45.186276+00:00",
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+}

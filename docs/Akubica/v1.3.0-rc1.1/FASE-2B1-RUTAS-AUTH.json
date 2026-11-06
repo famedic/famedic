@@ -1,0 +1,1646 @@
+{
+  "source": "local router in synthetic environment; no HTTP request",
+  "routes": [
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/auth/login/request-code",
+      "name": "api.v1.auth.login.request-code",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/auth/login/verify-code",
+      "name": "api.v1.auth.login.verify-code",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/auth/login/resend-code",
+      "name": "api.v1.auth.login.resend-code",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/auth/register",
+      "name": "api.v1.auth.register",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/auth/register/verify-code",
+      "name": "api.v1.auth.register.verify-code",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/auth/register/resend-code",
+      "name": "api.v1.auth.register.resend-code",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/integrations/atix/phone-lookups",
+      "name": "api.v1.integrations.atix.phone-lookups.store",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "throttle:atix-sandbox",
+        "api.audit",
+        "atix.hmac",
+        "atix.idempotency"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:atix-sandbox",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext",
+        "App\\Http\\Middleware\\Api\\V1\\AuthenticateAtixHmac",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceAtixPhoneLookupIdempotency"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "uri": "api/v1/auth/token",
+      "name": "api.v1.auth.token.revoke",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/secure-downloads/{token}",
+      "name": "api.v1.secure-downloads.show",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "throttle:60,1",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:60,1",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/catalog/laboratory-brands",
+      "name": "api.v1.catalog.laboratory-brands.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/catalog/laboratory-tests",
+      "name": "api.v1.catalog.laboratory-tests.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/catalog/laboratory-test-categories",
+      "name": "api.v1.catalog.laboratory-test-categories.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/catalog/laboratory-stores",
+      "name": "api.v1.catalog.laboratory-stores.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/catalog/laboratory-tests/{laboratory_test_id}",
+      "name": "api.v1.catalog.laboratory-tests.show",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/catalog/medications/{medication_id}",
+      "name": "api.v1.catalog.medications.show",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/memberships/plans",
+      "name": "api.v1.memberships.plans.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/memberships/status",
+      "name": "api.v1.memberships.status.show",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/cart/totals",
+      "name": "api.v1.cart.totals",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/cart/coupon",
+      "name": "api.v1.cart.coupon.show",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/cart/coupon",
+      "name": "api.v1.cart.coupon.apply",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "uri": "api/v1/cart/coupon",
+      "name": "api.v1.cart.coupon.remove",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/cart/medical-benefit",
+      "name": "api.v1.cart.medical-benefit.show",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/cart/medical-benefit",
+      "name": "api.v1.cart.medical-benefit.apply",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "uri": "api/v1/cart/medical-benefit",
+      "name": "api.v1.cart.medical-benefit.remove",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "uri": "api/v1/cart",
+      "name": "api.v1.cart.clear",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/cart",
+      "name": "api.v1.cart.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/cart/items",
+      "name": "api.v1.cart.items.store",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "uri": "api/v1/cart/items/{cart_item_id}",
+      "name": "api.v1.cart.items.destroy",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/checkout/prepare",
+      "name": "api.v1.checkout.prepare",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/checkout/draft",
+      "name": "api.v1.checkout.draft",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/checkout/payment-link",
+      "name": "api.v1.checkout.payment-link",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.idempotency"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/laboratory-appointments/requirements",
+      "name": "api.v1.laboratory-appointments.requirements",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/laboratory-appointments",
+      "name": "api.v1.laboratory-appointments.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/laboratory-appointments",
+      "name": "api.v1.laboratory-appointments.store",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "uri": "api/v1/laboratory-appointments/{appointment_id}",
+      "name": "api.v1.laboratory-appointments.destroy",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders",
+      "name": "api.v1.orders.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders/results",
+      "name": "api.v1.orders.results.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders/invoices",
+      "name": "api.v1.orders.invoices.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders/{order_id}/results/download",
+      "name": "api.v1.orders.results.download",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders/{order_id}/invoices/{invoice_id}/download",
+      "name": "api.v1.orders.invoices.download",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/orders/{order_id}/invoices/{invoice_id}/step-up/request",
+      "name": "api.v1.orders.invoices.step-up.request",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/orders/{order_id}/invoices/{invoice_id}/step-up/verify",
+      "name": "api.v1.orders.invoices.step-up.verify",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/orders/{order_id}/invoices/{invoice_id}/secure-link",
+      "name": "api.v1.orders.invoices.secure-link",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "throttle:60,1",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:60,1",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/orders/{order_id}/results/step-up/request",
+      "name": "api.v1.orders.results.step-up.request",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/orders/{order_id}/results/step-up/verify",
+      "name": "api.v1.orders.results.step-up.verify",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "otp.diagnostic",
+        "throttle:akubica-otp",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:akubica-otp",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\AddOtpDiagnosticResponseHeaders",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/orders/{order_id}/results/secure-link",
+      "name": "api.v1.orders.results.secure-link",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "throttle:60,1",
+        "api.idempotency",
+        "api.audit"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\ThrottleRequests:60,1",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey",
+        "App\\Http\\Middleware\\Api\\V1\\InitializeApiV1AuditContext"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders/{order_id}/invoice-request/status",
+      "name": "api.v1.orders.invoice-request.status",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/orders/{order_id}/invoice-request",
+      "name": "api.v1.orders.invoice-request.store",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer",
+        "api.idempotency"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer",
+        "App\\Http\\Middleware\\Api\\V1\\EnforceIdempotencyKey"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders/{order_id}/products",
+      "name": "api.v1.orders.products",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders/{order_id}/invoices",
+      "name": "api.v1.orders.invoices",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders/{order_id}/results",
+      "name": "api.v1.orders.results",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/orders/{order_id}/status",
+      "name": "api.v1.orders.status",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "uri": "api/v1/orders/{order_id}/cancel",
+      "name": "api.v1.orders.cancel",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/user/family",
+      "name": "api.v1.user.family",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/user/tax-profiles",
+      "name": "api.v1.user.tax-profiles",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/user/tax-profiles",
+      "name": "api.v1.user.tax-profiles.store",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "uri": "api/v1/user/tax-profiles/{tax_profile_id}",
+      "name": "api.v1.user.tax-profiles.update",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "uri": "api/v1/user/tax-profiles/{tax_profile_id}",
+      "name": "api.v1.user.tax-profiles.destroy",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/user/addresses",
+      "name": "api.v1.user.addresses",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/user/addresses",
+      "name": "api.v1.user.addresses.store",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "uri": "api/v1/user/addresses/{address_id}",
+      "name": "api.v1.user.addresses.update",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "uri": "api/v1/user/addresses/{address_id}",
+      "name": "api.v1.user.addresses.destroy",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/user/payment-methods",
+      "name": "api.v1.user.payment-methods",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "uri": "api/v1/user/contacts",
+      "name": "api.v1.user.contacts.index",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "uri": "api/v1/user/contacts",
+      "name": "api.v1.user.contacts.store",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "uri": "api/v1/user/contacts/{contact_id}",
+      "name": "api.v1.user.contacts.update",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "uri": "api/v1/user/contacts/{contact_id}",
+      "name": "api.v1.user.contacts.destroy",
+      "declared_middleware": [
+        "api",
+        "force.json",
+        "api.correlation",
+        "api.token.guard",
+        "auth:sanctum",
+        "api.customer"
+      ],
+      "resolved_middleware": [
+        "Illuminate\\Auth\\Middleware\\Authenticate:sanctum",
+        "Illuminate\\Routing\\Middleware\\SubstituteBindings",
+        "App\\Http\\Middleware\\ForceJsonResponse",
+        "App\\Http\\Middleware\\AssignAkubicaCorrelationId",
+        "App\\Http\\Middleware\\UseApiTokenGuard",
+        "App\\Http\\Middleware\\EnsureApiCustomer"
+      ]
+    }
+  ],
+  "consumer_policy_installed": false
+}

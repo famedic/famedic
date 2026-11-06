@@ -1,0 +1,31 @@
+{
+  "execution_id": "fase-1c2-47fe6ba5-cb0f-45e7-84ed-bf89d9da2766",
+  "started_at": "2026-11-05T20:29:25.916202+00:00",
+  "finished_at": "2026-11-05T20:29:28.341908+00:00",
+  "command": [
+    "/home/developer/.local/share/famedic-validation/openapi31-0.9.0-py3144/bin/python",
+    "-B",
+    "/home/developer/projects/famedic/scripts/validate-openapi31-full.py",
+    "--contract",
+    "/home/developer/projects/famedic/docs/Akubica/akubica-openapi-v1.3.0-rc1.1.yaml",
+    "--report",
+    "/home/developer/projects/famedic/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-OPENAPI-INTEGRAL.json"
+  ],
+  "cwd": "/home/developer/.local/share/famedic-validation",
+  "returncode": 0,
+  "stdout": "{\"candidate_sha256\": \"523a566bab22fffb4c0ad8fbb29d79cc4823e99769494b1fd135f6639094f9a4\", \"validation_executed\": true, \"downloads_performed\": false, \"result\": \"PASS\", \"errors\": 0, \"installed_version\": \"0.9.0\", \"scope\": \"integral OpenAPI 3.1; runtime/examples/security behavior require separate checks\"}\n",
+  "stderr": "",
+  "validator_class": "OpenAPIV31SpecValidator",
+  "error_categories": {},
+  "downloads_performed": false,
+  "dependencies_reinstalled": false,
+  "validation": {
+    "candidate_sha256": "523a566bab22fffb4c0ad8fbb29d79cc4823e99769494b1fd135f6639094f9a4",
+    "validation_executed": true,
+    "downloads_performed": false,
+    "result": "PASS",
+    "errors": 0,
+    "installed_version": "0.9.0",
+    "scope": "integral OpenAPI 3.1; runtime/examples/security behavior require separate checks"
+  }
+}

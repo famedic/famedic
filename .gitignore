@@ -64,3 +64,74 @@ start-dev.ps1
 refund_logs.txt
 /tmp/*
 /deliverables/*
+
+# Restricted Newman raw reports and runtime state (never distribute).
+/.private-akubica-evidence/
+
+# Only reviewed Fase 0 documentation; operational evidence remains ignored.
+!/docs/Akubica/v1.3.0-rc1.1/
+!/docs/Akubica/v1.3.0-rc1.1/FASE-0-SEGURIDAD.md
+!/docs/Akubica/v1.3.0-rc1.1/PROCEDIMIENTO-ADMINISTRATIVO-FASE-0.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-0-PRUEBAS-SINTETICAS.json
+
+# Reviewed Phase 1 candidate and design documents, never operational reports.
+!/docs/Akubica/akubica-openapi-v1.3.0-rc1.1.yaml
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1-CONTRATOS.md
+!/docs/Akubica/v1.3.0-rc1.1/MATRIZ-DIFERENCIAS-CONTRACTUALES.md
+!/docs/Akubica/v1.3.0-rc1.1/PROPUESTA-BENEFICIOS-OPACOS.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1-VALIDACION.json
+
+# Reviewed Phase 1B evidence; no operational or raw artifacts.
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1B-COMPATIBILIDAD.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1B-NULLABLE.json
+!/docs/Akubica/v1.3.0-rc1.1/MATRIZ-NULLABLE-26.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1B-VALIDACION.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1B-OPENAPI-INTEGRAL.json
+!/docs/Akubica/v1.3.0-rc1.1/MATRIZ-COMPATIBILIDAD-FASE-1B.md
+!/docs/Akubica/v1.3.0-rc1.1/MATRIZ-DECISIONES-D01-D10.md
+!/docs/Akubica/v1.3.0-rc1.1/VALIDACION-OPENAPI31-PENDIENTE.md
+
+# Phase 1C review artifacts only; no downloaded distributions or environments.
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-VALIDACION-INTEGRAL.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-OPENAPI-INTEGRAL.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-DEPENDENCIAS-PROPUESTAS.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-requirements-propuesto.lock
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-INSTALACION-PENDIENTE.md
+
+# Authorized Phase 1C validation results only, no tool environments or wheels.
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-OPENAPI-INTEGRAL-AUTORIZADA.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-ERRORES-CONTRACTUALES.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-ANALISIS-ERRORES.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-EJECUCION-AUTORIZADA.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C-VALIDACION-AUTORIZADA.md
+
+# Phase 1C.2 reviewed correction and validation evidence only.
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-CORRECCIONES.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-OPENAPI-INTEGRAL.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-EJECUCION.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-REGRESIONES.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-REGRESIONES-FINAL.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-VALIDACION-LOCAL.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-INTEGRIDAD.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-1C.2-CIERRE.md
+
+# Phase 2A design documents only; no operational evidence.
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2A-DIAGNOSTICO-ACTUAL.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2A-DECISIONES-D01-D10.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2A-DISENO-API-OPACA.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2A-CONSENTIMIENTO-IDENTIDAD-LEO.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2A-PLAN-2B-Y-BLOQUEOS.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2A-REVISION.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2A-EVIDENCIA.json
+
+# Phase 2B-1 reviewed diagnosis and local synthetic evidence only.
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-CIERRE.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-EJECUCION-FINAL.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-EJECUCION.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-IDENTIDAD-Y-CAPACIDADES.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-P01-P12.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-PROTECCION-Y-LEGACY.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-PRUEBAS-Y-RESULTADOS.md
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-REGRESIONES-ANALISIS.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-RUTAS-AUTH.json
+!/docs/Akubica/v1.3.0-rc1.1/FASE-2B1-INTEGRIDAD.json

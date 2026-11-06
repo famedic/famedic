@@ -1,0 +1,161 @@
+{
+  "scope": "observed unchanged local source; no production code fixes authorized without identity approval",
+  "per_class": {
+    "Tests.Feature.Api.V1.AkubicaAuthTest": {
+      "PASS": 17
+    },
+    "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test": {
+      "PASS": 10,
+      "FAIL": 11,
+      "ERROR": 3
+    },
+    "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test": {
+      "PASS": 10
+    },
+    "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test": {
+      "PASS": 30,
+      "FAIL": 2
+    },
+    "Tests.Feature.Api.V1.AkubicaCartCouponTest": {
+      "PASS": 28
+    },
+    "Tests.Feature.Api.V1.AkubicaCartCatalogTest": {
+      "PASS": 17
+    },
+    "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest": {
+      "PASS": 28
+    },
+    "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest": {
+      "PASS": 24
+    },
+    "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest": {
+      "PASS": 10
+    },
+    "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2CTest": {
+      "PASS": 7
+    },
+    "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test": {
+      "PASS": 13
+    },
+    "Tests.Feature.Api.V1.AkubicaMedicalCheckoutPrepareRc1IsolatedTest": {
+      "PASS": 6
+    }
+  },
+  "failures": [
+    {
+      "test": "p0a4 request returns 202 challenge with sms delivery without token",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 decoy and existing user start responses share public contract shape",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 issued decoy verify and resend match real public contracts across lifecycle",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 wrong code increments attempts and never returns plaintext otp",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 cooldown returns 429 with Retry-After",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 resend after cooldown invalidates previous challenge and sends new sms",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 vonage failure returns DELIVERY_FAILED without token",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 does not persist otp plaintext or full destination in abuse events or logs",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "ERROR",
+      "category": "OTP_CHALLENGE_MISSING",
+      "exception_type": "ErrorException"
+    },
+    {
+      "test": "p0a4 sequential double verify guarantees single consumed challenge and one token",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 failed expired superseded and exhausted paths never issue tokens",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 resend rejects client-controlled identity fields",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "ERROR",
+      "category": "OTP_CHALLENGE_MISSING",
+      "exception_type": "ErrorException"
+    },
+    {
+      "test": "p0a4 verify ignores client phone and binds identity from challenge",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "p0a4 unverified phone is treated as decoy and never authenticates",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "ERROR",
+      "category": "SQLITE_JSON_QUERY_INCOMPATIBLE",
+      "exception_type": "Illuminate\\Database\\QueryException"
+    },
+    {
+      "test": "p0a4 decoy reason is exposed only through authorized diagnostic headers",
+      "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "idempotency login request-code creates one challenge on replay",
+      "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    },
+    {
+      "test": "idempotency public actors differ by phone",
+      "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+      "result": "FAILURE",
+      "category": "OTP_FIXTURE_OR_EXPECTATION",
+      "exception_type": "PHPUnit\\Framework\\ExpectationFailedException"
+    }
+  ],
+  "initial_receipt_preserved": "FASE-2B1-EJECUCION.json",
+  "final_receipt": "FASE-2B1-EJECUCION-FINAL.json",
+  "initial_six_missing_schema_errors_resolved_in_ephemeral_harness": true
+}

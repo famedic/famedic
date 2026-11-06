@@ -1,0 +1,202 @@
+{
+  "result": "BLOCKED",
+  "criteria_source": "docs/Akubica/v1.3.0-rc1.1/FASE-2A-CONSENTIMIENTO-IDENTIDAD-LEO.md",
+  "criteria_sha256": "ac1b7831b4e288a8cdef4e9c678cbbd37d7d4cd991c726f6c465127d788bf0a8",
+  "cases": [
+    {
+      "id": "P01",
+      "exact_phase2a_source_row": "| P01 | PAT Leo válido, canal Leo, carrito laboratorio listo; POST payment-link con brand válido. | 403 LEO_PAYMENT_LINK_FORBIDDEN; cero links nuevos, acción/proveedor no invocados, draft sin cambios. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    },
+    {
+      "id": "P02",
+      "exact_phase2a_source_row": "| P02 | Mismo caso con todas las brands admitidas y body que omite o cambia service_line. | Mismo 403; prohibición independiente de línea y readiness. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    },
+    {
+      "id": "P03",
+      "exact_phase2a_source_row": "| P03 | PAT Leo con wildcard y con permiso de pago incluido por error. | Mismo 403; el deny de consumidor prevalece sobre abilities. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    },
+    {
+      "id": "P04",
+      "exact_phase2a_source_row": "| P04 | X-Client=native, consumer_id=native o User-Agent falsos manteniendo identidad verificada Leo. | Mismo 403; no modifica el contexto de autoridad. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    },
+    {
+      "id": "P05",
+      "exact_phase2a_source_row": "| P05 | Leo reutiliza Idempotency-Key de un link histórico propio, o coincide con la de otro consumidor del mismo usuario. | 403 Leo antes de replay; jamás responde URL ni body cifrado ajeno; namespace por consumer. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    },
+    {
+      "id": "P06",
+      "exact_phase2a_source_row": "| P06 | PAT nativo válido presentado por canal verificado Leo. | 403 CONSUMER_NOT_AUTHORIZED por mismatch; cero efectos. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    },
+    {
+      "id": "P07",
+      "exact_phase2a_source_row": "| P07 | PAT común antiguo/no clasificado, token con nombre akubica o ausencia de proof de cliente. | 403 CONSUMER_NOT_AUTHORIZED; sin default de permiso por legacy. |",
+      "status": "FAIL",
+      "http_execution_performed": true,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": true,
+      "blocked_reason": null,
+      "observations": [
+        {
+          "scenario": "P07",
+          "http_status": 200,
+          "error_code": null,
+          "links_created": 1,
+          "business_tables_changed": [
+            "akubica_checkout_links"
+          ],
+          "transactions_and_purchases_unchanged": true,
+          "outbound_http_calls": 0,
+          "business_unchanged": false
+        }
+      ]
+    },
+    {
+      "id": "P08",
+      "exact_phase2a_source_row": "| P08 | Sin Bearer, revocado, vencido o cookie de sesión sin PAT en ruta API. | 401 UNAUTHENTICATED; no usar sesión como elevación. |",
+      "status": "FAIL",
+      "http_execution_performed": true,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": true,
+      "blocked_reason": null,
+      "observations": [
+        {
+          "scenario": "P08/missing",
+          "http_status": 401,
+          "error_code": "UNAUTHENTICATED",
+          "links_created": 0,
+          "business_tables_changed": [],
+          "transactions_and_purchases_unchanged": true,
+          "outbound_http_calls": 0,
+          "business_unchanged": true
+        },
+        {
+          "scenario": "P08/invalid",
+          "http_status": 401,
+          "error_code": "UNAUTHENTICATED",
+          "links_created": 0,
+          "business_tables_changed": [],
+          "transactions_and_purchases_unchanged": true,
+          "outbound_http_calls": 0,
+          "business_unchanged": true
+        },
+        {
+          "scenario": "P08/revoked",
+          "http_status": 401,
+          "error_code": "UNAUTHENTICATED",
+          "links_created": 0,
+          "business_tables_changed": [],
+          "transactions_and_purchases_unchanged": true,
+          "outbound_http_calls": 0,
+          "business_unchanged": true
+        },
+        {
+          "scenario": "P08/expired",
+          "http_status": 401,
+          "error_code": "UNAUTHENTICATED",
+          "links_created": 0,
+          "business_tables_changed": [],
+          "transactions_and_purchases_unchanged": true,
+          "outbound_http_calls": 0,
+          "business_unchanged": true
+        },
+        {
+          "scenario": "P08/session-only",
+          "http_status": 500,
+          "error_code": "INTERNAL_ERROR",
+          "links_created": 0,
+          "business_tables_changed": [],
+          "transactions_and_purchases_unchanged": true,
+          "outbound_http_calls": 0,
+          "business_unchanged": true
+        }
+      ]
+    },
+    {
+      "id": "P09",
+      "exact_phase2a_source_row": "| P09 | Leo intenta medical-benefit/coupon legacy, rutas alternas de generación o invocación de la acción sin autorización. | 403 por política; acción directa lanza denegación de dominio, sin generar link. Inventario de rutas cubre todos los entry points. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    },
+    {
+      "id": "P10",
+      "exact_phase2a_source_row": "| P10 | Revocar delegación/consumer después de obtener un recibo o antes de retry. | 403 CONSUMER_NOT_AUTHORIZED; nunca replay de éxito tras revocación. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    },
+    {
+      "id": "P11",
+      "exact_phase2a_source_row": "| P11 | Usuario Leo también tiene rol administrador y carrito vacío/no listo. | 403 LEO_PAYMENT_LINK_FORBIDDEN; rol y error de negocio no amplían permisos. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    },
+    {
+      "id": "P12",
+      "exact_phase2a_source_row": "| P12 | Control positivo separado: consumidor nativo registrado, canal/PAT concordantes y permiso explícito, carrito listo. | 200 conforme al contrato vigente, exactamente un link en primera ejecución y replay sin duplicación; proveedores reales reemplazados por fakes. Sin permiso: 403. |",
+      "status": "BLOCKED",
+      "http_execution_performed": false,
+      "registered_in_automated_suite": true,
+      "integrated_assertions_implemented": false,
+      "blocked_reason": "APPROVED_CONSUMER_ISSUANCE_BINDING_CHANNEL_UNAVAILABLE; D08 additionally pending for legacy",
+      "observations": []
+    }
+  ],
+  "counts": {
+    "PASS": 0,
+    "FAIL": 2,
+    "BLOCKED": 10
+  },
+  "separate_current_bearer_characterization": {
+    "PASS": 4,
+    "is_verified_native_control": false
+  },
+  "production_gate_implemented": false,
+  "zero_effects_claim_for_unexecuted_scenarios": false
+}

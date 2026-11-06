@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "status": "LOCAL_REVIEW_REFERENCE_NOT_DEPLOYMENT_ATTESTATION",
+  "files": {
+    "config/atix.php": "aea6919d6a95a2d0d3a9d1dec9ac8c28a223fea1c6f02bc8c5e17319b4d99e12",
+    "app/Http/Middleware/Api/V1/AuthenticateAtixHmac.php": "b00461ffbc681a5d8623dae5bc4da2e5f9c632217bbc1ce8da781d9edcc6d1fd",
+    "app/Services/Api/V1/Integrations/AtixHmacService.php": "1b6e4edd765ec1e0c0154c86defdc640e22ad2db74ff98da60c967b2d8e7fa3e",
+    "bootstrap/app.php": "7a33c0822e60ba0524f881ec75fc0545120e99490eeab52d7b847302d3b4d017",
+    "bootstrap/providers.php": "453f16854bbe0bacc209b5bd474fc8cdcc5c47af25c88826985b392e7c02c5fb",
+    "app/Providers/AppServiceProvider.php": "c5f1d75da6d3bb28e23a26eefde4084a463248f2d773a58316aa0d4289a5800b",
+    "routes/api.php": "8f11418a4d5003a2fd6e1568d79891b75a86581cc96412b5c510dc808a110cb0",
+    "routes/api/v1.php": "a2e895ce1f59e766fa3dba9d6fbc019beaf171e0353955a8422cdc8c94b6d272",
+    "composer.lock": "1b7d96c216c4c2231569be95e5cd1e4ac983ba6bbae6200342943d0c01c09b18",
+    "vendor/symfony/console/Helper/QuestionHelper.php": "19ce57c01e9c78419c8ef147a805695eaeabd5dc5b5dd389b11c45f3c35f1d95",
+    "vendor/symfony/console/Question/Question.php": "11d63ca635a47bac1cdb5d4ac20b5f3ca9a3860d59c483489c4a5c12545ec309"
+  },
+  "contains_private_key_identifiers_or_secret_digests": false
+}

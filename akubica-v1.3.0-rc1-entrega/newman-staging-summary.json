@@ -1,0 +1,136 @@
+{
+  "executions": [
+    {
+      "case": "B1 authLoginVerifyCode invalido",
+      "http": 422,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B2 authLoginVerifyCode valido contextual",
+      "http": 200,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B3 membershipStatusShow",
+      "http": 200,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B4 cartItemsStore basic_annual",
+      "http": 201,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B5 cartIndex medical_services",
+      "http": 200,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B6 cartTotals medical_services",
+      "http": 200,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B7 medicalServiceBenefitApply cupon o saldo",
+      "http": 404,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B8 medicalServiceBenefitRemove",
+      "http": 200,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B9 checkoutPrepare medical_services",
+      "http": 200,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B10 cartItemsDestroy membresia",
+      "http": 200,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B11 Aislamiento laboratorio vs medical_services",
+      "http": 404,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    },
+    {
+      "case": "B12 Aislamiento farmacia (carrito pharmacy vacio)",
+      "http": 409,
+      "error_code": null,
+      "correlation_id": null,
+      "failed_assertions": 0
+    }
+  ],
+  "stats": {
+    "iterations": {
+      "total": 1,
+      "pending": 0,
+      "failed": 0
+    },
+    "items": {
+      "total": 12,
+      "pending": 0,
+      "failed": 0
+    },
+    "scripts": {
+      "total": 24,
+      "pending": 0,
+      "failed": 0
+    },
+    "prerequests": {
+      "total": 12,
+      "pending": 0,
+      "failed": 0
+    },
+    "requests": {
+      "total": 12,
+      "pending": 0,
+      "failed": 0
+    },
+    "tests": {
+      "total": 12,
+      "pending": 0,
+      "failed": 0
+    },
+    "assertions": {
+      "total": 78,
+      "pending": 0,
+      "failed": 0
+    },
+    "testScripts": {
+      "total": 12,
+      "pending": 0,
+      "failed": 0
+    },
+    "prerequestScripts": {
+      "total": 12,
+      "pending": 0,
+      "failed": 0
+    }
+  },
+  "failures": []
+}

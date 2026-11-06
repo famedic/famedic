@@ -14,7 +14,9 @@ Contrato OpenAPI y colección Postman para el flujo Leo RC1 ya implementado en r
 | `CHECKLIST-endpoint-operationId-v1.3.0-rc1.md` | Checklist imprimible endpoint / operationId. |
 | `MANIFEST-v1.3.0-rc1.md` | Lista de archivos de la entrega. |
 | `SHA256SUMS` | Hashes de integridad. |
-| `newman-report-template-sanitized.md` | Plantilla de reporte Newman sin PII ni tokens. |
+| `EVIDENCIA-NEWMAN-STAGING-v1.3.0-rc1.md` | Evidencia staging sanitizada (Fase A + B, PASS). |
+| `GUIA-CONSUMO-v1.3.0-rc1.md` | Guía de consumo para integradores. |
+| `NEWMAN-staging-local-runbook.md` | Runbook Newman contra staging (sin secretos en Git). |
 
 Colección canónica: `postman/Famedic-Akubica-v1.3.0-rc1.postman_collection.json` (espejo en esta carpeta).
 
@@ -42,8 +44,8 @@ python3 scripts/validate-akubica-rc1-artifacts.py
 git diff --check
 ```
 
-## Brechas conocidas (runtime vs contrato RC1)
+## Evidencia staging (2026-10-29)
 
-- `checkout/prepare` (`medical_services`): el runtime puede exponer `can_continue_to_payment_platform` en lugar de `can_continue_on_platform` y omitir `assistant_can_pay`. OpenAPI RC1 documenta el contrato objetivo Leo (`assistant_can_pay=false`, `can_continue_on_platform`).
+Newman Fase A + B: **92 assertions, 0 fallos** — ver `EVIDENCIA-NEWMAN-STAGING-v1.3.0-rc1.md` y `VALIDATION-FINAL-v1.3.0-rc1.md`.
 
-Ver `endpoint-matrix-v1.3.0-rc1.md` y el informe de validación.
+Checkout Leo en staging: `assistant_can_pay=false`, `can_continue_on_platform=true` (alineado con OpenAPI RC1).

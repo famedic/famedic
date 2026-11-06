@@ -12,6 +12,7 @@ class GenerateAkubicaCheckoutPaymentLinkAction
 {
     public function __construct(
         private readonly CheckoutPreparation $checkoutPreparation,
+        private readonly \App\Services\Api\V1\Auth\PaymentLinkAuthorization $authorization,
     ) {}
 
     /**
@@ -29,6 +30,7 @@ class GenerateAkubicaCheckoutPaymentLinkAction
         int $expiresInMinutes,
         ?int $createdByTokenId = null,
     ): array {
+        $this->authorization->assertAllowed(request(), $customer);
         $readiness = $this->checkoutPreparation->validatePaymentLinkReadiness($customer, $brand);
 
         if (isset($readiness['error'])) {

@@ -1,0 +1,6 @@
+{
+  "result": "BLOCKED",
+  "reason": "APPROVED_FULL_VALIDATOR_NOT_INSTALLED",
+  "tool_candidate": "openapi-spec-validator",
+  "downloads_performed": false
+}

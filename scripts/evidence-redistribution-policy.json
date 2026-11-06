@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "purpose": "DENY_HISTORICAL_INCIDENT_REDISTRIBUTION",
+  "historical_names": [
+    "newman-staging-report-sanitized.json",
+    "newman-staging-junit-sanitized.xml",
+    "newman-staging-summary.json",
+    "akubica-v1.3.0-rc1-entrega.zip",
+    "akubica-v1.3.0-rc1-entrega"
+  ],
+  "historical_file_sha256": {
+    "newman-staging-report-sanitized.json": "f49a7f9626d253f76c2bb9af157ea7ac74af7c9779307c664334d1084dd9914e",
+    "newman-staging-junit-sanitized.xml": "a7b198262797401b6424819ea9686e3d70ebeca8f374e8468e7bf65f58b40ecd",
+    "newman-staging-summary.json": "387adc964fa8c95d6504dd04bc3db3a0b136c8220709965ae2167fb227ace902"
+  },
+  "digest_provenance": "akubica-v1.3.0-rc1-entrega/SHA256SUMS; existing file inventory only; no compromised report read.",
+  "secret_digests": false
+}

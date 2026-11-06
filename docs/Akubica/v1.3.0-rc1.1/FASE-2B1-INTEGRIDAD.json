@@ -1,0 +1,165 @@
+{
+  "phase": "2B-1",
+  "result": "BLOCKED",
+  "created_at": "2026-11-05T22:26:33.700409+00:00",
+  "reason": "Consumer identity issuance/binding/channel model and D08 not expressly approved; existing acceptance failures; no gate installed",
+  "candidate": {
+    "sha256": "523a566bab22fffb4c0ad8fbb29d79cc4823e99769494b1fd135f6639094f9a4",
+    "operations": 67,
+    "operation_ids_unchanged": true,
+    "bytes_unchanged": true
+  },
+  "historical_contracts": {
+    "historical_commit": "6ffb35c7cdaee26e8deb09398c85ff9bcf7c46e5",
+    "historical_sha256": "6ace97823aa528171f0d5c34c8ec9674d5730c429db2a95c18dc0c560f5b3749",
+    "current_base_sha256": "c46ec1f832f2c8a22bdc9cefc2341ab1afc63e01f94dc6cd3946a5ae34e4e2d2",
+    "rc1_sha256": "bbf110ffb55f9092b7a9678561509e11bfb0eb644251efc2b44ceec3a8d1398b",
+    "historical_contractual_approval": "PENDING",
+    "historical_unresolved_references": [
+      "#/components/responses/ForbiddenError",
+      "#/components/responses/TooManyRequestsError"
+    ]
+  },
+  "scope": {
+    "prior_files_hashed": 2071,
+    "existing_changed_this_phase": [
+      ".gitignore"
+    ],
+    "existing_missing": [],
+    "functional_application_code_unchanged": true,
+    "existing_tests_unchanged": true,
+    "historical_reports_unchanged": true,
+    "created": [
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-CIERRE.md",
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-EJECUCION-FINAL.json",
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-EJECUCION.json",
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-IDENTIDAD-Y-CAPACIDADES.md",
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-INTEGRIDAD.json",
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-P01-P12.json",
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-PROTECCION-Y-LEGACY.md",
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-PRUEBAS-Y-RESULTADOS.md",
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-REGRESIONES-ANALISIS.json",
+      "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-RUTAS-AUTH.json",
+      "scripts/run-phase2b1-local.py",
+      "tests/Acceptance/Api/V1/LeoAuthorizationCurrentBehaviorTest.php",
+      "tests/Acceptance/Api/V1/LeoAuthorizationP01P12Test.php",
+      "tests/Support/Api/V1/Phase2B1EphemeralTestCase.php"
+    ]
+  },
+  "new_files_sha256": {
+    "tests/Acceptance/Api/V1/LeoAuthorizationCurrentBehaviorTest.php": "9f9c847df5470c815fd98721a142c947fd2e7b459a9b0e611a3a50b1377d878f",
+    "tests/Acceptance/Api/V1/LeoAuthorizationP01P12Test.php": "9b6efa83fa2d36b414c0297013bfa2e67e36f7f292b1eeafd7989fe684ef9bcc",
+    "tests/Support/Api/V1/Phase2B1EphemeralTestCase.php": "8f307540cbdcd5f3a7775e1134eef277d36acf7cf68407303e6c848228660d27",
+    "scripts/run-phase2b1-local.py": "7916234e20fe3aff3e3a1b116ecc95458482f756f972f26425d306e581f8980c",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-PRUEBAS-Y-RESULTADOS.md": "8e9e1739d44aab89a5add8074582afd83a942b97cd4fd7fe445bd52606e420dc",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-EJECUCION-FINAL.json": "a70e0bdd231b44740509d728b8aee3ecf85084425f8c1276bca306ad75cf1a4c",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-IDENTIDAD-Y-CAPACIDADES.md": "e56f4e0e4bef01f0e8fe3cacefe648dfd4ba76239262c15a1db85579e5ded5aa",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-P01-P12.json": "6042d079f9341344ea11f67d02ec2d9190b26b7957a9548a94ec5b607414cf4f",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-RUTAS-AUTH.json": "27f9bfb227133fd3f25cd55fff47d2d1e2627df29d6753f567bb510f29afe45c",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-CIERRE.md": "c86f2665c83a00b00df26edd89fc30ba5b82c71cf2374d53ed543e6f2f91fb3f",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-REGRESIONES-ANALISIS.json": "40ab354359f2d7975898bc5a4debdbde8e944cac9c69b8ea93e68ab9a6cd5113",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-EJECUCION.json": "243fae559fb5b49bd61711345d3df204486b797bb606047dc475b59784c6aa40",
+    "docs/Akubica/v1.3.0-rc1.1/FASE-2B1-PROTECCION-Y-LEGACY.md": "441440fea294f353ffae093ac072913e8359c98ff8ba2e0ae3c58e7d450b1e5c"
+  },
+  "required_references_sha256": {
+    "FASE-2A-REVISION.md": "9bcd01b2c7e68a5d855cee9b804bb2ea04cc482a1bedfbf02683a5954d200e2c",
+    "FASE-2A-DIAGNOSTICO-ACTUAL.md": "bb2b397329620f5f034eff2fc86a8713e294833a27dad4b17d3baa6db2fa7f16",
+    "FASE-2A-DECISIONES-D01-D10.md": "2b556e06fa2ea51fb48fe65c5f90b4595241ee12e0044367aa1ef559f0c71d61",
+    "FASE-2A-DISENO-API-OPACA.md": "82c33c7c2a8fd19162109da321fe55a21f4554ebde18880d00e4083adf6b8f22",
+    "FASE-2A-CONSENTIMIENTO-IDENTIDAD-LEO.md": "ac1b7831b4e288a8cdef4e9c678cbbd37d7d4cd991c726f6c465127d788bf0a8",
+    "FASE-2A-PLAN-2B-Y-BLOQUEOS.md": "dbeb63011408da740272c925ccf7b3546726529d40d900849f83c97216e50ae6",
+    "FASE-1C.2-CIERRE.md": "90f1dcb3b457bb6cc0d06fb20d23cff3c54a0523bfe32a508da4cfef3b58604f"
+  },
+  "inspected_source_sha256": {
+    "app/Actions/Api/V1/Auth/IssueAkubicaTokenAction.php": "6d6ec8f9e580095f28602b1b4f7bf0594f1a931a240674279b2970dd7d4737a7",
+    "app/Http/Controllers/Api/V1/Auth/LoginController.php": "fa17cdce00587070c8f63c9200af9fcfa3b09bea3eed6e0efdedb5f360aa58b8",
+    "app/Http/Controllers/Api/V1/Auth/RegisterController.php": "931c108787d8eb0614c1a8234064253ec057d6cdb84884605cbbafc1ce78d772",
+    "app/Services/Otp/AkubicaLoginOtpService.php": "f5a7cbc412bea6c9993c3ab23b966ef1123cfb008796581a92dd04ba2a5097f3",
+    "app/Services/Otp/Registration/AkubicaRegisterOtpService.php": "0f3b352d2cbaf53ed998a69e4ac57748e52b0b474a4c22003e1a7d8be0717a8e",
+    "app/Services/Api/V1/Auth/AccountContextTokenService.php": "70ea7ff87f15d7c344962bae5b17b75d3c23f655a142a556db3af3f7f1689e46",
+    "app/Services/Api/V1/Auth/ContactRecognitionContext.php": "59c3ce754c762c72c0340ab14e7990e60456d5feac04560ac4bd90589a33760c",
+    "app/Services/Api/V1/Integrations/AtixHmacService.php": "eb0a201e5b989ba50e2c46dd3ab8c3414e9947627958a666ff2d31820ed1f12b",
+    "app/Http/Middleware/UseApiTokenGuard.php": "fd18ff68cf4155cc2d65d4f31a70b03b7f791547426dd7e9e6032560c5179cb6",
+    "app/Http/Middleware/EnsureApiCustomer.php": "b9e3be848768fa355614988b2db5453758f781365c6b97697e094237afacb7d0",
+    "app/Http/Middleware/Api/V1/EnforceIdempotencyKey.php": "6f7d776de36b6fe7af083f922597daa02ba06f0e8a953693b42e9c8e18c5de6e",
+    "app/Services/Api/V1/Idempotency/IdempotencyService.php": "f15e3a25184b26f21b4c1034760927e1263395cbfb5ab67ae54ee8b239f81df0",
+    "app/Services/Api/V1/Idempotency/IdempotencyActorResolver.php": "908a455379d405c9d48b1c4461ed9c040323796a79e00a640adfb2f2ba1d2a2b",
+    "app/Services/Api/V1/Idempotency/IdempotencyRequestHasher.php": "0be3ead3a126eb55c4139826621af2bd91c0d66096d6ce8305bd4483df08c70f",
+    "app/Http/Controllers/Api/V1/CheckoutController.php": "f4616a5437b6709fc1bcd940c6e707e4a61974ca144d6544442488d5f3a39087",
+    "app/Http/Requests/Api/V1/Checkout/GeneratePaymentLinkRequest.php": "a22d0ce758f818633d10c0dd01736b1b7c6fec3576a879db3cebcfd2853187b9",
+    "app/Actions/Api/V1/GenerateAkubicaCheckoutPaymentLinkAction.php": "cbe7c7d7ff30ec7901f0659c3fe9ad25d08b09ef3938477dec70dc640bd5ed41",
+    "app/Support/Api/V1/CheckoutPreparation.php": "43bea78862f242e713bdb6591dd0308756d4674d41f17f09c3c2d1171f15e5c2",
+    "app/Http/Controllers/AkubicaCheckoutLinkController.php": "5d88ac0bb3c3488ade3cd0f11ef79dfc3e7bd1bd264b7ea37c264fbd8f619a6d",
+    "app/Models/AkubicaCheckoutLink.php": "2b79aec5a43d9bbdd8b7457b3e907d1a8506bacb2ec08928eec838e70befb98b",
+    "app/Http/Controllers/Api/V1/CartCouponController.php": "0ea4c1078ce85132c1a726bb9a9e3fd04dc9de64cc985961b9ae865010fa637d",
+    "app/Http/Controllers/Api/V1/MedicalServiceBenefitController.php": "c0c214b27286c07bf07925c596e0bb707acc263c67cc63eedb1d30f3ec11fe49",
+    "app/Services/Api/V1/MedicalServiceCartBenefitService.php": "4fe2e066e8ff0faef3c8be0169d79b18aadce1ba8688b29eeef38c11da11de44",
+    "app/Http/Resources/Api/V1/MedicalServiceCartBenefitResource.php": "267e7035df86613de0c2050353b7ba603ea122ef5bcaa6b54482d61c201121e3",
+    "app/Support/Api/V1/CartCouponSupport.php": "7394fbb23432191a82d05e2ede7d6bc096dec0ccb3801aa54d9a8ac402afe347",
+    "app/Actions/Api/V1/RemoveAkubicaCartCouponAction.php": "c9f6ad67be9dbd3ff5ae7676ee5fca03194325f7de6c33c1ed6d6e774a006b55",
+    "routes/api/v1.php": "93968d735edc557b86840dea273f6abbe14d2ec970420a7f4231606fa088aeb3",
+    "routes/api.php": "8f11418a4d5003a2fd6e1568d79891b75a86581cc96412b5c510dc808a110cb0",
+    "routes/web.php": "e23c403839d72b20a7205fd849f997ec7999a3c272bf036fdf932a6d6769c722",
+    "bootstrap/app.php": "d9dc2b0f53259dd232eeddfccc64965b8727962642625e5e8377719370fc4430",
+    "config/akubica.php": "93fe4c797f571f07004c66a4a79465842bac2a72f45f08a355384fddb197f3b1",
+    "vendor/laravel/sanctum/src/Guard.php": "aa4056e63c6b7bb09ca6676814997d0ff20d877c873559b7ca1c556dd4e1e19a",
+    "vendor/laravel/sanctum/src/HasApiTokens.php": "7400600b832dc377ac5f51d051a917775f6efc0d2176a1de7bd7826499ae6509",
+    "vendor/laravel/sanctum/src/PersonalAccessToken.php": "5f4e3cf12f9b900c207fc113967a558b2c1c602f6da7f930c2a3ca991730afae"
+  },
+  "acceptance": {
+    "PASS": 0,
+    "FAIL": 2,
+    "BLOCKED": 10
+  },
+  "separate_characterization": {
+    "PASS": 4
+  },
+  "laravel_existing": {
+    "PASS": 200,
+    "FAIL": 13,
+    "ERROR": 3,
+    "total": 216
+  },
+  "python_regression": {
+    "PASS": 80
+  },
+  "node_regression": {
+    "PASS": 4
+  },
+  "validation": {
+    "git_diff_check": {
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "new_text_whitespace": "PASS",
+    "new_python_ast": "PASS",
+    "new_php_syntax": "PASS (php -l and actual Pest runs)",
+    "documentation_links": "PASS"
+  },
+  "execution_final_sha256": "a70e0bdd231b44740509d728b8aee3ecf85084425f8c1276bca306ad75cf1a4c",
+  "initial_execution_sha256": "243fae559fb5b49bd61711345d3df204486b797bb606047dc475b59784c6aa40",
+  "environment": {
+    "php": "8.5.4",
+    "laravel": "11.46.1",
+    "sanctum": "4.2.0",
+    "pest": "2.36.0",
+    "phpunit": "10.5.36",
+    "database": "SQLite :memory:",
+    "existing_migrations_applied_only_to_memory": true,
+    "new_identity_schema_applied": false,
+    "dependencies_downloaded": false,
+    "real_env_files_read": false,
+    "real_credentials_used": false,
+    "real_tokens_created": false
+  },
+  "restrictions": {
+    "staging_or_production": false,
+    "commit_push_deploy": false,
+    "zip_generated": false,
+    "phase2b2_2b3_2b4_started": false,
+    "benefit_or_payment_business_logic_changed": false,
+    "phase0_status": "OPEN"
+  },
+  "head": "481a8871153cb4995e3fb05f6fba682d45ae33d4"
+}

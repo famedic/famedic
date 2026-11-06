@@ -1,0 +1,381 @@
+{
+  "result": "FAIL",
+  "candidate_not_modified": true,
+  "cause": "HEADERS_SIBLING_ON_REFERENCE_OBJECT",
+  "affected_response_objects": 33,
+  "all_sibling_keys": [
+    "headers"
+  ],
+  "observations": [
+    {
+      "error_id": "error-0001",
+      "reference": "#/components/responses/DeliveryOrConfigFailed",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0002",
+      "reference": "#/components/responses/DeliveryOrConfigFailed",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0003",
+      "reference": "#/components/responses/FeatureDisabled",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0004",
+      "reference": "#/components/responses/DeliveryOrConfigFailed",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0005",
+      "reference": "#/components/responses/DeliveryOrConfigFailed",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0006",
+      "reference": "#/components/responses/FeatureDisabled",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0007",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0008",
+      "reference": "#/components/responses/FeatureDisabled",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0009",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0010",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0011",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0012",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0013",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0014",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0015",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0016",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0017",
+      "reference": "#/components/responses/OrderNotFound",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0018",
+      "reference": "#/components/responses/OrderNotFound",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0019",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0020",
+      "reference": "#/components/responses/OrderNotFound",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0021",
+      "reference": "#/components/responses/FeatureDisabled",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0022",
+      "reference": "#/components/responses/FeatureDisabled",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0023",
+      "reference": "#/components/responses/FeatureDisabled",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0024",
+      "reference": "#/components/responses/OrderNotFound",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0025",
+      "reference": "#/components/responses/FeatureDisabled",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0026",
+      "reference": "#/components/responses/FeatureDisabled",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0027",
+      "reference": "#/components/responses/FeatureDisabled",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0028",
+      "reference": "#/components/responses/OrderNotFound",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0029",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0030",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0031",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0032",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    },
+    {
+      "error_id": "error-0033",
+      "reference": "#/components/responses/Unauthenticated",
+      "object_keys": [
+        "$ref",
+        "headers"
+      ],
+      "sibling_keys": [
+        "headers"
+      ]
+    }
+  ],
+  "synthetic_reproduction": {
+    "ref_with_headers_errors": 1,
+    "category": "unevaluatedProperties",
+    "inline_response_with_headers_errors": 0
+  },
+  "proposed_correction_not_applied": "Use a complete Response Object with headers or a dedicated response component; use a bare Reference Object for the component reference. Do not remove schema strictness.",
+  "further_errors_may_remain": true
+}

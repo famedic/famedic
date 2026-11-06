@@ -1,0 +1,15 @@
+8180e6fe344724a875e87d1740054df162902762f440d1512cb8de9738470c38  CHECKLIST-endpoint-operationId-v1.3.0-rc1.md
+3bff6917de0a204a2708f9392919e34f9f4c5b83982b115239f7142035e9e3a8  EVIDENCIA-NEWMAN-STAGING-v1.3.0-rc1.md
+4294e9c9b94d0b5f8aa732eeb5c8b46a6eb236e12ee0908634ba156f9ef5d217  Famedic-Akubica-v1.3.0-rc1.postman_collection.json
+cc8212b65f2479888d33ec7025b76a993b56bb0bc47110ca14d1bf91eee9fc82  Famedic-Akubica-v1.3.0-rc1.postman_environment.template.json
+1faf1101839c50707f7ea29fde0d4d5248e576e99b21b8bc56edbd873b148692  GUIA-CONSUMO-v1.3.0-rc1.md
+3d123643c0ca23eaed8f9e7613e96e3104dfec2be2eb20143d94934e1af38e53  MANIFEST-v1.3.0-rc1.md
+15d935e8f1c995944cc34a518789a3dd15ed76a77113adf26735741b69cdbf3b  NEWMAN-staging-local-runbook.md
+da369642d8c9e7b488adf85fb039aadf0e89d8102fdb2818fcb102b40ef26d21  NEWMAN-staging-v1.3.0-rc1.md
+25554c20bca6b1bdbc38f60b015c20e2c31b7f794d5f7b75cb6927be5018b635  README-v1.3.0-rc1.md
+bbf110ffb55f9092b7a9678561509e11bfb0eb644251efc2b44ceec3a8d1398b  akubica-openapi-v1.3.0-rc1.yaml
+2dab26f124572f08e8005076d95e9139d37a0e71ec960893eff32dec0f07d43e  endpoint-matrix-v1.3.0-rc1.md
+a7b198262797401b6424819ea9686e3d70ebeca8f374e8468e7bf65f58b40ecd  newman-staging-junit-sanitized.xml
+f49a7f9626d253f76c2bb9af157ea7ac74af7c9779307c664334d1084dd9914e  newman-staging-report-sanitized.json
+387adc964fa8c95d6504dd04bc3db3a0b136c8220709965ae2167fb227ace902  newman-staging-summary.json
+5b792c0cd0d13737e12387ed64e687d58c6755d08017e18d9c37fa0f4022e71c  openapi-changelog-v1.3.0-rc1.md

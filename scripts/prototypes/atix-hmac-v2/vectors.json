@@ -1,0 +1,196 @@
+{
+  "profile_status": "UNAPPROVED_LOCAL_DRAFT",
+  "synthetic_only": true,
+  "registry": {
+    "lookup-synthetic": {
+      "secret": "synthetic-only-lookup-v1-key-000001",
+      "profile": "lookup-v1",
+      "integration": "synthetic-atix",
+      "kind": "leo",
+      "audience": "local-stage",
+      "channel": "whatsapp",
+      "active": true
+    },
+    "atix-synthetic": {
+      "secret": "synthetic-only-atix-v2-key-0000001",
+      "profile": "delegated-v2",
+      "integration": "synthetic-atix",
+      "kind": "leo",
+      "audience": "local-stage",
+      "channel": "whatsapp",
+      "active": true
+    },
+    "other-synthetic": {
+      "secret": "synthetic-only-other-v2-key-000001",
+      "profile": "delegated-v2",
+      "integration": "synthetic-other",
+      "kind": "integration",
+      "audience": "local-stage",
+      "channel": "whatsapp",
+      "active": true
+    },
+    "audience-synthetic": {
+      "secret": "synthetic-only-audience-v2-key-001",
+      "profile": "delegated-v2",
+      "integration": "synthetic-atix",
+      "kind": "leo",
+      "audience": "local-other",
+      "channel": "whatsapp",
+      "active": true
+    }
+  },
+  "vectors": [
+    {
+      "id": "unicode-post",
+      "request": {
+        "audience": "local-stage",
+        "key_id": "atix-synthetic",
+        "method": "POST",
+        "path": "/api/v1/cart/items",
+        "query": "",
+        "timestamp": "1760000000",
+        "nonce": "synthetic-nonce-0001",
+        "channel": "whatsapp",
+        "pat": "123|SYNTHETIC_PAT_NOT_VALID_OR_ISSUED",
+        "idempotency_key": "synthetic-idem-01",
+        "body_base64": "eyJub3RlIjoiTcOpeGljbyIsInF1YW50aXR5IjoxfQ=="
+      },
+      "canonical_base64": "QVRJWC1BUEktVjIKbG9jYWwtc3RhZ2UKYXRpeC1zeW50aGV0aWMKUE9TVAovYXBpL3YxL2NhcnQvaXRlbXMKZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NQoxNzYwMDAwMDAwCnN5bnRoZXRpYy1ub25jZS0wMDAxCndoYXRzYXBwCmNhOWRhMWE4NzlkODg4YTgzZTFjMDI5NWU0NDQ5OGMyZTk1NmRiNzBjY2VkODA0NTQ0NWY2MWQyOGIxNDZmYzAKMzkwZjNiNWFiZDIxYjI4MTNlMzgxM2M3NDc2MGEzMTY0NWJhYTQ2OGIyYjNlMGY2YzQ4NzRkMzAzNGJkYjk0OQozN2I1NTQ5YjliNGIyYmNlNzA2MDE3MzRmYjU1MTUyNjIzNzk3YTg2ZWE3YzkxZTc2NjRiZmM3MTAyODEwYTU5",
+      "canonical_sha256": "a9826ef7932123c06b5f5a27e08a9f61e90aa0a995f56ccc287f8d544626ab90",
+      "signature": "faea181fe5f4df5cd7fb06673997230ff32a0aa6f1090d2d9557edce2b67a2cb"
+    },
+    {
+      "id": "exact-query-get",
+      "request": {
+        "audience": "local-stage",
+        "key_id": "atix-synthetic",
+        "method": "GET",
+        "path": "/api/v1/cart",
+        "query": "brand=olab&note=a%20b",
+        "timestamp": "1760000000",
+        "nonce": "synthetic-nonce-0001",
+        "channel": "whatsapp",
+        "pat": "123|SYNTHETIC_PAT_NOT_VALID_OR_ISSUED",
+        "idempotency_key": "synthetic-idem-01",
+        "body_base64": ""
+      },
+      "canonical_base64": "QVRJWC1BUEktVjIKbG9jYWwtc3RhZ2UKYXRpeC1zeW50aGV0aWMKR0VUCi9hcGkvdjEvY2FydAo5YWM5NjllMjllZDgzM2ExYzYyYzczNjhmOWI1NWFkMDJhYTQ1MzJiM2E4MTNhM2U2ZTc5ZDRhMjIxODExMmEzCjE3NjAwMDAwMDAKc3ludGhldGljLW5vbmNlLTAwMDEKd2hhdHNhcHAKY2E5ZGExYTg3OWQ4ODhhODNlMWMwMjk1ZTQ0NDk4YzJlOTU2ZGI3MGNjZWQ4MDQ1NDQ1ZjYxZDI4YjE0NmZjMAozOTBmM2I1YWJkMjFiMjgxM2UzODEzYzc0NzYwYTMxNjQ1YmFhNDY4YjJiM2UwZjZjNDg3NGQzMDM0YmRiOTQ5CmUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTU=",
+      "canonical_sha256": "b747a2d31e1dc70dbd44560f8e848773dd2984dc5d9d1cc65681d462a450480d",
+      "signature": "82ead53816b675df94059d3f9eae581376550318dae43799158e248d5999e0a2"
+    },
+    {
+      "id": "query-plus",
+      "request": {
+        "audience": "local-stage",
+        "key_id": "atix-synthetic",
+        "method": "GET",
+        "path": "/api/v1/cart/items",
+        "query": "note=a+b",
+        "timestamp": "1760000000",
+        "nonce": "synthetic-nonce-0001",
+        "channel": "whatsapp",
+        "pat": "123|SYNTHETIC_PAT_NOT_VALID_OR_ISSUED",
+        "idempotency_key": "synthetic-idem-01",
+        "body_base64": ""
+      },
+      "canonical_base64": "QVRJWC1BUEktVjIKbG9jYWwtc3RhZ2UKYXRpeC1zeW50aGV0aWMKR0VUCi9hcGkvdjEvY2FydC9pdGVtcwoyOWVlMWU2ZWFjNDIyMTA3ZGE4NDU3ZDE3Yzg4Y2U1N2NlOGVlNTVjNTNmZGJiMzMzNTc5MjBjZjM5NDNmMTBlCjE3NjAwMDAwMDAKc3ludGhldGljLW5vbmNlLTAwMDEKd2hhdHNhcHAKY2E5ZGExYTg3OWQ4ODhhODNlMWMwMjk1ZTQ0NDk4YzJlOTU2ZGI3MGNjZWQ4MDQ1NDQ1ZjYxZDI4YjE0NmZjMAozOTBmM2I1YWJkMjFiMjgxM2UzODEzYzc0NzYwYTMxNjQ1YmFhNDY4YjJiM2UwZjZjNDg3NGQzMDM0YmRiOTQ5CmUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTU=",
+      "canonical_sha256": "2cce5f7e86272084e23b66d5705eb2f7f47d98b322f4b85269210c10eaf5562f",
+      "signature": "3847235cfc8efe0d651b24807067f3acaee047326477d92cf7df51d890b8b1ee"
+    },
+    {
+      "id": "otp-before-pat",
+      "request": {
+        "audience": "local-stage",
+        "key_id": "atix-synthetic",
+        "method": "POST",
+        "path": "/api/v1/auth/login/request-code",
+        "query": "",
+        "timestamp": "1760000000",
+        "nonce": "synthetic-nonce-0001",
+        "channel": "whatsapp",
+        "pat": null,
+        "idempotency_key": null,
+        "body_base64": "eyJub3RlIjoiTcOpeGljbyIsInF1YW50aXR5IjoxfQ=="
+      },
+      "canonical_base64": "QVRJWC1BUEktVjIKbG9jYWwtc3RhZ2UKYXRpeC1zeW50aGV0aWMKUE9TVAovYXBpL3YxL2F1dGgvbG9naW4vcmVxdWVzdC1jb2RlCmUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUKMTc2MDAwMDAwMApzeW50aGV0aWMtbm9uY2UtMDAwMQp3aGF0c2FwcAotCi0KMzdiNTU0OWI5YjRiMmJjZTcwNjAxNzM0ZmI1NTE1MjYyMzc5N2E4NmVhN2M5MWU3NjY0YmZjNzEwMjgxMGE1OQ==",
+      "canonical_sha256": "7135e163d3c2241490b7725eb1a84be1675fa86b3a067344bcfb33d8bc5253ae",
+      "signature": "aa3d3895dcbd75f74b2b778efb2f0a01dabb7f6820c9746546dfcbbca6f5fe5d"
+    },
+    {
+      "id": "raw-binary",
+      "request": {
+        "audience": "local-stage",
+        "key_id": "atix-synthetic",
+        "method": "POST",
+        "path": "/api/v1/cart/items",
+        "query": "",
+        "timestamp": "1760000000",
+        "nonce": "synthetic-nonce-0001",
+        "channel": "whatsapp",
+        "pat": "123|SYNTHETIC_PAT_NOT_VALID_OR_ISSUED",
+        "idempotency_key": "synthetic-idem-01",
+        "body_base64": "AAH/DQo="
+      },
+      "canonical_base64": "QVRJWC1BUEktVjIKbG9jYWwtc3RhZ2UKYXRpeC1zeW50aGV0aWMKUE9TVAovYXBpL3YxL2NhcnQvaXRlbXMKZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NQoxNzYwMDAwMDAwCnN5bnRoZXRpYy1ub25jZS0wMDAxCndoYXRzYXBwCmNhOWRhMWE4NzlkODg4YTgzZTFjMDI5NWU0NDQ5OGMyZTk1NmRiNzBjY2VkODA0NTQ0NWY2MWQyOGIxNDZmYzAKMzkwZjNiNWFiZDIxYjI4MTNlMzgxM2M3NDc2MGEzMTY0NWJhYTQ2OGIyYjNlMGY2YzQ4NzRkMzAzNGJkYjk0OQo1YjY3ZmM3NzhiMDY3ZTkwYmE1OGNjNmIwNThmMjI5NWQwZTQ4ZjFlOGEyMzY1MWE3OGI3M2VjMjU2ZDhlYjQ5",
+      "canonical_sha256": "bea1cd0a010ef8a22f215f53c32ce93972cda9ee078b7e9c0a1055e8ee482e6e",
+      "signature": "8aa5cf064353ca1abbfb05e6634b8a6f8e862845f324fbc0a3c73423868cdab9"
+    },
+    {
+      "id": "escaped-path",
+      "request": {
+        "audience": "local-stage",
+        "key_id": "atix-synthetic",
+        "method": "DELETE",
+        "path": "/api/v1/items/caf%C3%A9",
+        "query": "",
+        "timestamp": "1760000000",
+        "nonce": "synthetic-nonce-0001",
+        "channel": "whatsapp",
+        "pat": "123|SYNTHETIC_PAT_NOT_VALID_OR_ISSUED",
+        "idempotency_key": "synthetic-idem-01",
+        "body_base64": ""
+      },
+      "canonical_base64": "QVRJWC1BUEktVjIKbG9jYWwtc3RhZ2UKYXRpeC1zeW50aGV0aWMKREVMRVRFCi9hcGkvdjEvaXRlbXMvY2FmJUMzJUE5CmUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUKMTc2MDAwMDAwMApzeW50aGV0aWMtbm9uY2UtMDAwMQp3aGF0c2FwcApjYTlkYTFhODc5ZDg4OGE4M2UxYzAyOTVlNDQ0OThjMmU5NTZkYjcwY2NlZDgwNDU0NDVmNjFkMjhiMTQ2ZmMwCjM5MGYzYjVhYmQyMWIyODEzZTM4MTNjNzQ3NjBhMzE2NDViYWE0NjhiMmIzZTBmNmM0ODc0ZDMwMzRiZGI5NDkKZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NQ==",
+      "canonical_sha256": "1e92cf3a5010a5f79362904232c608f48450e31a33a63c5f3ca47deb2b04e3a1",
+      "signature": "c9be8296d2b33adf3ccc94df9240b96b855e4140bcf86f510a3ac05710deeb35"
+    },
+    {
+      "id": "other-integration",
+      "request": {
+        "audience": "local-stage",
+        "key_id": "other-synthetic",
+        "method": "POST",
+        "path": "/api/v1/cart/items",
+        "query": "",
+        "timestamp": "1760000000",
+        "nonce": "synthetic-nonce-0001",
+        "channel": "whatsapp",
+        "pat": "123|SYNTHETIC_PAT_NOT_VALID_OR_ISSUED",
+        "idempotency_key": "synthetic-idem-01",
+        "body_base64": "eyJub3RlIjoiTcOpeGljbyIsInF1YW50aXR5IjoxfQ=="
+      },
+      "canonical_base64": "QVRJWC1BUEktVjIKbG9jYWwtc3RhZ2UKb3RoZXItc3ludGhldGljClBPU1QKL2FwaS92MS9jYXJ0L2l0ZW1zCmUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUKMTc2MDAwMDAwMApzeW50aGV0aWMtbm9uY2UtMDAwMQp3aGF0c2FwcApjYTlkYTFhODc5ZDg4OGE4M2UxYzAyOTVlNDQ0OThjMmU5NTZkYjcwY2NlZDgwNDU0NDVmNjFkMjhiMTQ2ZmMwCjM5MGYzYjVhYmQyMWIyODEzZTM4MTNjNzQ3NjBhMzE2NDViYWE0NjhiMmIzZTBmNmM0ODc0ZDMwMzRiZGI5NDkKMzdiNTU0OWI5YjRiMmJjZTcwNjAxNzM0ZmI1NTE1MjYyMzc5N2E4NmVhN2M5MWU3NjY0YmZjNzEwMjgxMGE1OQ==",
+      "canonical_sha256": "5ff5131e9a6ee19a7e3a6a3c89dbd1010901180cb10f72d9f9ca9c145d78bc31",
+      "signature": "abb657cc914f59e6d0714f370dbee6960aa522e7dfa1fd96e99a7703b787accf"
+    },
+    {
+      "id": "other-audience",
+      "request": {
+        "audience": "local-other",
+        "key_id": "audience-synthetic",
+        "method": "POST",
+        "path": "/api/v1/cart/items",
+        "query": "",
+        "timestamp": "1760000000",
+        "nonce": "synthetic-nonce-0001",
+        "channel": "whatsapp",
+        "pat": "123|SYNTHETIC_PAT_NOT_VALID_OR_ISSUED",
+        "idempotency_key": "synthetic-idem-01",
+        "body_base64": "eyJub3RlIjoiTcOpeGljbyIsInF1YW50aXR5IjoxfQ=="
+      },
+      "canonical_base64": "QVRJWC1BUEktVjIKbG9jYWwtb3RoZXIKYXVkaWVuY2Utc3ludGhldGljClBPU1QKL2FwaS92MS9jYXJ0L2l0ZW1zCmUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUKMTc2MDAwMDAwMApzeW50aGV0aWMtbm9uY2UtMDAwMQp3aGF0c2FwcApjYTlkYTFhODc5ZDg4OGE4M2UxYzAyOTVlNDQ0OThjMmU5NTZkYjcwY2NlZDgwNDU0NDVmNjFkMjhiMTQ2ZmMwCjM5MGYzYjVhYmQyMWIyODEzZTM4MTNjNzQ3NjBhMzE2NDViYWE0NjhiMmIzZTBmNmM0ODc0ZDMwMzRiZGI5NDkKMzdiNTU0OWI5YjRiMmJjZTcwNjAxNzM0ZmI1NTE1MjYyMzc5N2E4NmVhN2M5MWU3NjY0YmZjNzEwMjgxMGE1OQ==",
+      "canonical_sha256": "49d1340f3b69a742877622fb4e7203cb5b5a4eab7e996af623d0c113702b8c99",
+      "signature": "cf4cb917803015f10b94ef9b952666fbc315eaf6d024842cfb0b517bc93f9333"
+    }
+  ]
+}

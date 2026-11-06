@@ -1,118 +1,81 @@
 #!/usr/bin/env python3
-"""Validate RC1 OpenAPI and Postman artifacts."""
+"""Offline RC1.1 validation. Does not certify release or administrative closure."""
+import argparse
+import hashlib
 import json
-import re
-import sys
 from pathlib import Path
+import sys
+from akubica_contract_validation import *
 
-ROOT = Path(__file__).resolve().parents[1]
-OPENAPI = ROOT / "docs/Akubica/akubica-openapi-v1.3.0-rc1.yaml"
-POSTMAN = ROOT / "postman/Famedic-Akubica-v1.3.0-rc1.postman_collection.json"
-POSTMAN_MIRROR = ROOT / "docs/Akubica/v1.3.0-rc1/Famedic-Akubica-v1.3.0-rc1.postman_collection.json"
-BASE_OPENAPI = ROOT / "docs/Akubica/akubica-openapi.yaml"
+def evaluate(path):
+    spec=load(path.read_text())
+    historical, provenance=baseline_evidence()
+    rc1=load((ROOT/RC1_PATH).read_text())
+    current=load((ROOT/BASE_PATH).read_text())
+    structure=structural_checks(spec)
+    alignment=e164_alignment(spec)
+    auth=declared_auth_checks(spec)
+    examples=example_results(spec)
+    collection=json.loads((ROOT/'postman/Famedic-Akubica-v1.3.0-rc1.postman_collection.json').read_text())
+    mirror=json.loads((ROOT/'docs/Akubica/v1.3.0-rc1/Famedic-Akubica-v1.3.0-rc1.postman_collection.json').read_text())
+    postman=postman_checks(spec,collection,mirror)
+    sys.path.insert(0,str(ROOT/'scripts/tests'))
+    from akubica_contract_fixtures import fixtures
+    sample_results=[]
+    for index,(route,method,status,name,payload) in enumerate(fixtures(),1):
+        schema=response_schema(spec,route,method,status)
+        valid=not errors_for(spec,schema,payload)
+        if 'oneOf' in schema:
+            valid=valid and sum(not errors_for(spec,x,payload) for x in schema['oneOf'])==1
+        sample_results.append({'case_id':f'case-{index:04d}','result':'PASS' if valid else 'FAIL'})
+    delta=semantic_diff(rc1,spec)
+    checks={'security_declarations_vs_routes':auth['result']=='PASS',
+            'e164_contract_formrequest':alignment['result']=='PASS',
+            'nullable_reviewed_annotations_resolved':not any(node.get('nullable') is True for _,node in walk(spec['components']['schemas'])),
+            'openapi_31_parse':spec.get('openapi')=='3.1.0',
+            'candidate_version':spec.get('info',{}).get('version')=='1.3.0-rc1.1',
+            'structure_local_refs_and_schema_meta':not structure,
+            'historical_bytes_preserved':True,
+            'operation_set_and_ids_preserved':not delta['operations_added'] and not delta['operations_removed'] and not delta['operation_ids_changed'],
+            'embedded_examples':all(x['valid'] for x in examples),
+            'synthetic_response_fixtures':all(x['result']=='PASS' for x in sample_results),
+            'postman_method_paths_and_full_mirror':not postman['failures']}
+    return {'result':'PASS_LOCAL_SCOPE' if all(checks.values()) else 'FAIL',
+            'release_ready':False,'phase_0_administrative_status':'OPEN',
+            'validator_scope':'offline structural OpenAPI checks plus JSON Schema 2020-12; official full OpenAPI metaschema validator unavailable',
+            'runtime_e164_alignment':alignment,
+            'declared_authentication':auth,
+            'inherited_nullable_annotations_outside_corrected_schemas':['/'.join(loc) for loc,node in walk(spec['components']['schemas']) if node.get('nullable') is True],
+            'datetime_format_scope':'explicit timezone and seconds representation emitted by runtime; not all RFC3339 leap-second forms',
+            'provenance':provenance,'candidate_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+            'operations':{'historical':len(operations(historical)),'current_base':len(operations(current)),
+                          'rc1':len(operations(rc1)),'rc11':len(operations(spec))},
+            'checks':checks,'structural_failures':structure,
+            'examples':{'total':len(examples),'failed':sum(not x['valid'] for x in examples)},
+            'fixtures':sample_results,'postman':postman,
+            'historical_to_rc1':semantic_diff(historical,rc1),
+            'historical_to_rc11':semantic_diff(historical,spec),
+            'rc1_to_rc11':delta,
+            'current_base_to_rc1':semantic_diff(current,rc1),
+            'current_base_to_rc11':semantic_diff(current,spec)}
 
-errors = []
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--contract',type=Path,default=ROOT/CANDIDATE_PATH)
+    parser.add_argument('--report',type=Path)
+    args=parser.parse_args()
+    try:
+        report=evaluate(args.contract)
+        if args.report:
+            args.report.write_text(json.dumps(report,indent=2,ensure_ascii=False)+chr(10))
+        # No payloads, examples, parser exception messages or credentials in logs.
+        print(json.dumps({'result':report['result'],'checks':report['checks'],
+                          'examples':report['examples'],'operations':report['operations'],
+                          'release_ready':False,'runtime_e164_alignment':report['runtime_e164_alignment']['result']}))
+        return int(report['result']=='FAIL')
+    except Exception:
+        print('{"result":"FAIL","categories":["CONTRACT_VALIDATION_BLOCKED"]}')
+        return 1
 
-
-def ok(msg: str) -> None:
-    print(f"OK  {msg}")
-
-
-def fail(msg: str) -> None:
-    errors.append(msg)
-    print(f"FAIL {msg}")
-
-
-# YAML
-try:
-    import yaml  # type: ignore
-
-    with OPENAPI.open(encoding="utf-8") as f:
-        spec = yaml.safe_load(f)
-    ok(f"YAML parse: {OPENAPI.name}")
-except Exception as e:
-    fail(f"YAML parse: {e}")
-    spec = None
-
-if spec:
-    if spec.get("info", {}).get("version") != "1.3.0-rc1":
-        fail("info.version != 1.3.0-rc1")
-    else:
-        ok("info.version 1.3.0-rc1")
-
-    ids = re.findall(r"^\s+operationId:\s+(\S+)\s*$", OPENAPI.read_text(encoding="utf-8"), re.M)
-    dup = {x for x in ids if ids.count(x) > 1}
-    if dup:
-        fail(f"operationId duplicados: {sorted(dup)}")
-    else:
-        ok(f"operationId únicos ({len(ids)})")
-
-    base_ids = re.findall(
-        r"^\s+operationId:\s+(\S+)\s*$", BASE_OPENAPI.read_text(encoding="utf-8"), re.M
-    )
-    if set(ids) != set(base_ids):
-        only_new = set(ids) - set(base_ids)
-        only_old = set(base_ids) - set(ids)
-        if only_new or only_old:
-            fail(f"operationId diff vs v1.2.3: +{only_new} -{only_old}")
-        else:
-            ok("operationId set igual a v1.2.3")
-    else:
-        ok("operationId set igual a v1.2.3")
-
-    openapi_paths = set(spec.get("paths", {}).keys())
-
-# Postman JSON
-try:
-    coll = json.loads(POSTMAN.read_text(encoding="utf-8"))
-    ok(f"Postman JSON: {POSTMAN.name}")
-except Exception as e:
-    fail(f"Postman JSON: {e}")
-    coll = None
-
-postman_routes = set()
-
-
-def walk(items, prefix=""):
-    for it in items:
-        if "item" in it:
-            walk(it["item"], prefix)
-        elif "request" in it:
-            url = it["request"].get("url")
-            if isinstance(url, str):
-                path = url.replace("{{base_url}}", "").split("?")[0]
-                method = it["request"]["method"].upper()
-                postman_routes.add((method, path))
-
-
-if coll and POSTMAN_MIRROR.exists():
-    mirror = json.loads(POSTMAN_MIRROR.read_text(encoding="utf-8"))
-    if mirror.get("info", {}).get("name") != coll.get("info", {}).get("name"):
-        fail("Coleccion Postman espejo desincronizada (info.name)")
-    else:
-        ok("Postman espejo docs/Akubica/v1.3.0-rc1 presente")
-
-if coll:
-    walk(coll.get("item", []))
-    ok(f"Postman rutas distintas: {len(postman_routes)}")
-
-    if spec:
-        missing_in_openapi = []
-        for method, path in postman_routes:
-            norm = path.replace("{{medical_cart_item_id}}", "{cart_item_id}")
-            if norm not in openapi_paths:
-                # allow path params
-                alt = re.sub(r"/\{\{[^}]+\}\}", "/{cart_item_id}", path)
-                alt = alt.replace("{{base_url}}", "")
-                if alt not in openapi_paths and path not in openapi_paths:
-                    missing_in_openapi.append((method, path))
-        if missing_in_openapi:
-            fail(f"Rutas Postman no en OpenAPI: {missing_in_openapi[:10]}")
-        else:
-            ok("Rutas Postman ⊆ paths OpenAPI (normalizado)")
-
-if errors:
-    print("\nResumen: FALLÓ", len(errors), "validación(es)")
-    sys.exit(1)
-print("\nResumen: todas las validaciones pasaron")
-sys.exit(0)
+if __name__=='__main__':
+    raise SystemExit(main())

@@ -523,7 +523,7 @@ test('idempotency results secure-link replays same url', function () {
 test('idempotency login request-code creates one challenge on replay', function () {
     enableLoginOtpWithFakeDelivery();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5512345678',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
@@ -553,12 +553,12 @@ test('idempotency public actors differ by phone', function () {
     enableLoginOtpWithFakeDelivery();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('111111'));
 
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5511111111',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5522222222',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),

@@ -1,0 +1,9 @@
+{
+  "candidate_sha256": "a737a0c8380ac470f20d95bc3f08739cf2cd38a71092e1e80c4b1a959905010f",
+  "validation_executed": false,
+  "downloads_performed": false,
+  "result": "BLOCKED",
+  "reason": "APPROVED_FULL_VALIDATOR_NOT_INSTALLED",
+  "tool_candidate": "openapi-spec-validator",
+  "recommended_version": "0.9.0"
+}

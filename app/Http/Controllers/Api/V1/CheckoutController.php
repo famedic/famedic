@@ -165,7 +165,9 @@ class CheckoutController extends Controller
     ): JsonResponse {
         $brand = LaboratoryBrand::from($request->validated('brand'));
         $expiresInMinutes = (int) $request->validated('expires_in_minutes');
-        $sanctumTokenId = $request->user()->currentAccessToken()?->id;
+        $accessToken = $request->user()?->currentAccessToken();
+        $sanctumTokenId = $accessToken instanceof \Laravel\Sanctum\PersonalAccessToken
+            ? $accessToken->getKey() : null;
 
         $result = $generatePaymentLinkAction(
             $request->user()->customer,

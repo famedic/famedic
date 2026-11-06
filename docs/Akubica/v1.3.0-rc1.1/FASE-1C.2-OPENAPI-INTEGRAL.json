@@ -1,0 +1,9 @@
+{
+  "candidate_sha256": "523a566bab22fffb4c0ad8fbb29d79cc4823e99769494b1fd135f6639094f9a4",
+  "validation_executed": true,
+  "downloads_performed": false,
+  "result": "PASS",
+  "errors": 0,
+  "installed_version": "0.9.0",
+  "scope": "integral OpenAPI 3.1; runtime/examples/security behavior require separate checks"
+}

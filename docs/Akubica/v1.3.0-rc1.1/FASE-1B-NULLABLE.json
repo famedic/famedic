@@ -1,0 +1,556 @@
+{
+  "prior_candidate_sha256": "567ec2c72d11896c73069a7d67aad923f656efb0fba28c3e1681595a73c71a06",
+  "evidence_scope": "codigo y validacion aislada; sin consultas DB o staging",
+  "rows": [
+    {
+      "id": "N01",
+      "path": "PhoneLookupRecognizedData/properties/personalization/properties/first_name",
+      "action": "REMOVE_ANNOTATION",
+      "evidence": "app/Support/Api/V1/AtixPhoneLookupRecognitionPayload.php:16-20",
+      "runtime_or_request_behavior": "Omitido si no hay nombre permitido; no se serializa null en este productor.",
+      "consumer_impact": "Leo/SDK: propiedad opcional string; no sustituir ausencia por null.",
+      "before": {
+        "type": "string",
+        "nullable": true
+      },
+      "after": {
+        "type": "string"
+      }
+    },
+    {
+      "id": "N02",
+      "path": "MembershipStatus/properties/plan_code",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/MembershipPlanCatalogService.php:62-70,100-106",
+      "runtime_or_request_behavior": "Null explicito para cuenta sin membresia; valores adicionales nulos para planes patrocinados o fechas ausentes.",
+      "consumer_impact": "Leo/SDK/memberships status: aceptar valor null sin confundirlo con expiracion o falta de propiedad.",
+      "before": {
+        "type": "string",
+        "nullable": true,
+        "enum": [
+          "basic_annual",
+          null
+        ]
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "basic_annual",
+          null
+        ]
+      }
+    },
+    {
+      "id": "N03",
+      "path": "MembershipStatus/properties/plan_name",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/MembershipPlanCatalogService.php:62-70,100-106",
+      "runtime_or_request_behavior": "Null explicito para cuenta sin membresia; valores adicionales nulos para planes patrocinados o fechas ausentes.",
+      "consumer_impact": "Leo/SDK/memberships status: aceptar valor null sin confundirlo con expiracion o falta de propiedad.",
+      "before": {
+        "type": "string",
+        "nullable": true,
+        "enum": [
+          "Plan Básico",
+          null
+        ]
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "Plan Básico",
+          null
+        ]
+      }
+    },
+    {
+      "id": "N04",
+      "path": "MembershipStatus/properties/source",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/MembershipPlanCatalogService.php:62-70,100-106",
+      "runtime_or_request_behavior": "Null explicito para cuenta sin membresia; valores adicionales nulos para planes patrocinados o fechas ausentes.",
+      "consumer_impact": "Leo/SDK/memberships status: aceptar valor null sin confundirlo con expiracion o falta de propiedad.",
+      "before": {
+        "type": "string",
+        "nullable": true,
+        "enum": [
+          "individual",
+          "sponsored",
+          null
+        ]
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "individual",
+          "sponsored",
+          null
+        ]
+      }
+    },
+    {
+      "id": "N05",
+      "path": "MembershipStatus/properties/starts_at",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/MembershipPlanCatalogService.php:62-70,100-106",
+      "runtime_or_request_behavior": "Null explicito para cuenta sin membresia; valores adicionales nulos para planes patrocinados o fechas ausentes.",
+      "consumer_impact": "Leo/SDK/memberships status: aceptar valor null sin confundirlo con expiracion o falta de propiedad.",
+      "before": {
+        "type": "string",
+        "format": "date",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date"
+      }
+    },
+    {
+      "id": "N06",
+      "path": "MembershipStatus/properties/expires_at",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/MembershipPlanCatalogService.php:62-70,100-106",
+      "runtime_or_request_behavior": "Null explicito para cuenta sin membresia; valores adicionales nulos para planes patrocinados o fechas ausentes.",
+      "consumer_impact": "Leo/SDK/memberships status: aceptar valor null sin confundirlo con expiracion o falta de propiedad.",
+      "before": {
+        "type": "string",
+        "format": "date",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date"
+      }
+    },
+    {
+      "id": "N07",
+      "path": "MembershipStatus/properties/ineligibility_reason",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/MembershipPlanCatalogService.php:62-70,100-106",
+      "runtime_or_request_behavior": "Null explicito para cuenta sin membresia; valores adicionales nulos para planes patrocinados o fechas ausentes.",
+      "consumer_impact": "Leo/SDK/memberships status: aceptar valor null sin confundirlo con expiracion o falta de propiedad.",
+      "before": {
+        "type": "string",
+        "nullable": true,
+        "enum": [
+          "membership_already_active",
+          "sponsored_membership_active",
+          "renewal_not_supported",
+          null
+        ]
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "membership_already_active",
+          "sponsored_membership_active",
+          "renewal_not_supported",
+          null
+        ]
+      }
+    },
+    {
+      "id": "N08",
+      "path": "LaboratoryTestListCategory",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Resources/Api/V1/LaboratoryTestListResource.php:22-25",
+      "runtime_or_request_behavior": "Category se emite null cuando la relacion no existe.",
+      "consumer_impact": "Catalogo/SDK: object o null; propiedades del objeto siguen tipadas.",
+      "before": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "additionalProperties": false,
+        "nullable": true,
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "after": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "required": [
+          "id",
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "id": "N09",
+      "path": "LaboratoryTestListItem/properties/indications",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Resources/Api/V1/LaboratoryTestListResource.php:26; database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:296-298",
+      "runtime_or_request_behavior": "Passthrough de columna declarada nullable. No se consulto DB para frecuencia real.",
+      "consumer_impact": "Catalogo/SDK: aceptar string o null.",
+      "before": {
+        "type": "string",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    {
+      "id": "N10",
+      "path": "OtpChallenge/properties/resource_type",
+      "action": "REMOVE_ANNOTATION",
+      "evidence": "app/Services/Otp/AkubicaLoginOtpService.php:234-244; app/Services/Otp/StepUp/AkubicaStepUpOtpService.php:433",
+      "runtime_or_request_behavior": "Login/decoy omiten; step-up legitimo deriva contexto de recurso. Null no acreditado en flujos validos revisados.",
+      "consumer_impact": "OTP/SDK: opcional string; revisar clientes que interpretaban nullable de OpenAPI 3.0.",
+      "before": {
+        "type": "string",
+        "nullable": true
+      },
+      "after": {
+        "type": "string"
+      }
+    },
+    {
+      "id": "N11",
+      "path": "OtpChallenge/properties/resource_id",
+      "action": "REMOVE_ANNOTATION",
+      "evidence": "app/Services/Otp/AkubicaLoginOtpService.php:234-244; app/Services/Otp/StepUp/AkubicaStepUpOtpService.php:434",
+      "runtime_or_request_behavior": "Login/decoy omiten; step-up hace cast explicito a int, no null.",
+      "consumer_impact": "OTP/SDK: opcional integer; no inventar null para el caso omitido.",
+      "before": {
+        "type": "integer",
+        "nullable": true
+      },
+      "after": {
+        "type": "integer"
+      }
+    },
+    {
+      "id": "N12",
+      "path": "OtpChallenge/properties/resend_available_at",
+      "action": "REMOVE_ANNOTATION",
+      "evidence": "app/Services/Otp/AkubicaLoginOtpService.php:242,482,518; app/Services/Otp/Registration/AkubicaRegisterOtpService.php:590,699,718; app/Services/Otp/StepUp/AkubicaStepUpOtpService.php:436",
+      "runtime_or_request_behavior": "Productores revisados calculan timestamp no nulo; algunas respuestas legacy omiten el campo.",
+      "consumer_impact": "OTP/SDK: opcional date-time; frecuencia y ramas de flags requieren prueba operativa autorizada.",
+      "before": {
+        "type": "string",
+        "format": "date-time",
+        "nullable": true
+      },
+      "after": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    {
+      "id": "N13",
+      "path": "Invoice/properties/uuid",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Resources/Api/V1/OrderInvoiceResource.php:32",
+      "runtime_or_request_behavior": "El recurso emite null explicitamente. Se mantiene string como alternativa declarada legacy, sin inventar UUID real.",
+      "consumer_impact": "Documentos/SDK: no asumir UUID disponible en respuestas issued o pending.",
+      "before": {
+        "type": "string",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    {
+      "id": "N14",
+      "path": "Invoice/properties/issued_at",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Resources/Api/V1/OrderInvoiceResource.php:34",
+      "runtime_or_request_behavior": "Null cuando pendiente o created_at ausente; fecha ISO cuando existe.",
+      "consumer_impact": "Documentos/SDK: date-time o null; no usar fecha por defecto inventada.",
+      "before": {
+        "type": "string",
+        "format": "date-time",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      }
+    },
+    {
+      "id": "N15",
+      "path": "LaboratoryPricing/properties/public_price_cents",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/LaboratoryPricingService.php:17-19",
+      "runtime_or_request_behavior": "Null si columna publico es null.",
+      "consumer_impact": "Catalogo/precios/SDK: aceptar null, conservar limites/formato y no presentarlo como ahorro cero.",
+      "before": {
+        "type": "integer",
+        "minimum": 0,
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0
+      }
+    },
+    {
+      "id": "N16",
+      "path": "LaboratoryPricing/properties/savings_cents",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/LaboratoryPricingService.php:21-35",
+      "runtime_or_request_behavior": "Null mientras comparacion no confiable; entero cuando disponible.",
+      "consumer_impact": "Catalogo/precios/SDK: aceptar null, conservar limites/formato y no presentarlo como ahorro cero.",
+      "before": {
+        "type": "integer",
+        "minimum": 0,
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0
+      }
+    },
+    {
+      "id": "N17",
+      "path": "LaboratoryPricing/properties/savings_percentage",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/LaboratoryPricingService.php:21-35",
+      "runtime_or_request_behavior": "Null mientras comparacion no confiable; numero cuando disponible.",
+      "consumer_impact": "Catalogo/precios/SDK: aceptar null, conservar limites/formato y no presentarlo como ahorro cero.",
+      "before": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0,
+        "maximum": 100
+      }
+    },
+    {
+      "id": "N18",
+      "path": "LaboratoryPricing/properties/tax_included",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/LaboratoryPricingService.php:61-73",
+      "runtime_or_request_behavior": "Configuracion ausente/no interpretable devuelve null; boolean en otro caso.",
+      "consumer_impact": "Catalogo/precios/SDK: aceptar null, conservar limites/formato y no presentarlo como ahorro cero.",
+      "before": {
+        "type": "boolean",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "boolean",
+          "null"
+        ]
+      }
+    },
+    {
+      "id": "N19",
+      "path": "LaboratoryPricing/properties/effective_at",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/LaboratoryPricingService.php:76-91",
+      "runtime_or_request_behavior": "Fecha de configuracion ausente o invalida devuelve null.",
+      "consumer_impact": "Catalogo/precios/SDK: aceptar null, conservar limites/formato y no presentarlo como ahorro cero.",
+      "before": {
+        "type": "string",
+        "format": "date-time",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      }
+    },
+    {
+      "id": "N20",
+      "path": "LaboratoryPricing/properties/valid_until",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Services/Api/V1/LaboratoryPricingService.php:76-91",
+      "runtime_or_request_behavior": "Fecha de configuracion ausente o invalida devuelve null.",
+      "consumer_impact": "Catalogo/precios/SDK: aceptar null, conservar limites/formato y no presentarlo como ahorro cero.",
+      "before": {
+        "type": "string",
+        "format": "date-time",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      }
+    },
+    {
+      "id": "N21",
+      "path": "LaboratoryTest/properties/description",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Resources/Api/V1/LaboratoryTestResource.php:18; database/migrations/2025_04_21_161348_modify_laboratory_tests_table.php:294",
+      "runtime_or_request_behavior": "Passthrough de columna nullable, sin consultar datos existentes.",
+      "consumer_impact": "Catalogo detalle/SDK: string o null.",
+      "before": {
+        "type": "string",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    {
+      "id": "N22",
+      "path": "LaboratoryTest/properties/category",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Resources/Api/V1/LaboratoryTestResource.php:20",
+      "runtime_or_request_behavior": "Operador null-safe devuelve null si falta categoria.",
+      "consumer_impact": "Catalogo detalle/SDK: string o null; distinto de objeto categoria en lista.",
+      "before": {
+        "type": "string",
+        "nullable": true
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    {
+      "id": "N23",
+      "path": "TaxProfileWriteRequest/properties/cfdi_use",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Requests/Api/V1/User/StoreTaxProfileRequest.php:22; app/Http/Requests/Api/V1/User/UpdateTaxProfileRequest.php:22",
+      "runtime_or_request_behavior": "Solicitud admite null explicitamente; no es una afirmacion sobre cada respuesta.",
+      "consumer_impact": "Clientes fiscales/SDK: pueden enviar null; limite maxLength conservado.",
+      "before": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 10
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 10
+      }
+    },
+    {
+      "id": "N24",
+      "path": "TaxProfileWriteRequest/properties/email",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Requests/Api/V1/User/StoreTaxProfileRequest.php:24; app/Http/Requests/Api/V1/User/UpdateTaxProfileRequest.php:24",
+      "runtime_or_request_behavior": "Solicitud admite null; si hay string debe ser email valido.",
+      "consumer_impact": "Clientes fiscales/SDK: null permitido sin quitar formato email o limite.",
+      "before": {
+        "type": "string",
+        "format": "email",
+        "nullable": true,
+        "maxLength": 255
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "email",
+        "maxLength": 255
+      }
+    },
+    {
+      "id": "N25",
+      "path": "AddressWriteRequest/properties/additional_references",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Requests/Api/V1/User/StoreAddressRequest.php:24; app/Http/Requests/Api/V1/User/UpdateAddressRequest.php:24",
+      "runtime_or_request_behavior": "Solicitud admite null explicitamente.",
+      "consumer_impact": "Clientes de direccion/SDK: conservar limite y opcionalidad.",
+      "before": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 255
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 255
+      }
+    },
+    {
+      "id": "N26",
+      "path": "CancelOrderRequest/properties/reason",
+      "action": "ALLOW_NULL",
+      "evidence": "app/Http/Requests/Api/V1/Orders/CancelOrderRequest.php:17",
+      "runtime_or_request_behavior": "Solicitud admite null explicitamente.",
+      "consumer_impact": "Clientes de ordenes/SDK: conservar maxLength y no hacerlo obligatorio.",
+      "before": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 500
+      },
+      "after": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 500
+      }
+    }
+  ]
+}

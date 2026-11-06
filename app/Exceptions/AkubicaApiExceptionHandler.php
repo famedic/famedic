@@ -17,6 +17,10 @@ class AkubicaApiExceptionHandler
 {
     public static function register(Exceptions $exceptions): void
     {
+        $exceptions->render(function (PaymentLinkAuthorizationDenied $e, Request $request) {
+            return static::isAkubicaApiRequest($request) ? $e->getResponse() : null;
+        });
+
         $exceptions->render(function (AuthenticationException $e, Request $request) {
             if (! static::isAkubicaApiRequest($request)) {
                 return null;

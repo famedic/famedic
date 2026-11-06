@@ -1,0 +1,904 @@
+{
+  "result": "FAIL",
+  "validator": "OpenAPIV31SpecValidator",
+  "version": "0.9.0",
+  "candidate_sha256": "a737a0c8380ac470f20d95bc3f08739cf2cd38a71092e1e80c4b1a959905010f",
+  "errors": 33,
+  "categories": {
+    "unevaluatedProperties": 33
+  },
+  "findings": [
+    {
+      "error_id": "error-0001",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/auth/login/request-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0002",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/auth/login/verify-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0003",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/auth/login/resend-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0004",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/auth/register",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0005",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/auth/register/verify-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0006",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/auth/register/resend-code",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0007",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/auth/token",
+        "delete",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "delete",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0008",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/secure-downloads/{token}",
+        "get",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0009",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/cart",
+        "delete",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "delete",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0010",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/cart/totals",
+        "get",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0011",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/cart/coupon",
+        "delete",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "delete",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0012",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/checkout/prepare",
+        "get",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0013",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/laboratory-appointments/requirements",
+        "get",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0014",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders",
+        "get",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0015",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/results",
+        "get",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0016",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/invoices",
+        "get",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0017",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/products",
+        "get",
+        "responses",
+        "404"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0018",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/status",
+        "get",
+        "responses",
+        "404"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0019",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/cancel",
+        "put",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "put",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0020",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/results",
+        "get",
+        "responses",
+        "404"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0021",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/results/step-up/request",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0022",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/results/step-up/verify",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0023",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/results/secure-link",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0024",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoices",
+        "get",
+        "responses",
+        "404"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0025",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoices/{invoice_id}/step-up/request",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0026",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoices/{invoice_id}/step-up/verify",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0027",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoices/{invoice_id}/secure-link",
+        "post",
+        "responses",
+        "503"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0028",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/orders/{order_id}/invoice-request/status",
+        "get",
+        "responses",
+        "404"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0029",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/user/family",
+        "get",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0030",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/user/payment-methods",
+        "get",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "get",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0031",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/user/tax-profiles",
+        "post",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0032",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/user/addresses",
+        "post",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    },
+    {
+      "error_id": "error-0033",
+      "category": "unevaluatedProperties",
+      "path": [
+        "paths",
+        "/user/contacts",
+        "post",
+        "responses",
+        "401"
+      ],
+      "schema_path": [
+        "properties",
+        "paths",
+        "patternProperties",
+        "^/",
+        "else",
+        "properties",
+        "post",
+        "properties",
+        "responses",
+        "patternProperties",
+        "^[1-5](?:[0-9]{2}|XX)$",
+        "then",
+        "unevaluatedProperties"
+      ],
+      "exception_class": "OpenAPIValidationError"
+    }
+  ],
+  "values_and_exception_messages_omitted": true
+}

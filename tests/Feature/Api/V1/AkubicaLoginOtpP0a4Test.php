@@ -37,7 +37,7 @@ function disableAkubicaLoginOtpFlags(): void
  */
 function loginOtpUser(string $nationalPhone, array $attrs = []): User
 {
-    return User::factory()->create(array_merge([
+    return User::factory()->withRegularCustomer()->create(array_merge([
         'phone' => $nationalPhone,
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
@@ -160,9 +160,11 @@ test('p0a4 decoy and existing user start responses share public contract shape',
         'phone' => '5599999999',
     ])->assertStatus(202)->json('data');
 
-    $keys = ['requires_otp', 'challenge_id', 'purpose', 'channel', 'destination_masked', 'expires_at', 'resend_available_at'];
+    $keys = ['requires_otp', 'challenge_id', 'purpose', 'channel', 'destination_masked', 'expires_at', 'resend_available_at', 'personalization'];
     expect(array_keys($existing))->toEqualCanonicalizing($keys)
         ->and(array_keys($decoy))->toEqualCanonicalizing($keys)
+        ->and($existing['personalization'])->toBe(['allowed' => false])
+        ->and($decoy['personalization'])->toBe(['allowed' => false])
         ->and($existing['requires_otp'])->toBeTrue()
         ->and($decoy['requires_otp'])->toBeTrue()
         ->and($existing['purpose'])->toBe($decoy['purpose'])
@@ -576,9 +578,10 @@ test('p0a4 failed expired superseded and exhausted paths never issue tokens', fu
 
     expect(PersonalAccessToken::query()->count())->toBe(0);
 
-    OtpChallenge::query()->where('public_id', $replacementId)->update([
+    $expiredRows = OtpChallenge::query()->where('public_id', $replacementId)->update([
         'expires_at' => now()->subMinute(),
     ]);
+    expect($expiredRows)->toBe(1);
 
     $this->postJson('/api/v1/auth/login/verify-code', [
         'challenge_id' => $replacementId,
@@ -667,7 +670,7 @@ test('p0a4 unverified phone is treated as decoy and never authenticates', functi
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('121212'));
 
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'email' => 'unverified@ejemplo.com',
         'phone' => '5512345678',
         'phone_country' => 'MX',
@@ -680,7 +683,7 @@ test('p0a4 unverified phone is treated as decoy and never authenticates', functi
 
     expect(OtpChallenge::query()->count())->toBe(0)
         ->and(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(0)
-        ->and(OtpMovementEvent::query()->where('is_decoy', true)->value('meta.decoy_reason'))->toBe('phone_not_verified')
+        ->and(OtpMovementEvent::query()->where('is_decoy', true)->firstOrFail()->meta['decoy_reason'])->toBe('phone_not_verified')
         ->and(OtpMovementEvent::query()->where('is_decoy', true)->value('technical_message'))->toContain('phone_not_verified');
 
     $this->postJson('/api/v1/auth/login/verify-code', [
@@ -699,7 +702,7 @@ test('p0a4 decoy reason is exposed only through authorized diagnostic headers', 
     config()->set('otp.diagnostic_response_headers.token', $token);
     $this->app->detectEnvironment(fn () => 'local');
 
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'email' => 'headers.unverified@ejemplo.com',
         'phone' => '5512345971',
         'phone_country' => 'MX',
@@ -726,6 +729,18 @@ test('p0a4 decoy reason is exposed only through authorized diagnostic headers', 
     expect(array_keys($public->json('data')))->toEqualCanonicalizing(array_keys($diagnostic->json('data')))
         ->and(json_encode($public->json()))->not->toContain('phone_not_verified')
         ->and(json_encode($diagnostic->json()))->not->toContain('phone_not_verified')
+        ->and(app(FakeOtpDeliveryProvider::class)->sent)->toHaveCount(0);
+});
+
+test('p0a4 verified phone without customer remains a decoy after eligible fixture corrections', function () {
+    enableAkubicaLoginOtpFlags();
+    User::factory()->create([
+        'phone' => '5512345678', 'phone_country' => 'MX', 'phone_verified_at' => now(),
+    ]);
+    $this->postJson('/api/v1/auth/login/request-code', ['phone' => '+525512345678'])
+        ->assertStatus(202)->assertJsonPath('data.personalization.allowed', false);
+    expect(OtpChallenge::query()->count())->toBe(0)
+        ->and(PersonalAccessToken::query()->count())->toBe(0)
         ->and(app(FakeOtpDeliveryProvider::class)->sent)->toHaveCount(0);
 });
 

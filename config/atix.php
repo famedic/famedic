@@ -22,6 +22,8 @@ return [
         // Phone normalization is currently Mexico-only; no other country rule is assumed.
         'phone_country' => strtoupper((string) env('ATIX_SANDBOX_PHONE_COUNTRY', 'MX')),
         'timestamp_tolerance_seconds' => $envInt('ATIX_SANDBOX_TIMESTAMP_TOLERANCE_SECONDS', 300, 1, 900),
+        // Minimum retention; V1 enforces at least 2*tolerance+1 seconds.
+        // Expiry is not permission to recycle/prune claims for an active key.
         'nonce_ttl_seconds' => $envInt('ATIX_SANDBOX_NONCE_TTL_SECONDS', 300, 1, 86400),
         'binding_ttl_hours' => $envInt('ATIX_SANDBOX_BINDING_TTL_HOURS', 24, 1, 24),
         'allowed_channels' => array_values(array_filter(array_map('trim', explode(',', (string) env('ATIX_SANDBOX_ALLOWED_CHANNELS', 'whatsapp'))))),

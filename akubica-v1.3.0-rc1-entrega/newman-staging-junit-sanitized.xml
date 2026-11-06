@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Famedic Akubica API v1.3.0-rc1" tests="12" time="5.229">
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B1 authLoginVerifyCode invalido" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="7" failures="0" errors="0" time="1.132">
+    <testcase name="HTTP status esperado" time="1.132" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="1.132" classname="[REDACTED]"/>
+    <testcase name="error.code presente" time="1.132" classname="[REDACTED]"/>
+    <testcase name="error.correlation_id coherente" time="1.132" classname="[REDACTED]"/>
+    <testcase name="error.retryable es boolean" time="1.132" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="1.132" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="1.132" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B2 authLoginVerifyCode valido contextual" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="8" failures="0" errors="0" time="0.662">
+    <testcase name="HTTP status esperado" time="0.662" classname="[REDACTED]"/>
+    <testcase name="token_type Bearer" time="0.662" classname="[REDACTED]"/>
+    <testcase name="otp_verified" time="0.662" classname="[REDACTED]"/>
+    <testcase name="schema Bearer contextual" time="0.662" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.662" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.662" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.662" classname="[REDACTED]"/>
+    <testcase name="schema success envelope" time="0.662" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B3 membershipStatusShow" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="6" failures="0" errors="0" time="0.288">
+    <testcase name="HTTP status esperado" time="0.288" classname="[REDACTED]"/>
+    <testcase name="membership schema" time="0.288" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.288" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.288" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.288" classname="[REDACTED]"/>
+    <testcase name="schema success envelope" time="0.288" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B4 cartItemsStore basic_annual" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="5" failures="0" errors="0" time="0.380">
+    <testcase name="HTTP status esperado" time="0.380" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.380" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.380" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.380" classname="[REDACTED]"/>
+    <testcase name="schema success envelope" time="0.380" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B5 cartIndex medical_services" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="5" failures="0" errors="0" time="0.274">
+    <testcase name="HTTP status esperado" time="0.274" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.274" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.274" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.274" classname="[REDACTED]"/>
+    <testcase name="schema success envelope" time="0.274" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B6 cartTotals medical_services" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="5" failures="0" errors="0" time="0.305">
+    <testcase name="HTTP status esperado" time="0.305" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.305" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.305" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.305" classname="[REDACTED]"/>
+    <testcase name="schema success envelope" time="0.305" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B7 medicalServiceBenefitApply cupon o saldo" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="7" failures="0" errors="0" time="0.445">
+    <testcase name="HTTP status esperado" time="0.445" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.445" classname="[REDACTED]"/>
+    <testcase name="error.code presente" time="0.445" classname="[REDACTED]"/>
+    <testcase name="error.correlation_id coherente" time="0.445" classname="[REDACTED]"/>
+    <testcase name="error.retryable es boolean" time="0.445" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.445" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.445" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B8 medicalServiceBenefitRemove" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="5" failures="0" errors="0" time="0.332">
+    <testcase name="HTTP status esperado" time="0.332" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.332" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.332" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.332" classname="[REDACTED]"/>
+    <testcase name="schema success envelope" time="0.332" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B9 checkoutPrepare medical_services" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="7" failures="0" errors="0" time="0.350">
+    <testcase name="HTTP status esperado" time="0.350" classname="[REDACTED]"/>
+    <testcase name="assistant_can_pay false" time="0.350" classname="[REDACTED]"/>
+    <testcase name="can_continue_on_platform true" time="0.350" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.350" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.350" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.350" classname="[REDACTED]"/>
+    <testcase name="schema success envelope" time="0.350" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B10 cartItemsDestroy membresia" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="5" failures="0" errors="0" time="0.393">
+    <testcase name="HTTP status esperado" time="0.393" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.393" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.393" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.393" classname="[REDACTED]"/>
+    <testcase name="schema success envelope" time="0.393" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B11 Aislamiento laboratorio vs medical_services" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="10" failures="0" errors="0" time="0.374">
+    <testcase name="HTTP status esperado" time="0.374" classname="[REDACTED]"/>
+    <testcase name="B11: 404 implica LAB_TEST_NOT_FOUND (catalogo/fixture staging)" time="0.374" classname="[REDACTED]"/>
+    <testcase name="B11: 409 implica conflicto de carrito laboratorio" time="0.374" classname="[REDACTED]"/>
+    <testcase name="B11: 201 confirma carrito laboratorio independiente de medical_services" time="0.374" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.374" classname="[REDACTED]"/>
+    <testcase name="error.code presente" time="0.374" classname="[REDACTED]"/>
+    <testcase name="error.correlation_id coherente" time="0.374" classname="[REDACTED]"/>
+    <testcase name="error.retryable es boolean" time="0.374" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.374" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.374" classname="[REDACTED]"/>
+  </testsuite>
+  <testsuite name="02 - RC1 Fase B (Bearer y carrito) / B12 Aislamiento farmacia (carrito pharmacy vacio)" id="[REDACTED]" timestamp="2026-10-29T21:56:15.664Z" tests="8" failures="0" errors="0" time="0.294">
+    <testcase name="HTTP status esperado" time="0.294" classname="[REDACTED]"/>
+    <testcase name="B12: RC1 rechaza service_line=pharmacy con brand (409 CART_SERVICE_LINE_MISMATCH)" time="0.294" classname="[REDACTED]"/>
+    <testcase name="X-Correlation-ID presente y coherente con la peticion" time="0.294" classname="[REDACTED]"/>
+    <testcase name="error.code presente" time="0.294" classname="[REDACTED]"/>
+    <testcase name="error.correlation_id coherente" time="0.294" classname="[REDACTED]"/>
+    <testcase name="error.retryable es boolean" time="0.294" classname="[REDACTED]"/>
+    <testcase name="sin account_context_token" time="0.294" classname="[REDACTED]"/>
+    <testcase name="sin payment link ni pagos" time="0.294" classname="[REDACTED]"/>
+  </testsuite>
+</testsuites>

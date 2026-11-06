@@ -109,20 +109,22 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
             ->name('memberships.status.show');
 
         Route::get('cart/totals', [CartController::class, 'totals'])->name('cart.totals');
-        Route::get('cart/coupon', [CartCouponController::class, 'show'])->name('cart.coupon.show');
+        Route::get('cart/coupon', [CartCouponController::class, 'show'])
+            ->middleware('api.consumer.legacy-benefits')->name('cart.coupon.show');
         Route::post('cart/coupon', [CartCouponController::class, 'apply'])
-            ->middleware('api.audit')
+            ->middleware(['api.consumer.legacy-benefits', 'api.audit'])
             ->name('cart.coupon.apply');
         Route::delete('cart/coupon', [CartCouponController::class, 'remove'])
-            ->middleware('api.audit')
+            ->middleware(['api.consumer.legacy-benefits', 'api.audit'])
             ->name('cart.coupon.remove');
         Route::get('cart/medical-benefit', [MedicalServiceBenefitController::class, 'show'])
+            ->middleware('api.consumer.legacy-benefits')
             ->name('cart.medical-benefit.show');
         Route::post('cart/medical-benefit', [MedicalServiceBenefitController::class, 'apply'])
-            ->middleware(['api.idempotency', 'api.audit'])
+            ->middleware(['api.consumer.legacy-benefits', 'api.idempotency', 'api.audit'])
             ->name('cart.medical-benefit.apply');
         Route::delete('cart/medical-benefit', [MedicalServiceBenefitController::class, 'remove'])
-            ->middleware(['api.idempotency', 'api.audit'])
+            ->middleware(['api.consumer.legacy-benefits', 'api.idempotency', 'api.audit'])
             ->name('cart.medical-benefit.remove');
         Route::delete('cart', [CartController::class, 'clear'])
             ->middleware('api.audit')
@@ -140,7 +142,8 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
             ->middleware('api.audit')
             ->name('checkout.draft');
         Route::post('checkout/payment-link', [CheckoutController::class, 'paymentLink'])
-            ->middleware('api.idempotency')
+            ->withoutMiddleware(['auth:sanctum', 'api.token.guard'])
+            ->middleware(['api.payment-link.pat', 'api.payment-link.authorize', 'api.idempotency'])
             ->name('checkout.payment-link');
 
         Route::get('laboratory-appointments/requirements', [LaboratoryAppointmentController::class, 'requirements'])

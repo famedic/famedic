@@ -1,0 +1,1409 @@
+{
+  "phase": "2B-1",
+  "execution_id": "phase2b1-6324b855-9bad-4c06-9d6f-7cbb97e08175",
+  "started_at": "2026-11-05T22:14:03.956662+00:00",
+  "result": "BLOCKED",
+  "runtime_directory": "/tmp/famedic-phase2b1-nwz5330n",
+  "reason": "Identity issuance/binding/channel and D08 are not approved; no server authorization policy installed",
+  "candidate_sha256": "523a566bab22fffb4c0ad8fbb29d79cc4823e99769494b1fd135f6639094f9a4",
+  "dependencies_downloaded": false,
+  "production_code_changed": false,
+  "database": "sqlite :memory:",
+  "existing_migrations_excluded_from_test_copy": [
+    "2026_10_21_142000_relax_atix_operation_unique_indexes.php"
+  ],
+  "commands": {
+    "acceptance": {
+      "command": [
+        "php",
+        "-d",
+        "allow_url_fopen=0",
+        "-d",
+        "disable_functions=fsockopen,pfsockopen,stream_socket_client,socket_connect",
+        "/home/developer/projects/famedic/vendor/bin/pest",
+        "--configuration",
+        "/tmp/famedic-phase2b1-nwz5330n/phpunit.xml",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--display-warnings",
+        "/home/developer/projects/famedic/tests/Acceptance/Api/V1",
+        "--log-junit",
+        "/tmp/famedic-phase2b1-nwz5330n/acceptance.xml"
+      ],
+      "returncode": 1,
+      "log_path": "/tmp/famedic-phase2b1-nwz5330n/acceptance.log",
+      "log_sha256": "7823f8d85e5f0121beaac82c33136b8c1c7f9f75238f327c94e04a0f1ac7de0b",
+      "cases": [
+        {
+          "name": "Existing unclassified bearer can create a link with data set \"empty\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationCurrentBehaviorTest",
+          "result": "PASS"
+        },
+        {
+          "name": "Existing unclassified bearer can create a link with data set \"read-only\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationCurrentBehaviorTest",
+          "result": "PASS"
+        },
+        {
+          "name": "Existing unclassified bearer can create a link with data set \"wildcard\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationCurrentBehaviorTest",
+          "result": "PASS"
+        },
+        {
+          "name": "Replay returns a persisted response and new key creates another link",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationCurrentBehaviorTest",
+          "result": "PASS"
+        },
+        {
+          "name": "Acceptance with data set \"P01\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        },
+        {
+          "name": "Acceptance with data set \"P02\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        },
+        {
+          "name": "Acceptance with data set \"P03\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        },
+        {
+          "name": "Acceptance with data set \"P04\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        },
+        {
+          "name": "Acceptance with data set \"P05\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        },
+        {
+          "name": "Acceptance with data set \"P06\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        },
+        {
+          "name": "Acceptance with data set \"P07\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "Acceptance with data set \"P08\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "Acceptance with data set \"P09\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        },
+        {
+          "name": "Acceptance with data set \"P10\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        },
+        {
+          "name": "Acceptance with data set \"P11\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        },
+        {
+          "name": "Acceptance with data set \"P12\"",
+          "class": "Tests.Acceptance.Api.V1.LeoAuthorizationP01P12Test",
+          "result": "BLOCKED"
+        }
+      ],
+      "counts": {
+        "PASS": 4,
+        "FAIL": 2,
+        "ERROR": 0,
+        "BLOCKED": 10
+      },
+      "junit_sha256": "966abc738c76837a977bc400d9726736dd7412c5ef7ed6c855fa4121a3119544"
+    },
+    "laravel_regressions": {
+      "command": [
+        "php",
+        "-d",
+        "allow_url_fopen=0",
+        "-d",
+        "disable_functions=fsockopen,pfsockopen,stream_socket_client,socket_connect",
+        "/home/developer/projects/famedic/vendor/bin/pest",
+        "--configuration",
+        "/tmp/famedic-phase2b1-nwz5330n/phpunit.xml",
+        "--colors=never",
+        "--do-not-cache-result",
+        "--display-warnings",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaAuthTest.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaLoginOtpP0a4Test.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaSanctumTokenExpirationP0c1Test.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaIdempotencyP1Test.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaCartCouponTest.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaCartCatalogTest.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaCheckoutPreparationTest.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaCheckoutPaymentLinkTest.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaMedicalServicesCartM2BTest.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaMedicalServicesCartM2CTest.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaMedicalCheckoutPrepareRc1IsolatedTest.php",
+        "/home/developer/projects/famedic/tests/Feature/Api/V1/AkubicaErrorsCorrelationP1a6Test.php",
+        "--log-junit",
+        "/tmp/famedic-phase2b1-nwz5330n/laravel_regressions.xml"
+      ],
+      "returncode": 2,
+      "log_path": "/tmp/famedic-phase2b1-nwz5330n/laravel_regressions.log",
+      "log_sha256": "8a4fe25f6e81eb4a5fba1f4706d567a1749b98b594f9e9a16de8f8198d6f5081",
+      "cases": [
+        {
+          "name": "login request-code rejects invalid email with 422",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "login request-code returns generic 200 for nonexistent email without sending mail",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "login request-code creates OTP and sends notification for existing user",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "login verify-code returns NO_ACTIVE_CODE when no active OTP exists",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "login verify-code returns INVALID_CODE for wrong code",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "login verify-code returns CODE_EXPIRED for expired OTP",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "login verify-code returns ATTEMPTS_EXHAUSTED after max failed attempts",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "login verify-code returns Bearer token for valid code",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "register rejects invalid data with 422",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "register returns 409 EMAIL_ALREADY_REGISTERED for duplicate email",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "register returns 409 PHONE_ALREADY_REGISTERED for duplicate phone",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "register creates registration OTP for valid data",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "register verify-code creates user and customer with Bearer token",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "register verify-code does not reuse consumed OTP",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "registered user can access GET /api/v1/cart with token",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /api/v1/auth/token revokes token without requiring customer",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "auth OTP is stored hashed not in plain text",
+          "class": "Tests.Feature.Api.V1.AkubicaAuthTest",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 flags off keeps legacy login token flow and notifications",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 flags off does not create challenges for nonexistent email",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 resend is disabled when login otp flag is off",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 request returns 202 challenge with sms delivery without token",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 request for nonexistent phone returns decoy 202 without persistence or sms",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 decoy and existing user start responses share public contract shape",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 verify and resend of never-issued uuid stay NO_ACTIVE_CODE",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 issued decoy verify and resend match real public contracts across lifecycle",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 login otp without anti abuse returns configuration error",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 login otp without sms delivery returns configuration error",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 verify issues sanctum token for existing user and customer without creating duplicates",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 wrong code increments attempts and never returns plaintext otp",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 max attempts invalidates and blocks further success",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0a4 cooldown returns 429 with Retry-After",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 resend after cooldown invalidates previous challenge and sends new sms",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 vonage failure returns DELIVERY_FAILED without token",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 does not persist otp plaintext or full destination in abuse events or logs",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "ERROR"
+        },
+        {
+          "name": "p0a4 sequential double verify guarantees single consumed challenge and one token",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 failed expired superseded and exhausted paths never issue tokens",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 resend rejects client-controlled identity fields",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "ERROR"
+        },
+        {
+          "name": "p0a4 verify ignores client phone and binds identity from challenge",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 unverified phone is treated as decoy and never authenticates",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "ERROR"
+        },
+        {
+          "name": "p0a4 decoy reason is exposed only through authorized diagnostic headers",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "p0a4 register challenge cannot be used for login verify",
+          "class": "Tests.Feature.Api.V1.AkubicaLoginOtpP0a4Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 flag off issues akubica token without pat expires_at and legacy ttl",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 flag on persists expires_at from config ttl not hardcode",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 login otp verify uses 180 minute ttl when flag on",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 legacy login verify uses 180 minute ttl when flag on",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 register otp verify uses configured ttl when flag on",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 valid token accesses private endpoint; expired token returns 401",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 expired token cannot download bearer or request step-up",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 new token cannot use grant bound to previous pat",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 non-akubica createToken is unchanged when flag on",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "p0c1 flag off does not alter sanctum.expiration config",
+          "class": "Tests.Feature.Api.V1.AkubicaSanctumTokenExpirationP0c1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency flag off ignores Idempotency-Key",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency without header keeps current behaviour",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency invalid header returns VALIDATION_ERROR",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency config defaults are safe",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency payment-link first creates one link and replay returns same url",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency payment-link same key different payload conflicts",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency payment-link cross-user isolation",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency active processing returns IN_PROGRESS",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency expired processing becomes UNCERTAIN and does not execute controller",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency unique constraint is the concurrency barrier",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency oversized response marks uncertain without truncating",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency laboratory appointment creates once on replay",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency invoice-request creates once on replay",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency results secure-link replays same url",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency login request-code creates one challenge on replay",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "idempotency public actors differ by phone",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "FAIL"
+        },
+        {
+          "name": "idempotency register creates one challenge on replay",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency step-up results request creates one challenge on replay",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency invoices step-up request creates one challenge and delivery on replay",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency invoices step-up same key different invoice conflicts",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency invoices step-up cross-user isolation",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency invoices secure-link creates one link and replay returns same url",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency invoices secure-link same key different payload conflicts",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency invoices secure-link respects ownership isolation",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency failed_final 4xx is replayed without re-running controller",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency 5xx marks failed_uncertain without persisting body and blocks re-run",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency 5xx uncertain same payload does not re-execute",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency persistence encrypts response and never stores raw key or request body",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency processing in progress and expired semantics",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency prune dry-run and force",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency prune scheduler is off by default",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "idempotency unauthenticated does not create durable record",
+          "class": "Tests.Feature.Api.V1.AkubicaIdempotencyP1Test",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart/coupon without token returns 401",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon without token returns 401",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart/coupon without token returns 401",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "cart coupon endpoints return 403 for user without customer",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart/coupon without brand returns 422",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon without code returns 422",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon with invalid brand returns 422",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart/coupon returns null coupon when none applied",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart/coupon returns applied coupon structure",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon with empty cart returns 409 EMPTY_CART",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon with nonexistent code returns 404 COUPON_NOT_FOUND",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon with used coupon returns 409 COUPON_EXPIRED",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon with zero balance returns 409 COUPON_EXPIRED",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon with balance greater than cart total returns 409 COUPON_NOT_APPLICABLE",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon with valid coupon returns coupon and totals",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon updates GET /cart/totals",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/coupon updates GET /checkout/prepare",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "applying coupon does not affect another brand cart",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "applying coupon does not affect another customer",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart/coupon without applied coupon returns removed false",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart/coupon with applied coupon returns removed true",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart/coupon recalculates totals without discount",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart/coupon does not affect another brand",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart/coupon does not affect another customer",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "payment link works with applied coupon",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "payment link does not create purchase or payment",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "medications catalog endpoint still returns 503",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "order cancellation still returns 503",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCouponTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart without token returns 401 UNAUTHENTICATED",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart with user without customer returns 403 FORBIDDEN",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart without brand returns 422 VALIDATION_ERROR",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart with valid token and empty cart returns empty items",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart returns items and correct totals",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart filters items by brand",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/items with invalid body returns 422 VALIDATION_ERROR",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/items with nonexistent laboratory_test_id returns 404 LAB_TEST_NOT_FOUND",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/items with brand mismatch returns 404 LAB_TEST_NOT_FOUND",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/items with valid laboratory_test_id adds item and returns cart summary",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /cart/items duplicate returns 409 ITEM_ALREADY_IN_CART",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart/items/{id} for nonexistent item returns 404 CART_ITEM_NOT_FOUND",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart/items/{id} for another customer returns 403 FORBIDDEN",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart/items/{id} removes own item and returns updated cart",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /catalog/laboratory-tests/{id} for nonexistent test returns 404 LAB_TEST_NOT_FOUND",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /catalog/laboratory-tests/{id} returns laboratory test data",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE",
+          "class": "Tests.Feature.Api.V1.AkubicaCartCatalogTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart/totals without token returns 401 UNAUTHENTICATED",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart without token returns 401 UNAUTHENTICATED",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /checkout/prepare without token returns 401 UNAUTHENTICATED",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/draft without token returns 401 UNAUTHENTICATED",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /checkout/prepare with user without customer returns 403 FORBIDDEN",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart/totals with empty cart returns 200 with zero totals",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart/totals with items returns correct totals",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart/totals without brand returns 422 VALIDATION_ERROR",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /cart/totals with invalid brand returns 422 VALIDATION_ERROR",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart with empty cart returns 200 deleted_count 0",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart with items returns correct deleted_count",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart does not remove items from another brand",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "DELETE /cart does not remove items from another customer",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /checkout/prepare with empty cart returns EMPTY_CART warning",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /checkout/prepare with items returns cart totals contacts and addresses",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /checkout/prepare sets can_continue_to_payment_platform true when cart has items",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /checkout/prepare sets requires_appointment true when cart item requires appointment",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /checkout/prepare payment_methods do not expose sensitive tokens",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/draft with empty cart returns 409 EMPTY_CART",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/draft with foreign contact_id returns 404 CONTACT_NOT_FOUND",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/draft with foreign address_id returns 404 ADDRESS_NOT_FOUND",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/draft with own contact and address returns 200 draft",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/draft with foreign tax_profile_id returns 404 TAX_PROFILE_NOT_FOUND",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/draft with notes too long returns 422 VALIDATION_ERROR",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/draft does not create a laboratory purchase",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/draft does not store payment_method on draft",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPreparationTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link without token returns 401 UNAUTHENTICATED",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link with user without customer returns 403 FORBIDDEN",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link without brand returns 422 VALIDATION_ERROR",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link with invalid brand returns 422 VALIDATION_ERROR",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link with expires_in_minutes below 5 returns 422",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link with expires_in_minutes above 1440 returns 422",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link with empty cart returns 409 EMPTY_CART",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link with cart but no draft returns 409 CHECKOUT_NOT_READY",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link with draft missing contact_id returns 409 CHECKOUT_NOT_READY",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link with draft missing address_id returns 409 CHECKOUT_NOT_READY",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link when appointment required and missing returns 409 APPOINTMENT_REQUIRED",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link with ready checkout returns 200 with payment_link url",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link does not create LaboratoryPurchase",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link stores token hash not plain token",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "POST /checkout/payment-link generates unique token hashes",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET akubica checkout link with valid token redirects to laboratory checkout",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET akubica checkout link with expired token redirects to login",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET akubica checkout link with invalid token redirects to login",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET akubica checkout link does not authenticate another customer",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET akubica checkout link with empty cart redirects to login with error",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET akubica checkout link with deleted draft redirects to login with error",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET akubica checkout link with pending appointment allows redirect when appointment exists",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED",
+          "class": "Tests.Feature.Api.V1.AkubicaCheckoutPaymentLinkTest",
+          "result": "PASS"
+        },
+        {
+          "name": "adds the basic plan to a medical services cart with authoritative totals",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "gets medical cart and medical totals without mixing laboratory data",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "deletes a medical membership cart item",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "prepares medical checkout without payment or activation side effects",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "blocks adding a plan when an individual membership is active",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "blocks adding a plan when a sponsored membership is active",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "blocks duplicate membership and invalid service line combinations",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "rejects a medical membership quantity different from one",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "rejects deleting another customer medical cart item",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "replays adding a medical membership with the same idempotency key",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2BTest",
+          "result": "PASS"
+        },
+        {
+          "name": "applies assigned credit partially without consuming it",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2CTest",
+          "result": "PASS"
+        },
+        {
+          "name": "applies a coupon as discount and does not combine it with credit",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2CTest",
+          "result": "PASS"
+        },
+        {
+          "name": "rejects expired, unassigned and invalid medical benefits",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2CTest",
+          "result": "PASS"
+        },
+        {
+          "name": "isolates medical benefits from laboratory carts and customer ownership",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2CTest",
+          "result": "PASS"
+        },
+        {
+          "name": "recalculates the persisted benefit after item removal",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2CTest",
+          "result": "PASS"
+        },
+        {
+          "name": "reapplies the same medical benefit idempotently",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2CTest",
+          "result": "PASS"
+        },
+        {
+          "name": "removes a medical benefit without changing laboratory coupon behavior",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalServicesCartM2CTest",
+          "result": "PASS"
+        },
+        {
+          "name": "Medical checkout exposes rc1 assistant and platform flags",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalCheckoutPrepareRc1IsolatedTest",
+          "result": "ERROR"
+        },
+        {
+          "name": "Medical checkout does not create payments or payment links",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalCheckoutPrepareRc1IsolatedTest",
+          "result": "ERROR"
+        },
+        {
+          "name": "Medical checkout does not activate memberships",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalCheckoutPrepareRc1IsolatedTest",
+          "result": "ERROR"
+        },
+        {
+          "name": "Medical checkout reflects cart totals and applied benefits",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalCheckoutPrepareRc1IsolatedTest",
+          "result": "ERROR"
+        },
+        {
+          "name": "Laboratory checkout prepare is unchanged",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalCheckoutPrepareRc1IsolatedTest",
+          "result": "ERROR"
+        },
+        {
+          "name": "Medical checkout ownership isolated per customer",
+          "class": "Tests.Feature.Api.V1.AkubicaMedicalCheckoutPrepareRc1IsolatedTest",
+          "result": "ERROR"
+        },
+        {
+          "name": "correlation id is generated when header is missing",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "correlation id accepts a valid client header",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "correlation id replaces an invalid client header",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "error responses include retryable and correlation_id matching header",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "validation errors include retryable false and correlation_id",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "soft-deny and unknown route errors are non-retryable with correlation",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "feature disabled is non-retryable",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "two requests receive distinct generated correlation ids",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "success envelope remains compatible without correlation_id in body",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "ApiErrorRetryability classifies known codes",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "AkubicaCorrelationId validation rejects unsafe values",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "pdf download response includes correlation header without changing body",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        },
+        {
+          "name": "logging context receives correlation_id without secrets",
+          "class": "Tests.Feature.Api.V1.AkubicaErrorsCorrelationP1a6Test",
+          "result": "PASS"
+        }
+      ],
+      "counts": {
+        "PASS": 194,
+        "FAIL": 13,
+        "ERROR": 9,
+        "BLOCKED": 0
+      },
+      "junit_sha256": "a277c28accccda751928e9cfbb286b3b5aa7a412d3927ceda15682c6db7830b5"
+    },
+    "python": {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts/tests",
+        "-p",
+        "test_*.py",
+        "-q"
+      ],
+      "returncode": 0,
+      "log_path": "/tmp/famedic-phase2b1-nwz5330n/python.log",
+      "log_sha256": "2386a8b2dc9f5ff5d88d9e5522dab5070fce3492077f9d0f1c7f2147a7adee43"
+    },
+    "node": {
+      "command": [
+        "node",
+        "--test",
+        "scripts/tests/test-newman-secure.cjs"
+      ],
+      "returncode": 0,
+      "log_path": "/tmp/famedic-phase2b1-nwz5330n/node.log",
+      "log_sha256": "c7972b77e41387208e00d3092acee805282e19e93a57df9a94e0d06b33e88c66"
+    },
+    "local_contract": {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/validate-akubica-rc1-artifacts.py",
+        "--report",
+        "/tmp/famedic-phase2b1-nwz5330n/local-contract.json"
+      ],
+      "returncode": 0,
+      "log_path": "/tmp/famedic-phase2b1-nwz5330n/local_contract.log",
+      "log_sha256": "bc359876d1f46da801d6d1584b4e77da37e4db9ed164ea61825120cec9aae3b3"
+    },
+    "diff_check": {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "returncode": 0,
+      "log_path": "/tmp/famedic-phase2b1-nwz5330n/diff_check.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "observations": [
+    {
+      "scenario": "C01/empty",
+      "http_status": 200,
+      "error_code": null,
+      "links_created": 1,
+      "business_tables_changed": [
+        "akubica_checkout_links"
+      ],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": false
+    },
+    {
+      "scenario": "C01/akubica:read",
+      "http_status": 200,
+      "error_code": null,
+      "links_created": 1,
+      "business_tables_changed": [
+        "akubica_checkout_links"
+      ],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": false
+    },
+    {
+      "scenario": "C01/*",
+      "http_status": 200,
+      "error_code": null,
+      "links_created": 1,
+      "business_tables_changed": [
+        "akubica_checkout_links"
+      ],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": false
+    },
+    {
+      "scenario": "C02/persisted-replay",
+      "http_status": 200,
+      "error_code": null,
+      "links_created": 0,
+      "business_tables_changed": [],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": true
+    },
+    {
+      "scenario": "P07",
+      "http_status": 200,
+      "error_code": null,
+      "links_created": 1,
+      "business_tables_changed": [
+        "akubica_checkout_links"
+      ],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": false
+    },
+    {
+      "scenario": "P08/missing",
+      "http_status": 401,
+      "error_code": "UNAUTHENTICATED",
+      "links_created": 0,
+      "business_tables_changed": [],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": true
+    },
+    {
+      "scenario": "P08/invalid",
+      "http_status": 401,
+      "error_code": "UNAUTHENTICATED",
+      "links_created": 0,
+      "business_tables_changed": [],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": true
+    },
+    {
+      "scenario": "P08/revoked",
+      "http_status": 401,
+      "error_code": "UNAUTHENTICATED",
+      "links_created": 0,
+      "business_tables_changed": [],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": true
+    },
+    {
+      "scenario": "P08/expired",
+      "http_status": 401,
+      "error_code": "UNAUTHENTICATED",
+      "links_created": 0,
+      "business_tables_changed": [],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": true
+    },
+    {
+      "scenario": "P08/session-only",
+      "http_status": 500,
+      "error_code": "INTERNAL_ERROR",
+      "links_created": 0,
+      "business_tables_changed": [],
+      "transactions_and_purchases_unchanged": true,
+      "outbound_http_calls": 0,
+      "business_unchanged": true
+    }
+  ],
+  "candidate_unchanged": true,
+  "finished_at": "2026-11-05T22:14:57.032765+00:00"
+}
