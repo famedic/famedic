@@ -1,82 +1,35 @@
 #!/usr/bin/env python3
-"""Sanitize Newman JSON export: strip secrets from bodies/headers."""
+"""Project Newman evidence using an explicit allowlist; never copy raw data."""
 import json
-import re
+import os
 import sys
 from pathlib import Path
+from evidence_security import Scanner, project_newman, read_limited, strict_json
 
-SENSITIVE_KEYS = re.compile(
-    r"(token|authorization|signature|secret|otp|phone|password|hmac|bearer)",
-    re.I,
-)
+def main():
+    try:
+        if len(sys.argv) not in (4, 5):
+            raise ValueError()
+        import yaml
+        contract = Path(sys.argv[4]) if len(sys.argv) == 5 else Path(__file__).resolve().parents[1] / 'docs/Akubica/akubica-openapi-v1.3.0-rc1.yaml'
+        spec = yaml.safe_load(read_limited(contract).decode('utf-8'))
+        projected = project_newman(strict_json(read_limited(sys.argv[1]).decode('utf-8')), spec)
+        encoded = (json.dumps(projected, indent=2, allow_nan=False) + chr(10)).encode()
+        scanner = Scanner(); scanner.blob(encoded, '.json')
+        if scanner.findings:
+            raise ValueError()
+        targets = [Path(sys.argv[2]), Path(sys.argv[3])]
+        if len(set(p.resolve() for p in targets)) != 2 or any(p.exists() or p.is_symlink() for p in targets):
+            raise ValueError()
+        os.umask(0o077)
+        for target in targets:
+            with target.open('xb') as handle:
+                handle.write(encoded)
+        print('PASS: projected Newman evidence; original input preserved')
+        return 0
+    except Exception:
+        print('FAIL: evidence projection blocked; input values omitted', file=sys.stderr)
+        return 1
 
-
-def redact_obj(obj):
-    if isinstance(obj, dict):
-        out = {}
-        for k, v in obj.items():
-            if SENSITIVE_KEYS.search(str(k)):
-                out[k] = "[REDACTED]"
-            else:
-                out[k] = redact_obj(v)
-        return out
-    if isinstance(obj, list):
-        return [redact_obj(x) for x in obj]
-    if isinstance(obj, str) and len(obj) > 64 and re.fullmatch(r"[A-Za-z0-9._\-+/=]+", obj):
-        return "[REDACTED]"
-    return obj
-
-
-def main() -> None:
-    raw_path = Path(sys.argv[1])
-    san_path = Path(sys.argv[2])
-    summary_path = Path(sys.argv[3])
-    raw = json.loads(raw_path.read_text(encoding="utf-8"))
-    san = redact_obj(raw)
-    san_path.write_text(json.dumps(san, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-    executions = []
-    for run in san.get("run", {}).get("executions", []):
-        name = run.get("item", {}).get("name", "")
-        req = run.get("request", {}) or {}
-        url = req.get("url", "")
-        if isinstance(url, dict):
-            url = url.get("raw") or url.get("host", "")
-        status = None
-        for a in run.get("assertions", []) or []:
-            pass
-        resp = run.get("response", {}) or {}
-        status = resp.get("code")
-        body = {}
-        try:
-            body = json.loads(resp.get("stream", "") or "{}")
-        except Exception:
-            body = {}
-        err_code = None
-        corr = None
-        if isinstance(body, dict):
-            err = body.get("error") or {}
-            if isinstance(err, dict):
-                err_code = err.get("code")
-                corr = err.get("correlation_id")
-        executions.append(
-            {
-                "case": name,
-                "http": status,
-                "error_code": err_code,
-                "correlation_id": corr,
-                "failed_assertions": sum(1 for a in (run.get("assertions") or []) if a.get("error")),
-            }
-        )
-
-    stats = san.get("run", {}).get("stats", {})
-    summary = {
-        "executions": executions,
-        "stats": stats,
-        "failures": san.get("run", {}).get("failures", []),
-    }
-    summary_path.write_text(json.dumps(redact_obj(summary), indent=2) + "\n", encoding="utf-8")
-
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    raise SystemExit(main())

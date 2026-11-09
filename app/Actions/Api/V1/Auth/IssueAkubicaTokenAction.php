@@ -22,11 +22,16 @@ class IssueAkubicaTokenAction
         $ttlMinutes = $this->resolveTtlMinutes();
         $expiresAt = now()->addMinutes($ttlMinutes);
 
-        $tokenResult = $user->createToken(
-            config('akubica.token_name'),
-            config('akubica.token_abilities'),
-            $this->shouldPersistExpiresAt() ? $expiresAt : null,
-        );
+        $tokenResult = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $expiresAt) {
+            $grant = app(\App\Services\Api\V1\Auth\OtpConsumerEnrollment::class)->grant($user, request());
+            $expiry = $grant ? \Illuminate\Support\Carbon::createFromTimestampUTC(min($expiresAt->timestamp, $grant->expiresAt)) : $expiresAt;
+            $token = $user->createToken(config('akubica.token_name'), $grant?->capabilities ?? config('akubica.token_abilities'), ($grant || $this->shouldPersistExpiresAt()) ? $expiry : null);
+            if ($grant) {
+                app(\App\Services\Api\V1\Auth\ConsumerTokenBindingWriter::class)->bind($grant->operator, $token->accessToken, $grant->delegation, $grant->capabilities, $expiry);
+            }
+
+            return $token;
+        });
 
         $accessToken = $tokenResult->accessToken;
         $effectiveExpiresAt = $accessToken->expires_at instanceof DateTimeInterface

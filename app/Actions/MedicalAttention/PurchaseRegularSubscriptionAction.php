@@ -14,9 +14,18 @@ use Illuminate\Support\Facades\Log;
 
 class PurchaseRegularSubscriptionAction
 {
+    /** Internal first-party integration, gated independently of legacy checkout. */
+    public function beginBenefitPurchase(\App\Domain\Akubica\Benefits\BenefitActor $actor, string $cartRef, string $applicationRef, string $key, string $provider = 'paypal'): array
+    {
+        return app(\App\Services\MedicalCheckout\MedicalPurchaseSaga::class)->begin($actor, $cartRef, $applicationRef, $key, $provider);
+    }
+
     private CreateRegularSubscriptionAction $createRegularSubscriptionAction;
+
     private ChargeOdessaAction $chargeOdessaAction;
+
     private ChargeEfevooPaymentMethodAction $chargeEfevooPaymentMethodAction;
+
     private RefundTransactionAction $refundTransactionAction;
 
     public function __construct(
@@ -37,6 +46,7 @@ class PurchaseRegularSubscriptionAction
         int $totalCents
     ): MedicalAttentionSubscription {
 
+        app(\App\Services\MedicalCheckout\MedicalCheckoutSelectionGuard::class)->assertNoIgnoredBenefit($customer);
         $expectedTotalCents = config('famedic.medical_attention_subscription_price_cents');
 
         Log::info('🔵 Starting Medical Attention Subscription Purchase', [
@@ -54,7 +64,7 @@ class PurchaseRegularSubscriptionAction
                 'expected' => $expectedTotalCents,
             ]);
 
-            throw new UnmatchingTotalPriceException();
+            throw new UnmatchingTotalPriceException;
         }
 
         $transaction = null;
@@ -104,7 +114,7 @@ class PurchaseRegularSubscriptionAction
             $subscription->transactions()->attach($transaction);
 
             $customer->update([
-                'medical_attention_subscription_expires_at' => $subscription->end_date
+                'medical_attention_subscription_expires_at' => $subscription->end_date,
             ]);
 
             Log::info('🎉 Subscription created successfully', [

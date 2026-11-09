@@ -58,7 +58,7 @@ function docAuditCustomerToken(array $userAttrs = []): array
         'email' => 'doc.audit@ejemplo.com',
     ], $userAttrs));
 
-    $newToken = $user->createToken('akubica-test');
+    $newToken = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user,'native')['token'];
 
     return [$user, $newToken->plainTextToken, (int) $newToken->accessToken->id];
 }

@@ -37,7 +37,7 @@ function disableAkubicaLoginOtpFlags(): void
  */
 function loginOtpUser(string $nationalPhone, array $attrs = []): User
 {
-    return User::factory()->create(array_merge([
+    return User::factory()->withRegularCustomer()->create(array_merge([
         'phone' => $nationalPhone,
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
@@ -667,7 +667,7 @@ test('p0a4 unverified phone is treated as decoy and never authenticates', functi
     enableAkubicaLoginOtpFlags();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('121212'));
 
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'email' => 'unverified@ejemplo.com',
         'phone' => '5512345678',
         'phone_country' => 'MX',
@@ -680,7 +680,7 @@ test('p0a4 unverified phone is treated as decoy and never authenticates', functi
 
     expect(OtpChallenge::query()->count())->toBe(0)
         ->and(count(app(FakeOtpDeliveryProvider::class)->sent))->toBe(0)
-        ->and(OtpMovementEvent::query()->where('is_decoy', true)->value('meta.decoy_reason'))->toBe('phone_not_verified')
+        ->and(OtpMovementEvent::query()->where('is_decoy', true)->firstOrFail()->meta['decoy_reason'])->toBe('phone_not_verified')
         ->and(OtpMovementEvent::query()->where('is_decoy', true)->value('technical_message'))->toContain('phone_not_verified');
 
     $this->postJson('/api/v1/auth/login/verify-code', [
@@ -699,7 +699,7 @@ test('p0a4 decoy reason is exposed only through authorized diagnostic headers', 
     config()->set('otp.diagnostic_response_headers.token', $token);
     $this->app->detectEnvironment(fn () => 'local');
 
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'email' => 'headers.unverified@ejemplo.com',
         'phone' => '5512345971',
         'phone_country' => 'MX',
@@ -759,4 +759,32 @@ test('p0a4 register challenge cannot be used for login verify', function () {
         ->assertJsonPath('error.code', 'INVALID_CODE');
 
     expect(PersonalAccessToken::query()->count())->toBe(0);
+});
+
+
+test('clean candidate verified user without customer remains decoy without challenge or PAT', function () {
+    enableAkubicaLoginOtpFlags();
+    User::factory()->create(['phone' => '5512345678', 'phone_country' => 'MX', 'phone_verified_at' => now()]);
+    $this->postJson('/api/v1/auth/login/request-code', ['phone' => '+525512345678'])->assertStatus(202);
+    expect(OtpChallenge::query()->count())->toBe(0)
+        ->and(PersonalAccessToken::query()->count())->toBe(0)
+        ->and(app(FakeOtpDeliveryProvider::class)->sent)->toHaveCount(0);
+});
+
+
+test('integral candidate real and decoy have exactly eight public keys and denied personalization', function () {
+    enableAkubicaLoginOtpFlags();
+    $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
+    loginOtpUser('5512345678');
+    $real = $this->postJson('/api/v1/auth/login/request-code', ['phone'=>'5512345678'])->assertStatus(202)->json('data');
+    $decoy = $this->postJson('/api/v1/auth/login/request-code', ['phone'=>'5599999999'])->assertStatus(202)->json('data');
+    $keys = ['requires_otp','challenge_id','purpose','channel','destination_masked','expires_at','resend_available_at','personalization'];
+    expect(array_keys($real))->toEqualCanonicalizing($keys)
+        ->and(array_keys($decoy))->toEqualCanonicalizing($keys)
+        ->and($real['personalization'])->toBe(['allowed'=>false])
+        ->and($decoy['personalization'])->toBe(['allowed'=>false])
+        ->and($real)->not->toHaveKey('token')
+        ->and($decoy)->not->toHaveKey('token');
+    expect(OtpChallenge::query()->where('public_id',$real['challenge_id'])->count())->toBe(1)
+        ->and(OtpChallenge::query()->where('public_id',$decoy['challenge_id'])->exists())->toBeFalse();
 });

@@ -193,6 +193,7 @@ test('extract-rc1-phase-a-state valida salida con ids distintos', function () {
                 [
                     'item' => ['name' => 'A2 authLoginRequestCode contextual (Fase A)'],
                     'response' => [
+                        'code' => 202,
                         'stream' => json_encode([
                             'success' => true,
                             'data' => ['challenge_id' => '33333333-3333-4333-8333-333333333333'],

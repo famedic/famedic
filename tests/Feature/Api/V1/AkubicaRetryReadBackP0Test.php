@@ -4,6 +4,17 @@ use App\Enums\LaboratoryBrand;
 use App\Models\TaxProfile;
 use Illuminate\Support\Facades\Storage;
 
+
+// Self-contained synthetic fixture; previously depended on another test file.
+function integralRetryAddressPayload(array $overrides = []): array
+{
+    return array_merge([
+        'street' => 'Av. Siempre Viva', 'number' => '123', 'neighborhood' => 'Centro',
+        'city' => 'Monterrey', 'state' => 'Nuevo León', 'zipcode' => '64000',
+        'additional_references' => 'Casa azul',
+    ], $overrides);
+}
+
 beforeEach(function () {
     Storage::fake();
 });
@@ -48,7 +59,7 @@ test('p0 retry read-back create without idempotency key is discoverable in addre
 
     $created = $this->postJson(
         '/api/v1/user/addresses',
-        validAddressPayload([
+        integralRetryAddressPayload([
             'street' => 'Calle Read Back',
             'additional_references' => 'Referencia dirigida TI-06',
         ]),

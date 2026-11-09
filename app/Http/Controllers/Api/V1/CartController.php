@@ -19,9 +19,9 @@ use App\Http\Resources\Api\V1\MedicalServiceCartResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
-use App\Services\Api\V1\MedicalServiceCartService;
 use App\Services\Api\V1\Audit\AuditOutcome;
 use App\Services\Api\V1\Audit\CartCheckoutAuditRecorder;
+use App\Services\Api\V1\MedicalServiceCartService;
 use App\Support\Api\V1\CartCouponSupport;
 use App\Support\Api\V1\CheckoutPreparation;
 use Illuminate\Http\JsonResponse;
@@ -35,6 +35,10 @@ class CartController extends Controller
 
     public function index(GetCartRequest $request): JsonResponse
     {
+        if (\App\Services\Api\V1\Benefits\OpaqueCartContinuity::enabled() && \App\Services\Api\V1\Benefits\OpaqueCartContinuity::leo($request)) {
+            return app(\App\Services\Api\V1\Benefits\OpaqueCartContinuity::class)->response($request, false);
+        }
+
         if ($request->validated('service_line') !== null) {
             if ($request->validated('service_line') !== 'medical_services' || $request->validated('brand') !== null) {
                 return $this->serviceLineMismatch();
@@ -293,9 +297,11 @@ class CartController extends Controller
 
             $cart = app(MedicalServiceCartService::class)->activeCart($request->user()->customer);
 
-            return ApiResponse::success((new MedicalServiceCartResource($cart->load('items')))->resolve($request)['totals'] + [
+            $cartPayload = (new MedicalServiceCartResource($cart->load(['items', 'benefits.coupon'])))->resolve($request);
+
+            return ApiResponse::success($cartPayload['totals'] + [
                 'service_line' => 'medical_services',
-                'applied_benefits' => [],
+                'applied_benefits' => $cartPayload['applied_benefits'],
             ]);
         }
 

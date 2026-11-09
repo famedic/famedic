@@ -12,18 +12,25 @@ use Illuminate\Support\Str;
 
 class CreateMedicalAttentionPayPalOrderAction
 {
+    /** Internal first-party integration, gated independently of legacy checkout. */
+    public function beginBenefitPurchase(\App\Domain\Akubica\Benefits\BenefitActor $actor, string $cartRef, string $applicationRef, string $key, string $provider = 'paypal'): array
+    {
+        return app(\App\Services\MedicalCheckout\MedicalPurchaseSaga::class)->begin($actor, $cartRef, $applicationRef, $key, $provider);
+    }
+
     public const DETAILS_PURPOSE = 'medical_attention_subscription';
 
     public function __construct(
         private PayPalService $payPalService,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{order_id: string, transaction_id: int}
      */
     public function __invoke(Customer $customer): array
     {
+        app(\App\Services\MedicalCheckout\MedicalCheckoutSelectionGuard::class)->assertNoIgnoredBenefit($customer);
+
         if ($customer->medicalAttentionSubscriptions()->active()->exists()) {
             throw new PayPalPaymentException('Ya tienes una membresía médica activa.');
         }
@@ -36,7 +43,7 @@ class CreateMedicalAttentionPayPalOrderAction
         $amount = round($amountCents / 100, 2);
 
         return DB::transaction(function () use ($customer, $amountCents, $amount) {
-            $tempReference = 'PAYPAL-MA-PENDING-' . Str::uuid()->toString();
+            $tempReference = 'PAYPAL-MA-PENDING-'.Str::uuid()->toString();
 
             $transaction = Transaction::create([
                 'transaction_amount_cents' => $amountCents,
@@ -52,7 +59,7 @@ class CreateMedicalAttentionPayPalOrderAction
                 ],
             ]);
 
-            $customId = 'ma-' . $transaction->id;
+            $customId = 'ma-'.$transaction->id;
 
             $paypal = $this->payPalService->createOrder(
                 $amount,

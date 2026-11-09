@@ -67,6 +67,27 @@ class EnforceIdempotencyKey
         $requestHash = $this->idempotency->requestHash($request);
         $correlationId = AkubicaCorrelationId::fromRequest($request);
 
+        // A newly verified consumer must never adopt another client's legacy
+        // customer-only receipt or silently execute the retained intent again.
+        $context = $request->attributes->get(\App\Services\Api\V1\Auth\ConsumerRequestScope::ATTRIBUTE);
+        if ($context instanceof \App\Services\Api\V1\Auth\ConsumerAuthorizationContext) {
+            $own = IdempotencyRecord::query()->where('actor_key', $actorKey)->where('method', $method)
+                ->where('path', $path)->where('key_hash', $keyHash)->exists();
+            if (! $own && IdempotencyRecord::query()->where('actor_key', 'customer:'.$request->user()->customer->id)
+                ->where('method', $method)->where('path', $path)->where('key_hash', $keyHash)->exists()) {
+                return ApiResponse::error('IDEMPOTENCY_OPERATION_UNCERTAIN',
+                    'El estado histórico requiere conciliación antes de reintentar.', 409, null, null, false);
+            }
+        }
+
+        if (str_starts_with($actorKey, 'backend-public:')) {
+            $own = IdempotencyRecord::query()->where('actor_key', $actorKey)->where('method', $method)->where('path', $path)->where('key_hash', $keyHash)->exists();
+            $legacy = $this->actors->legacyOtpActor($request);
+            if (! $own && $legacy && IdempotencyRecord::query()->where('actor_key', $legacy)->where('method', $method)->where('path', $path)->where('key_hash', $keyHash)->exists()) {
+                return ApiResponse::error('IDEMPOTENCY_OPERATION_UNCERTAIN', 'El estado histórico requiere conciliación antes de reintentar.', 409, null, null, false);
+            }
+        }
+
         $begin = $this->idempotency->begin(
             $actorKey,
             $method,

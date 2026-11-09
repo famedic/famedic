@@ -56,7 +56,7 @@ function apptAuditCustomerToken(array $userAttrs = []): array
         'email' => 'appt.audit.'.$phoneSeq.'@ejemplo.com',
     ], $userAttrs));
 
-    $newToken = $user->createToken('akubica-test');
+    $newToken = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user,'native')['token'];
 
     return [$user, $newToken->plainTextToken, (int) $newToken->accessToken->id];
 }

@@ -74,11 +74,14 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
     public function bearer_from_contextual_verify_allows_membership_and_own_medical_cart(): void
     {
         $user = $this->eligibleUser();
+        \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::existing($user);
+        $this->withHeaders(\Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::headers());
         $challengeId = $this->startContextualOtp($user);
         $token = $this->verifyPost([
             'challenge_id' => $challengeId,
             'code' => '123456',
         ])->assertOk()->json('data.token');
+        \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::issued($token);
 
         $this->getJson('/api/v1/memberships/status', authHeaders($token))
             ->assertOk()
@@ -99,17 +102,20 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
             'phone_verified_at' => now(),
         ]);
 
+        \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::existing($owner);
+        $this->withHeaders(\Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::headers());
         $challengeId = $this->startContextualOtp($owner);
         $ownerToken = $this->verifyPost([
             'challenge_id' => $challengeId,
             'code' => '123456',
         ])->assertOk()->json('data.token');
+        \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::issued($ownerToken);
 
         $this->getJson('/api/v1/memberships/status', authHeaders($ownerToken))
             ->assertOk()
             ->assertJsonPath('data.status', 'none');
 
-        $otherToken = $other->createToken('other')->plainTextToken;
+        $otherToken = akubicaCustomerToken($other)[1];
         $this->getJson('/api/v1/memberships/status', authHeaders($otherToken))
             ->assertOk();
 

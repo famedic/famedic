@@ -87,3 +87,19 @@ require __DIR__ . '/online-pharmacy.php';
 require __DIR__ . '/medical-attention.php';
 require __DIR__ . '/auth.php';
 require __DIR__ . '/webhooks.php';
+
+// First-party proposal: auth:web + web CSRF stack; operative issuance default denied.
+Route::middleware('auth:web')->prefix('benefits/consent')->group(function(){
+    Route::get('/',[\App\Http\Controllers\Api\V1\FirstPartyBenefitConsentController::class,'page'])->name('benefits.consent');
+    Route::post('review',[\App\Http\Controllers\Api\V1\FirstPartyBenefitConsentController::class,'review']);
+    Route::post('confirm',[\App\Http\Controllers\Api\V1\FirstPartyBenefitConsentController::class,'issue']);
+    Route::post('{confirmation_ref}/revoke',[\App\Http\Controllers\Api\V1\FirstPartyBenefitConsentController::class,'revoke']);
+});
+
+// First-party medical purchase. Every effect is additionally gated by financial/provider certification.
+Route::middleware('auth:web')->prefix('medical-attention/benefit-checkout')->group(function () {
+    Route::get('/', [\App\Http\Controllers\FirstPartyMedicalPurchaseController::class, 'review'])->name('medical.benefit-checkout.review');
+    Route::post('confirm', [\App\Http\Controllers\FirstPartyMedicalPurchaseController::class, 'confirm'])->name('medical.benefit-checkout.confirm');
+    Route::get('{checkout_ref}', [\App\Http\Controllers\FirstPartyMedicalPurchaseController::class, 'status'])->name('medical.benefit-checkout.status');
+    Route::post('{checkout_ref}/{action}', [\App\Http\Controllers\FirstPartyMedicalPurchaseController::class, 'action'])->whereIn('action', ['recover', 'capture', 'cancel', 'reverse'])->name('medical.benefit-checkout.action');
+});

@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 
 class CouponApplicationService
 {
+    public const RESERVATION_GUARD_VERSION = 1;
+
     /**
      * Aplica el crédito completo a una compra de laboratorio (uso total, sin parcial en saldo).
      *
@@ -31,6 +33,7 @@ class CouponApplicationService
     ): int {
         return DB::transaction(function () use ($user, $purchase, $couponId, $skipActiveCampaignCreditRedeemed) {
             $coupon = Coupon::query()->whereKey($couponId)->lockForUpdate()->firstOrFail();
+            $this->assertNoMedicalReservation($coupon);
 
             $assignment = CouponUser::query()
                 ->where('coupon_id', $coupon->id)
@@ -79,6 +82,7 @@ class CouponApplicationService
     ): int {
         return DB::transaction(function () use ($user, $purchase, $couponId, $skipActiveCampaignCreditRedeemed) {
             $coupon = Coupon::query()->whereKey($couponId)->lockForUpdate()->firstOrFail();
+            $this->assertNoMedicalReservation($coupon);
 
             $assignment = CouponUser::query()
                 ->where('coupon_id', $coupon->id)
@@ -130,6 +134,7 @@ class CouponApplicationService
             ->where('user_id', $user->id)
             ->firstOrFail();
 
+        $this->assertNoMedicalReservation($coupon);
         $this->assertCouponApplicable($coupon, $assignment, $purchaseTotalCents);
     }
 
@@ -162,13 +167,19 @@ class CouponApplicationService
         return (int) $coupon->remaining_cents;
     }
 
+    private function assertNoMedicalReservation(Coupon $coupon): void
+    {
+        if (\Illuminate\Support\Facades\Schema::hasTable('medical_credit_reservations') && DB::table('medical_credit_reservations')->where('source_id', $coupon->id)->whereIn('state', ['held', 'needs_review'])->exists()) {
+            throw new CouponApplicationException('El crédito está reservado por otra operación.');
+        }
+    }
+
     private function assertCouponApplicable(
         Coupon $coupon,
         CouponUser $assignment,
         int $purchaseTotalCents,
         bool $allowPartialBalance = false,
-    ): void
-    {
+    ): void {
         if (! $coupon->is_active) {
             throw new CouponApplicationException('El crédito no está activo.');
         }

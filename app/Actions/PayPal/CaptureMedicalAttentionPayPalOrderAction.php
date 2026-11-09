@@ -13,8 +13,7 @@ class CaptureMedicalAttentionPayPalOrderAction
     public function __construct(
         private PayPalService $payPalService,
         private FinalizeMedicalAttentionPayPalPaymentAction $finalizeMedicalAttentionPayPalPaymentAction,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{subscription: ?MedicalAttentionSubscription, status: string, message?: string}
@@ -29,7 +28,7 @@ class CaptureMedicalAttentionPayPalOrderAction
             })
             ->first();
 
-        if (!$transaction) {
+        if (! $transaction) {
             Log::warning('[PayPal][MedicalAttention] Capture: transacción no encontrada', [
                 'order_id' => $paypalOrderId,
             ]);
@@ -39,6 +38,14 @@ class CaptureMedicalAttentionPayPalOrderAction
 
         $details = is_array($transaction->details) ? $transaction->details : [];
 
+        if (($details['purpose'] ?? null) === 'medical_benefit_settlement') {
+            if ((int) ($details['customer_id'] ?? 0) !== (int) $customer->id) {
+                return ['subscription' => null, 'status' => 'forbidden'];
+            }
+            $result = app(\App\Services\MedicalCheckout\MedicalPurchaseSaga::class)->capturePayPal($transaction, $customer);
+
+            return ['subscription' => $transaction->medicalAttentionSubscriptions()->first(), 'status' => $result['state']];
+        }
         if (($details['purpose'] ?? null) !== CreateMedicalAttentionPayPalOrderAction::DETAILS_PURPOSE) {
             return ['subscription' => null, 'status' => 'not_found', 'message' => 'Orden no encontrada.'];
         }

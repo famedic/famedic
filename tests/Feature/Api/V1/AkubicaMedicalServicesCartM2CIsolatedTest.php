@@ -52,6 +52,65 @@ final class AkubicaMedicalServicesCartM2CIsolatedTest extends TestCase
     }
 
     #[Test]
+    public function totals_exposes_the_current_benefit_and_clears_it_after_removal_or_cart_invalidation(): void
+    {
+        [$user, $token] = akubicaCustomerToken();
+        app(MedicalServiceCartService::class)->addBasicPlan($user->customer);
+        $headers = authHeaders($token);
+
+        $this->getJson('/api/v1/cart/totals?service_line=medical_services', $headers)
+            ->assertOk()
+            ->assertJsonPath('data.applied_benefits', [])
+            ->assertJsonPath('data.total_cents', 30000);
+
+        $couponCode = $this->code('TOTALS-COUPON');
+        $this->coupon($user, $couponCode, CouponType::Coupon, 5000);
+        $this->postJson('/api/v1/cart/medical-benefit', [
+            'service_line' => 'medical_services', 'code' => $couponCode,
+        ], $headers)->assertOk();
+
+        $this->getJson('/api/v1/cart/totals?service_line=medical_services', $headers)
+            ->assertOk()
+            ->assertJsonPath('data.applied_benefits.0.applied_cents', 5000)
+            ->assertJsonPath('data.discount_cents', 5000)
+            ->assertJsonPath('data.total_cents', 25000);
+
+        $this->deleteJson('/api/v1/cart/medical-benefit?service_line=medical_services', [], $headers)
+            ->assertOk()->assertJsonPath('data.removed', true);
+        $this->getJson('/api/v1/cart/totals?service_line=medical_services', $headers)
+            ->assertOk()->assertJsonPath('data.applied_benefits', [])
+            ->assertJsonPath('data.total_cents', 30000);
+
+        $creditCode = $this->code('TOTALS-CREDIT');
+        $this->coupon($user, $creditCode, CouponType::Balance, 7000);
+        $this->postJson('/api/v1/cart/medical-benefit', [
+            'service_line' => 'medical_services', 'code' => $creditCode,
+        ], $headers)->assertOk();
+        $this->getJson('/api/v1/cart/totals?service_line=medical_services', $headers)
+            ->assertOk()
+            ->assertJsonPath('data.applied_benefits.0.applied_cents', 7000)
+            ->assertJsonPath('data.credit_applied_cents', 7000)
+            ->assertJsonPath('data.total_cents', 23000);
+
+        $itemId = $user->customer->medicalServiceCarts()->first()->items()->sole()->id;
+        $this->deleteJson("/api/v1/cart/items/{$itemId}", [], $headers)->assertOk();
+        $this->getJson('/api/v1/cart/totals?service_line=medical_services', $headers)
+            ->assertOk()
+            ->assertJsonPath('data.applied_benefits', [])
+            ->assertJsonPath('data.credit_applied_cents', 0)
+            ->assertJsonPath('data.total_cents', 0);
+
+        $other = User::factory()->withRegularCustomer()->create([
+            'email' => 'm2c-totals-other-'.uniqid().'@example.test',
+        ]);
+        $otherToken = akubicaCustomerToken($other)[1];
+        $this->getJson('/api/v1/cart/totals?service_line=medical_services', authHeaders($otherToken))
+            ->assertOk()
+            ->assertJsonPath('data.applied_benefits', [])
+            ->assertJsonPath('data.total_cents', 0);
+    }
+
+    #[Test]
     public function it_allows_one_discount_or_credit_but_never_both(): void
     {
         [$user, $token] = akubicaCustomerToken();
@@ -96,21 +155,21 @@ final class AkubicaMedicalServicesCartM2CIsolatedTest extends TestCase
     public function it_isolates_medical_benefits_and_ownership_from_laboratory(): void
     {
         $owner = User::factory()->withRegularCustomer()->create(['email' => 'm2c-owner-'.uniqid().'@example.test']);
-        $ownerToken = $owner->createToken('m2c-owner')->plainTextToken;
+        $ownerToken = akubicaCustomerToken($owner)[1];
         $other = User::factory()->withRegularCustomer()->create(['email' => 'm2c-other-'.uniqid().'@example.test']);
-        $otherToken = $other->createToken('m2c-other')->plainTextToken;
+        $otherToken = akubicaCustomerToken($other)[1];
         $this->assertNotSame($owner->id, $other->id);
         app(MedicalServiceCartService::class)->addBasicPlan($owner->customer);
         LaboratoryCartItem::factory()->create(['customer_id' => $owner->customer->id]);
         $code = $this->code('OWNED');
         $this->coupon($owner, $code, CouponType::Balance, 5000);
 
-        $this->actingAs($other, 'sanctum');
+        $this->switchApiBearerToken($otherToken);
         $this->postJson('/api/v1/cart/medical-benefit', [
             'service_line' => 'medical_services', 'code' => $code,
         ])->assertNotFound();
 
-        $this->actingAs($owner, 'sanctum');
+        $this->switchApiBearerToken($ownerToken);
         $this->postJson('/api/v1/cart/medical-benefit', [
             'service_line' => 'medical_services', 'code' => $code,
         ])->assertOk();
@@ -141,10 +200,11 @@ final class AkubicaMedicalServicesCartM2CIsolatedTest extends TestCase
     public function it_replays_benefit_application_idempotently(): void
     {
         $user = User::factory()->withRegularCustomer()->create(['email' => 'm2c-idemp-'.uniqid().'@example.test']);
+        $token = akubicaCustomerToken($user)[1];
         $code = $this->code('IDEMP');
         $cart = app(MedicalServiceCartService::class)->addBasicPlan($user->customer);
         $this->coupon($user, $code, CouponType::Coupon, 5000);
-        $this->actingAs($user, 'sanctum');
+        $this->switchApiBearerToken($token);
         $headers = [IdempotencyKey::HEADER => 'm2c-isolated-idempotency-'.$this->runId];
         $payload = ['service_line' => 'medical_services', 'code' => $code];
 

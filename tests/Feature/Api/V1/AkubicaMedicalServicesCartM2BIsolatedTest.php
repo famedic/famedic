@@ -76,9 +76,9 @@ final class AkubicaMedicalServicesCartM2BIsolatedTest extends TestCase
     public function it_rejects_an_active_membership_and_preserves_ownership(): void
     {
         $owner = User::factory()->withRegularCustomer()->create(['email' => 'm2b-owner-'.uniqid().'@example.test']);
-        $ownerToken = $owner->createToken('m2b-owner')->plainTextToken;
+        $ownerToken = akubicaCustomerToken($owner)[1];
         $otherUser = User::factory()->withRegularCustomer()->create(['email' => 'm2b-other-'.uniqid().'@example.test']);
-        $other = $otherUser->createToken('m2b-other')->plainTextToken;
+        $other = akubicaCustomerToken($otherUser)[1];
         $this->assertNotSame($owner->id, $otherUser->id);
         MedicalAttentionSubscription::query()->create([
             'customer_id' => $owner->customer->id,
@@ -98,7 +98,7 @@ final class AkubicaMedicalServicesCartM2BIsolatedTest extends TestCase
         $cart = MedicalServiceCart::factory()->create(['customer_id' => $owner->customer->id]);
         MedicalServiceCartItem::factory()->create(['cart_id' => $cart->id]);
         $itemId = $cart->items->sole()->id;
-        $this->actingAs($otherUser, 'sanctum')->deleteJson("/api/v1/cart/items/{$itemId}")
+        $this->withHeaders($this->switchApiBearerToken($other))->deleteJson("/api/v1/cart/items/{$itemId}")
             ->assertForbidden()->assertJsonPath('error.code', 'FORBIDDEN');
     }
 

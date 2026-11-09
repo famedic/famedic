@@ -64,7 +64,7 @@ function auditAssertNoSecrets(?ApiV1AuditEvent $event = null): void
 test('flag OFF login otp works and inserts no audit rows', function () {
     enableLoginOtpWithFakeDelivery();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5512345678',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
@@ -395,7 +395,7 @@ test('broken audit writer does not change login status body or delivery', functi
     enableAuthOtpAudit();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
 
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5512345678',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
@@ -427,7 +427,7 @@ test('idempotent login request-code replay does not duplicate SMS challenge or s
     config()->set('api_v1.idempotency.enabled', true);
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
 
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5512345678',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
@@ -476,7 +476,7 @@ test('rate limit cooldown on login request is audited as rejected retryable', fu
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
     config()->set('otp.p0a.policy.cooldown_seconds', 60);
 
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5512345678',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),

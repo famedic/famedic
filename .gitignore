@@ -64,3 +64,11 @@ start-dev.ps1
 refund_logs.txt
 /tmp/*
 /deliverables/*
+
+# I01: exclude historical delivery artifacts and restricted runtime evidence.
+/akubica-v1.3.0-rc1-entrega/
+/akubica-v1.3.0-rc1-entrega.zip
+**/newman-staging-report-sanitized.json
+**/newman-staging-junit-sanitized.xml
+**/newman-staging-summary.json
+/.private-akubica-evidence/

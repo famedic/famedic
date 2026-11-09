@@ -304,7 +304,9 @@ test('idempotency expired processing becomes UNCERTAIN and does not execute cont
 test('idempotency unique constraint is the concurrency barrier', function () {
     [$user] = akubicaCustomerToken();
     $attrs = [
-        'actor_key' => 'customer:'.$user->customer->id,
+        'actor_key' => getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') === '1'
+                ? \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::actorKey($user)
+                : 'customer:'.$user->customer->id,
         'method' => 'POST',
         'path' => 'api/v1/checkout/payment-link',
         'key_hash' => IdempotencyKey::hash(idemKey('uniq')),
@@ -523,7 +525,7 @@ test('idempotency results secure-link replays same url', function () {
 test('idempotency login request-code creates one challenge on replay', function () {
     enableLoginOtpWithFakeDelivery();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('123456'));
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5512345678',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
@@ -553,12 +555,12 @@ test('idempotency public actors differ by phone', function () {
     enableLoginOtpWithFakeDelivery();
     $this->app->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('111111'));
 
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5511111111',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    User::factory()->create([
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5522222222',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
@@ -1155,7 +1157,9 @@ test('idempotency prune dry-run and force', function () {
     [$user] = akubicaCustomerToken();
 
     IdempotencyRecord::query()->create([
-        'actor_key' => 'customer:'.$user->customer->id,
+        'actor_key' => getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') === '1'
+                ? \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::actorKey($user)
+                : 'customer:'.$user->customer->id,
         'method' => 'POST',
         'path' => 'api/v1/checkout/payment-link',
         'key_hash' => IdempotencyKey::hash(idemKey('old')),
@@ -1168,7 +1172,9 @@ test('idempotency prune dry-run and force', function () {
     ]);
 
     IdempotencyRecord::query()->create([
-        'actor_key' => 'customer:'.$user->customer->id,
+        'actor_key' => getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') === '1'
+                ? \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::actorKey($user)
+                : 'customer:'.$user->customer->id,
         'method' => 'POST',
         'path' => 'api/v1/checkout/payment-link',
         'key_hash' => IdempotencyKey::hash(idemKey('new')),

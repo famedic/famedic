@@ -59,6 +59,7 @@ function vonageSmsCollection(int $status, ?string $errorText = null, ?string $me
     $message = [
         'to' => '525512345678',
         'status' => $status,
+        'message-id' => $messageId ?? '',
         'remaining-balance' => '12.34',
         'message-price' => '0.04500',
         'network' => '334020',

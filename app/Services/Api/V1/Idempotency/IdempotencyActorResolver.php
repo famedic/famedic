@@ -25,10 +25,34 @@ final class IdempotencyActorResolver
      */
     public function resolve(Request $request): ?string
     {
+        $backend = $request->attributes->get(\App\Http\Middleware\Api\V1\AuthenticateOtpBackend::ATTRIBUTE);
+        if ($backend instanceof \App\Services\Api\V1\Auth\AuthenticatedBackendClient) {
+            $fresh = app(\App\Contracts\Api\V1\Auth\BackendClientAuthenticator::class)->authenticate($request);
+            if (! $fresh || $fresh->consumerId !== $backend->consumerId || $fresh->channelId !== $backend->channelId) {
+                throw new \App\Exceptions\PaymentLinkAuthorizationDenied(\App\Http\Responses\ApiResponse::error('UNAUTHENTICATED', 'No autenticado.', 401));
+            }
+            $public = $this->legacyOtpActor($request);
+
+            return $public ? 'backend-public:'.hash('sha256', json_encode([$fresh->consumerId, $fresh->channelId, $public], JSON_THROW_ON_ERROR)) : null;
+        }
         $user = $request->user();
         $customer = $user?->customer;
 
         if ($customer !== null) {
+            if ($request->attributes->has(\App\Services\Api\V1\Auth\ConsumerRequestScope::ATTRIBUTE)) {
+                $context = $request->attributes->get(\App\Services\Api\V1\Auth\ConsumerRequestScope::ATTRIBUTE);
+                $token = $user instanceof \App\Models\User ? $user->currentAccessToken() : null;
+                if ($context instanceof \App\Services\Api\V1\Auth\ConsumerAuthorizationContext
+                    && $user instanceof \App\Models\User
+                    && $token instanceof \Laravel\Sanctum\PersonalAccessToken
+                    && $context->matches($user, $token, now()->timestamp)) {
+                    return \App\Services\Api\V1\Auth\ConsumerRequestScope::actorKey((int) $customer->id, $context);
+                }
+                throw new \App\Exceptions\PaymentLinkAuthorizationDenied(\App\Http\Responses\ApiResponse::error(
+                    'CONSUMER_NOT_AUTHORIZED', 'Operación no autorizada.', 403,
+                ));
+            }
+
             return 'customer:'.(string) $customer->id;
         }
 
@@ -50,6 +74,11 @@ final class IdempotencyActorResolver
     /**
      * @return non-empty-string|null
      */
+    public function legacyOtpActor(Request $request): ?string
+    {
+        return $this->publicFromPhone($request, 'login.request-code');
+    }
+
     private function publicFromPhone(Request $request, string $operation): ?string
     {
         $phone = $request->input('phone');

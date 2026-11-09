@@ -112,23 +112,23 @@ final class AkubicaMedicalCheckoutPrepareRc1IsolatedTest extends TestCase
     #[Test]
     public function medical_checkout_ownership_isolated_per_customer(): void
     {
-        [$owner] = akubicaCustomerToken();
+        [$owner, $token] = akubicaCustomerToken();
         $cart = app(MedicalServiceCartService::class)->addBasicPlan($owner->customer);
         $itemId = $cart->items->sole()->id;
 
-        [$other] = akubicaCustomerToken();
+        [$other, $otherToken] = akubicaCustomerToken();
 
-        $this->actingAs($other, 'sanctum')
+        $this->withHeaders($this->switchApiBearerToken($otherToken))
             ->deleteJson("/api/v1/cart/items/{$itemId}")
             ->assertForbidden()
             ->assertJsonPath('error.code', 'FORBIDDEN');
 
-        $this->actingAs($other, 'sanctum')
+        $this->withHeaders($this->switchApiBearerToken($otherToken))
             ->getJson('/api/v1/checkout/prepare?service_line=medical_services')
             ->assertOk()
             ->assertJsonPath('data.cart.totals.item_count', 0);
 
-        $this->actingAs($owner, 'sanctum')
+        $this->withHeaders($this->switchApiBearerToken($token))
             ->getJson('/api/v1/checkout/prepare?service_line=medical_services')
             ->assertOk()
             ->assertJsonPath('data.cart.totals.item_count', 1)

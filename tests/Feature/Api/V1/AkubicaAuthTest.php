@@ -299,12 +299,15 @@ test('registered user can access GET /api/v1/cart with token', function () {
 
     createAkubicaAuthOtp('carrito@ejemplo.com', OtpCode::PURPOSE_AKUBICA_REGISTER, '222222', $payload);
 
+    \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::registration($payload['email']);
+    $this->withHeaders(\Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::headers());
     $token = $this->postJson('/api/v1/auth/register/verify-code', [
         'email' => 'carrito@ejemplo.com',
         'code' => '222222',
     ])->json('data.token');
 
-    $this->getJson('/api/v1/cart?brand=olab', [
+    \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::issued($token);
+    $this->getJson('/api/v1/cart?brand=olab', authHeaders($token) + [
         'Authorization' => 'Bearer '.$token,
     ])
         ->assertOk()

@@ -5,9 +5,9 @@ use App\Services\Otp\Delivery\VonageSmsCallbackApplyResult;
 use App\Services\Otp\Delivery\VonageSmsCallbackFallbackPolicy;
 use App\Services\Otp\Delivery\VonageSmsSendParseResult;
 use Tests\Support\Otp\FakeVonageSmsSendGateway;
-use Tests\Support\Otp\makeVonageOtpProvider;
-use Tests\Support\Otp\vonageOtpDeliveryRequest;
-use Tests\Support\Otp\vonageSmsCollection;
+use function Tests\Support\Otp\makeVonageOtpProvider;
+use function Tests\Support\Otp\vonageOtpDeliveryRequest;
+use function Tests\Support\Otp\vonageSmsCollection;
 
 require_once __DIR__.'/../../Support/Otp/FakeVonageSmsSendGateway.php';
 

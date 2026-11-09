@@ -2,48 +2,48 @@
 
 namespace App\Providers;
 
+use App\Contracts\Api\V1\Auth\AccountContextTokenIssuer;
+use App\Contracts\Otp\OtpCodeGenerator;
+use App\Contracts\Otp\OtpDeliveryProvider;
+use App\Contracts\Otp\VonageSmsSendGateway;
+use App\Http\Responses\Api\V1\OtpExceptionHttpMapper;
+use App\Listeners\ApplyMailSafetyPolicy;
+use App\Listeners\LinkPendingCouponBeneficiaries;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\OnlinePharmacyPurchase;
-use App\Services\Tracking\Tracking;
-use App\Listeners\ApplyMailSafetyPolicy;
-use App\Listeners\LinkPendingCouponBeneficiaries;
-use Illuminate\Auth\Events\Verified;
-use Illuminate\Mail\Events\MessageSending;
-use Illuminate\Support\Facades\Event;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Routing\Redirector;
-use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\ServiceProvider;
-use Illuminate\Cache\RateLimiting\Limit;
-use Laravel\Cashier\Cashier;
-use Stripe\StripeClient;
-use App\Services\ConstanciaFiscalService;
-use App\Contracts\Otp\OtpCodeGenerator;
-use App\Contracts\Api\V1\Auth\AccountContextTokenIssuer;
 use App\Services\Api\V1\Auth\AccountContextTokenService;
+use App\Services\ConstanciaFiscalService;
 use App\Services\Otp\AkubicaLoginOtpDecoyStore;
 use App\Services\Otp\AkubicaLoginOtpService;
-use App\Services\Otp\OtpAbuseKeyHasher;
-use App\Services\Otp\OtpAbusePolicy;
-use App\Services\Otp\OtpRateLimitService;
-use App\Services\Otp\SecureOtpCodeGenerator;
-use App\Http\Responses\Api\V1\OtpExceptionHttpMapper;
-use App\Contracts\Otp\OtpDeliveryProvider;
-use App\Contracts\Otp\VonageSmsSendGateway;
-use App\Services\Otp\Delivery\HttpVonageSmsSendGateway;
 use App\Services\Otp\Delivery\AkubicaSecureOtpDeliveryOrchestrator;
 use App\Services\Otp\Delivery\ArrayOtpDeliveryReservationStore;
 use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
+use App\Services\Otp\Delivery\HttpVonageSmsSendGateway;
 use App\Services\Otp\Delivery\NullOtpDeliveryProvider;
 use App\Services\Otp\Delivery\OtpDeliveryObservability;
 use App\Services\Otp\Delivery\OtpDeliveryReservationStore;
 use App\Services\Otp\Delivery\RedisOtpDeliveryReservationStore;
 use App\Services\Otp\Delivery\VonageOtpDeliveryProvider;
-//use App\Services\EfevooPayService;
+use App\Services\Otp\OtpAbuseKeyHasher;
+use App\Services\Otp\OtpAbusePolicy;
+use App\Services\Otp\OtpRateLimitService;
+use App\Services\Otp\SecureOtpCodeGenerator;
+use App\Services\Tracking\Tracking;
+use Illuminate\Auth\Events\Verified;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Mail\Events\MessageSending;
+use Illuminate\Routing\Redirector;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
+use Inertia\Inertia;
+use Laravel\Cashier\Cashier;
+// use App\Services\EfevooPayService;
 /*
 use App\Services\EfevooPayFactoryService;
 use App\Services\EfevooPaySimulatorService;
@@ -51,14 +51,14 @@ use App\Actions\Efevoo\ChargeEfevooTokenAction;
 use App\Actions\Efevoo\RefundEfevooTransactionAction;
 use App\Actions\EfevooPay\ChargeEfevooPaymentMethodAction;
 */
-use Inertia\Inertia;
+use Stripe\StripeClient;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //$this->app->singleton(ChargeEfevooTokenAction::class);
-        //$this->app->singleton(RefundEfevooTransactionAction::class);
+        // $this->app->singleton(ChargeEfevooTokenAction::class);
+        // $this->app->singleton(RefundEfevooTransactionAction::class);
 
         $this->app->singleton(StripeClient::class, function ($app) {
             return new StripeClient(config('services.stripe.secret'));
@@ -73,11 +73,21 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->app->singleton(ConstanciaFiscalService::class, function ($app) {
-            return new ConstanciaFiscalService();
+            return new ConstanciaFiscalService;
         });
 
+        $this->app->bind(\App\Services\Api\V1\Benefits\ReservationReleaseAuthority::class, fn ($app) => $app->make(config('akubica_connectors.financial.enabled') === true && config('akubica_connectors.financial.certified') === true && config('akubica_connectors.financial.legacy_writers_coordinated') === true ? \App\Services\MedicalCheckout\RecordedMedicalPaymentAuthority::class : \App\Services\Api\V1\Benefits\UnavailableReservationReleaseAuthority::class));
+        $this->app->bind(\App\Services\Api\V1\Benefits\MedicalPaymentAuthority::class, fn ($app) => $app->make(config('akubica_connectors.financial.enabled') === true && config('akubica_connectors.financial.certified') === true && config('akubica_connectors.financial.legacy_writers_coordinated') === true ? \App\Services\MedicalCheckout\RecordedMedicalPaymentAuthority::class : \App\Services\Api\V1\Benefits\UnavailableMedicalPaymentAuthority::class));
+        $this->app->bind(\App\Services\Api\V1\Benefits\BenefitApprovals::class, fn ($app) => $app->make(config('akubica_connectors.contract.accepted') === true ? \App\Services\Api\V1\Benefits\CertifiedBenefitApprovals::class : \App\Services\Api\V1\Benefits\PendingBenefitApprovals::class));
+        $this->app->bind(\App\Services\Api\V1\Auth\OtpConsumerEnrollment::class, fn ($app) => $app->make(config('akubica_connectors.otp_enrollment.enabled') === true && config('akubica_connectors.otp_enrollment.certified') === true ? \App\Services\Api\V1\Auth\RegisteredOtpConsumerEnrollment::class : \App\Services\Api\V1\Auth\PendingOtpConsumerEnrollment::class));
+        $this->app->bind(\App\Services\Api\V1\Auth\OtpEnrollmentOperator::class, fn ($app) => $app->make(config('akubica_connectors.otp_enrollment.enabled') === true && config('akubica_connectors.otp_enrollment.certified') === true ? \App\Services\Api\V1\Auth\RegistryOtpEnrollmentOperator::class : \App\Services\Api\V1\Auth\UnavailableOtpEnrollmentOperator::class));
         $this->app->bind(OtpCodeGenerator::class, SecureOtpCodeGenerator::class);
         $this->app->singleton(AccountContextTokenIssuer::class, AccountContextTokenService::class);
+        // Registry resolution is fail-closed; external credential transport stays disabled.
+        $this->app->bind(\App\Contracts\Api\V1\Auth\BackendCredentialSource::class, fn ($app) => $app->make(config('akubica_connectors.transport.enabled') === true && config('akubica_connectors.transport.certified') === true ? \App\Services\Api\V1\Auth\TlsMachinePatCredentialSource::class : \App\Services\Api\V1\Auth\UnavailableBackendCredentialSource::class));
+        $this->app->bind(\App\Contracts\Api\V1\Auth\ConsumerBindingRepository::class, \App\Services\Api\V1\Auth\EloquentConsumerBindingRepository::class);
+        $this->app->bind(\App\Contracts\Api\V1\Auth\BackendClientAuthenticator::class, \App\Services\Api\V1\Auth\RegisteredMachinePatBackendAuthenticator::class);
+        $this->app->bind(\App\Contracts\Api\V1\Auth\ConsumerIdentityResolver::class, \App\Services\Api\V1\Auth\BoundConsumerIdentityResolver::class);
         $this->app->singleton(OtpAbuseKeyHasher::class);
         $this->app->scoped(\App\Services\Otp\Diagnostics\OtpDiagnosticContext::class);
         $this->app->singleton(\App\Services\Api\V1\Audit\AuditActorResolver::class);
@@ -147,19 +157,19 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(EfevooPaySimulatorService::class)
             );
         });*/
-        
-        //$this->app->singleton(EfevooPayService::class);
-        //$this->app->singleton(EfevooPaySimulatorService::class);
-        
+
+        // $this->app->singleton(EfevooPayService::class);
+        // $this->app->singleton(EfevooPaySimulatorService::class);
+
         /*
         // Acciones de EfevooPay
         $this->app->singleton(ChargeEfevooTokenAction::class);
         $this->app->singleton(RefundEfevooTransactionAction::class);
         $this->app->singleton(ChargeEfevooPaymentMethodAction::class);
         */
-        
+
         // También mantener el servicio original disponible
-        //$this->app->singleton(EfevooPayFactoryService::class);
+        // $this->app->singleton(EfevooPayFactoryService::class);
     }
 
     public function boot(): void
@@ -182,6 +192,7 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('atix-sandbox', function (Request $request) {
             $integration = hash('sha256', (string) $request->header('X-Integration-Key-Id', 'unknown'));
+
             return Limit::perMinute((int) config('atix.sandbox.rate_limit_per_minute', 60))->by('atix:'.$integration);
         });
 
@@ -216,10 +227,10 @@ class AppServiceProvider extends ServiceProvider
                 'type' => $type,
                 'message' => $message,
             ]);
-        });       
+        });
 
-        Cashier::useCustomerModel(Customer::class);       
-        
+        Cashier::useCustomerModel(Customer::class);
+
         Inertia::share([
             'flash' => function () {
                 return [

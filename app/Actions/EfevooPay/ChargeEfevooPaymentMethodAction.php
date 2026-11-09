@@ -2,13 +2,13 @@
 
 namespace App\Actions\EfevooPay;
 
-use App\Models\Customer;
-use App\Models\Transaction;
-use App\Models\PaymentAttempt;
 use App\Contracts\EfevooPayGateway;
+use App\Exceptions\EfevooPaymentException;
+use App\Models\Customer;
+use App\Models\PaymentAttempt;
+use App\Models\Transaction;
 use App\Support\MockEfevooPaymentSupport;
 use Illuminate\Support\Facades\Log;
-use App\Exceptions\EfevooPaymentException;
 
 class ChargeEfevooPaymentMethodAction
 {
@@ -19,7 +19,7 @@ class ChargeEfevooPaymentMethodAction
         $this->efevooPayService = $efevooPayService;
     }
 
-    public function __invoke(Customer $customer, int $amountCents, string $paymentMethod): Transaction
+    public function __invoke(Customer $customer, int $amountCents, string $paymentMethod, ?string $purchaseReference = null, ?Transaction $pending = null): Transaction
     {
         $chargeData = [];
         $token = null;
@@ -47,7 +47,7 @@ class ChargeEfevooPaymentMethodAction
                 ->where('id', $tokenId)
                 ->first();
 
-            if (!$token) {
+            if (! $token) {
                 throw new EfevooPaymentException(
                     'El método de pago seleccionado no está disponible o ha expirado.'
                 );
@@ -73,7 +73,10 @@ class ChargeEfevooPaymentMethodAction
                 );
             }
 
-            $reference = 'LAB-' . $customer->id . '-' . time() . '-' . rand(1000, 9999);
+            $reference = $purchaseReference ?? ('LAB-'.$customer->id.'-'.time().'-'.rand(1000, 9999));
+            if ($pending && ((int) ($pending->details['customer_id'] ?? 0) !== (int) $customer->id || (int) $pending->transaction_amount_cents !== $amountCents || $pending->payment_status !== 'pending')) {
+                throw new \DomainException('Invalid medical payment context');
+            }
 
             $chargeData = [
                 'card_token' => $cardToken,
@@ -127,7 +130,7 @@ class ChargeEfevooPaymentMethodAction
                 'processor_transaction_id' => $processorTransactionId,
             ]);
 
-            if (!$result['success']) {
+            if (! $result['success']) {
 
                 $message = \App\Support\PaymentErrorClassifier::message($processorCode);
 
@@ -141,7 +144,7 @@ class ChargeEfevooPaymentMethodAction
                 $result['transaction_id']
                 ?? $result['efevoo_transaction_id']
                 ?? $rawData['id']
-                ?? 'EFV-' . time();
+                ?? 'EFV-'.time();
 
         } catch (EfevooPaymentException $e) {
 
@@ -178,7 +181,7 @@ class ChargeEfevooPaymentMethodAction
             }
 
             throw new EfevooPaymentException(
-                'Error al procesar el pago con EfevooPay: ' . $e->getMessage()
+                'Error al procesar el pago con EfevooPay: '.$e->getMessage()
             );
         }
 
@@ -190,7 +193,7 @@ class ChargeEfevooPaymentMethodAction
         try {
             $commissionCents = $this->extractCommissionCentsFromGatewayResult($result);
 
-            $transaction = Transaction::create([
+            $attributes = [
                 'transaction_amount_cents' => $amountCents,
                 'payment_method' => 'efevoopay',
                 'reference_id' => $reference,
@@ -198,7 +201,7 @@ class ChargeEfevooPaymentMethodAction
                 'gateway_transaction_id' => $gatewayTransactionId,
                 'gateway_status' => 'completed',
                 'gateway_response' => $result, // 👈 SIN json_encode
-                'gateway_token' => 'efv-token-ref:' . substr(md5($cardToken), 0, 20),
+                'gateway_token' => 'efv-token-ref:'.substr(md5($cardToken), 0, 20),
                 'gateway_processed_at' => now(),
 
                 // 👇 TODO lo contextual va dentro de details
@@ -233,7 +236,11 @@ class ChargeEfevooPaymentMethodAction
 
                     'processed_at' => now()->toISOString(),
                 ],
-            ]);
+            ];
+            if ($pending) {
+                $attributes['details'] = array_merge($attributes['details'], $pending->details ?? []);
+            }
+            $transaction = $pending ? tap($pending, fn ($p) => $p->forceFill($attributes)->save()) : Transaction::create($attributes);
 
             Log::info('[EfevooPay] Transacción creada exitosamente', [
                 'transaction_id' => $transaction->id,
@@ -252,7 +259,7 @@ class ChargeEfevooPaymentMethodAction
             ]);
 
             throw new EfevooPaymentException(
-                'Error al guardar la transacción en la base de datos: ' . $e->getMessage()
+                'Error al guardar la transacción en la base de datos: '.$e->getMessage()
             );
         }
     }
@@ -303,7 +310,7 @@ class ChargeEfevooPaymentMethodAction
         if (is_string($value)) {
             $normalized = str_replace([',', '$', 'MXN', 'mxn', ' '], ['', '', '', '', ''], $value);
 
-            if (!is_numeric($normalized)) {
+            if (! is_numeric($normalized)) {
                 return null;
             }
 

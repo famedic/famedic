@@ -71,19 +71,19 @@ final class AkubicaMembershipsM1IsolatedTest extends TestCase
             ->assertJsonPath('data.purchase_eligible', false);
 
         $sponsored = User::factory()->withRegularCustomer()->create(['email' => 'm1-sponsored-'.uniqid().'@example.test']);
-        $sponsoredToken = $sponsored->createToken('m1-isolated')->plainTextToken;
+        $sponsoredToken = akubicaCustomerToken($sponsored)[1];
         $this->createSubscription($sponsored->customer, MedicalSubscriptionType::INSTITUTIONAL->value);
-        $this->actingAs($sponsored, 'sanctum')->getJson('/api/v1/memberships/status')
+        $this->withHeaders($this->switchApiBearerToken($sponsoredToken))->getJson('/api/v1/memberships/status')
             ->assertOk()->assertJsonPath('data.source', 'sponsored')
             ->assertJsonPath('data.purchase_eligible', false);
 
         $expired = akubicaCustomerToken()[0];
-        $expiredToken = $expired->createToken('m1-isolated')->plainTextToken;
+        $expiredToken = akubicaCustomerToken($expired)[1];
         $this->createSubscription($expired->customer, MedicalSubscriptionType::REGULAR, [
             'start_date' => now()->subYear()->subDay()->toDateString(),
             'end_date' => now()->subDay()->toDateString(),
         ]);
-        $this->actingAs($expired, 'sanctum')->getJson('/api/v1/memberships/status')
+        $this->withHeaders($this->switchApiBearerToken($expiredToken))->getJson('/api/v1/memberships/status')
             ->assertOk()->assertJsonPath('data.status', 'expired')
             ->assertJsonPath('data.purchase_eligible', true);
     }

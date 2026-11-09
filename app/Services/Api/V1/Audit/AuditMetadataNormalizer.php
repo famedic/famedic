@@ -32,6 +32,7 @@ final class AuditMetadataNormalizer
         'password',
         'otp',
         'code',
+        'credential',
         'authorization',
         'bearer',
         'cookie',

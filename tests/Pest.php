@@ -72,6 +72,10 @@ function something()
 function akubicaCustomerToken(?\App\Models\User $user = null): array
 {
     $user ??= \App\Models\User::factory()->withRegularCustomer()->create();
+    if (getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') === '1') {
+        $issued = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user);
+        return [$user, $issued['token']->plainTextToken];
+    }
     $token = $user->createToken('akubica-test')->plainTextToken;
 
     return [$user, $token];
@@ -79,7 +83,8 @@ function akubicaCustomerToken(?\App\Models\User $user = null): array
 
 function authHeaders(string $token): array
 {
-    return ['Authorization' => 'Bearer '.$token];
+    return ['Authorization' => 'Bearer '.$token] + (getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') === '1'
+        ? \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::headers($token) : []);
 }
 
 /**

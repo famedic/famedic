@@ -19,7 +19,9 @@ final class VonageSmsSendResponseParser
 
     public static function parse(mixed $response): VonageSmsSendParseResult
     {
-        if (! $response instanceof Collection || $response->count() < 1) {
+        // A malformed SDK envelope is an uninterpretable response, never a transport retry.
+        $raw = $response instanceof Collection ? $response->getAllMessagesRaw() : [];
+        if (! $response instanceof Collection || ! isset($raw['message-count']) || ! is_numeric($raw['message-count']) || (int) $raw['message-count'] < 1 || ! isset($raw['messages'][0]) || ! is_array($raw['messages'][0]) || ! isset($raw['messages'][0]['status']) || ! (is_int($raw['messages'][0]['status']) || (is_string($raw['messages'][0]['status']) && ctype_digit($raw['messages'][0]['status'])))) {
             return new VonageSmsSendParseResult(
                 accepted: false,
                 messageId: null,

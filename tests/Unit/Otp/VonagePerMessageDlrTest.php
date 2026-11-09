@@ -127,6 +127,10 @@ test('politica de fallback exige error-text con callback para status 3', functio
         'messages' => [[
             'to' => '525512345678',
             'status' => 3,
+            'message-id' => '',
+            'remaining-balance' => '0.00',
+            'message-price' => '0.00',
+            'network' => '',
             'error-text' => 'Invalid callback url',
         ]],
     ]));

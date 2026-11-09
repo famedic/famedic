@@ -480,6 +480,7 @@ class AkubicaLoginOtpService
             'destination_masked' => $previous['destination_masked'],
             'expires_at' => $expiresAt->utc()->format('Y-m-d\TH:i:s\Z'),
             'resend_available_at' => $resendAvailableAt->utc()->format('Y-m-d\TH:i:s\Z'),
+            'personalization' => ['allowed' => false],
         ];
     }
 
@@ -516,6 +517,7 @@ class AkubicaLoginOtpService
             'destination_masked' => $challenge->destination_masked,
             'expires_at' => $challenge->expires_at?->utc()->format('Y-m-d\TH:i:s\Z'),
             'resend_available_at' => $resendAvailableAt->utc()->format('Y-m-d\TH:i:s\Z'),
+            'personalization' => ['allowed' => false],
         ];
     }
 

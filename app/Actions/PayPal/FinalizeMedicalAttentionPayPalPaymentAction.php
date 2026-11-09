@@ -16,14 +16,18 @@ class FinalizeMedicalAttentionPayPalPaymentAction
     public function __construct(
         private PayPalService $payPalService,
         private CreateRegularSubscriptionAction $createRegularSubscriptionAction,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $capturePayload
      */
     public function __invoke(Transaction $transaction, array $capturePayload): ?MedicalAttentionSubscription
     {
+        if (($transaction->details['purpose'] ?? null) === 'medical_benefit_settlement') {
+            app(\App\Services\MedicalCheckout\MedicalPurchaseSaga::class)->reconcileTransaction($transaction);
+
+            return $transaction->medicalAttentionSubscriptions()->first();
+        }
         $info = $this->payPalService->extractCaptureInfo($capturePayload);
 
         if (($info['capture_id'] ?? null) === null) {
@@ -101,7 +105,7 @@ class FinalizeMedicalAttentionPayPalPaymentAction
         $details = is_array($transaction->details) ? $transaction->details : [];
         $customer = Customer::find($details['customer_id'] ?? null);
 
-        if (!$customer) {
+        if (! $customer) {
             throw new \RuntimeException('Cliente no encontrado para transacción PayPal de membresía médica.');
         }
 

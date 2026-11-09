@@ -12,8 +12,7 @@ class HandlePayPalWebhookAction
         private PayPalService $payPalService,
         private FinalizeLaboratoryPayPalPaymentAction $finalizeLaboratoryPayPalPaymentAction,
         private FinalizeMedicalAttentionPayPalPaymentAction $finalizeMedicalAttentionPayPalPaymentAction,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $payload
@@ -22,7 +21,7 @@ class HandlePayPalWebhookAction
     {
         $eventType = (string) ($payload['event_type'] ?? '');
         $resource = $payload['resource'] ?? [];
-        if (!is_array($resource)) {
+        if (! is_array($resource)) {
             return;
         }
 
@@ -30,7 +29,7 @@ class HandlePayPalWebhookAction
 
         if ($eventType === 'PAYMENT.CAPTURE.COMPLETED') {
             $orderId = data_get($resource, 'supplementary_data.related_ids.order_id');
-            if (!is_string($orderId) || $orderId === '') {
+            if (! is_string($orderId) || $orderId === '') {
                 Log::warning('[PayPal] Webhook COMPLETED sin order_id');
 
                 return;
@@ -44,12 +43,17 @@ class HandlePayPalWebhookAction
                 })
                 ->first();
 
-            if (!$transaction) {
+            if (! $transaction) {
                 Log::warning('[PayPal] Webhook: transacción no encontrada', ['order_id' => $orderId]);
 
                 return;
             }
 
+            if (($transaction->details['purpose'] ?? null) === 'medical_benefit_settlement') {
+                app(\App\Services\MedicalCheckout\MedicalPurchaseSaga::class)->reconcileTransaction($transaction);
+
+                return;
+            }
             if ($this->isMedicalAttentionTransaction($transaction)) {
                 if ($transaction->medicalAttentionSubscriptions()->exists()) {
                     return;
@@ -87,6 +91,11 @@ class HandlePayPalWebhookAction
                     ->first();
             }
 
+            if ($transaction && ($transaction->details['purpose'] ?? null) === 'medical_benefit_settlement') {
+                app(\App\Services\MedicalCheckout\MedicalPurchaseSaga::class)->reconcileTransaction($transaction);
+
+                return;
+            }
             if ($transaction) {
                 $transaction->update([
                     'payment_status' => 'failed',

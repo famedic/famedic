@@ -3,16 +3,17 @@
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\Auth\TokenController;
-use App\Http\Controllers\Api\V1\CartCouponController;
 use App\Http\Controllers\Api\V1\CartController;
+use App\Http\Controllers\Api\V1\CartCouponController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
+use App\Http\Controllers\Api\V1\Integrations\AtixPhoneLookupController;
 use App\Http\Controllers\Api\V1\LaboratoryAppointmentController;
-use App\Http\Controllers\Api\V1\MembershipController;
 use App\Http\Controllers\Api\V1\MedicalServiceBenefitController;
+use App\Http\Controllers\Api\V1\MembershipController;
+use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\OrderDocumentDownloadController;
 use App\Http\Controllers\Api\V1\OrderInvoiceRequestController;
-use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\OrderInvoicesSecureLinkController;
 use App\Http\Controllers\Api\V1\OrderInvoicesStepUpController;
 use App\Http\Controllers\Api\V1\OrderResultsSecureLinkController;
@@ -22,7 +23,6 @@ use App\Http\Controllers\Api\V1\UserAddressController;
 use App\Http\Controllers\Api\V1\UserContactController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserTaxProfileController;
-use App\Http\Controllers\Api\V1\Integrations\AtixPhoneLookupController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -38,15 +38,15 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
     // ── Auth pública ──────────────────────────────────────────────────────
     Route::prefix('auth')->name('auth.')->group(function () {
         Route::post('login/request-code', [LoginController::class, 'requestCode'])
-            ->middleware(['otp.diagnostic', 'throttle:akubica-otp', 'api.idempotency', 'api.audit'])
+            ->middleware([\App\Http\Middleware\Api\V1\AuthenticateOtpBackend::class, 'otp.diagnostic', 'throttle:akubica-otp', 'api.idempotency', 'api.audit'])
             ->name('login.request-code');
 
         Route::post('login/verify-code', [LoginController::class, 'verifyCode'])
-            ->middleware(['otp.diagnostic', 'throttle:akubica-otp', 'api.audit'])
+            ->middleware([\App\Http\Middleware\Api\V1\AuthenticateOtpBackend::class, 'otp.diagnostic', 'throttle:akubica-otp', 'api.audit'])
             ->name('login.verify-code');
 
         Route::post('login/resend-code', [LoginController::class, 'resendCode'])
-            ->middleware(['otp.diagnostic', 'throttle:akubica-otp', 'api.audit'])
+            ->middleware([\App\Http\Middleware\Api\V1\AuthenticateOtpBackend::class, 'otp.diagnostic', 'throttle:akubica-otp', 'api.audit'])
             ->name('login.resend-code');
 
         Route::post('register', [RegisterController::class, 'store'])
@@ -140,7 +140,8 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
             ->middleware('api.audit')
             ->name('checkout.draft');
         Route::post('checkout/payment-link', [CheckoutController::class, 'paymentLink'])
-            ->middleware('api.idempotency')
+            ->withoutMiddleware(['auth:sanctum', 'api.token.guard'])
+            ->middleware(['api.payment-link.pat', 'api.payment-link.authorize', 'api.idempotency'])
             ->name('checkout.payment-link');
 
         Route::get('laboratory-appointments/requirements', [LaboratoryAppointmentController::class, 'requirements'])
@@ -218,3 +219,41 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
         });
     });
 });
+
+// Unapproved opaque API proposal: always closed by default policy and identity transport.
+Route::middleware(['force.json', 'api.correlation', \App\Http\Middleware\Api\V1\OpaqueBenefitGate::class])->name('api.v1.benefits.')->group(function () {
+    Route::get('cart/benefits', [\App\Http\Controllers\Api\V1\OpaqueBenefitController::class, 'index'])->name('index');
+    Route::post('cart/benefits/applications', [\App\Http\Controllers\Api\V1\OpaqueBenefitController::class, 'apply'])->name('apply');
+    Route::post('cart/benefits/applications/{application_ref}/remove', [\App\Http\Controllers\Api\V1\OpaqueBenefitController::class, 'remove'])->name('remove');
+});
+
+// Closed local composition: enforce the registered actor BEFORE customer/audit/idempotency.
+// There is no legacy/native fallback. Do not deploy before consumer migration and transport approval.
+foreach (Route::getRoutes() as $registeredRoute) {
+    if (! array_key_exists($registeredRoute->getName(), \App\Http\Middleware\Api\V1\AuthorizeRegisteredConsumer::ROUTES)) {
+        continue;
+    }
+    $registeredRoute->withoutMiddleware(['auth:sanctum', 'api.token.guard']);
+    $action = $registeredRoute->getAction();
+    $list = $action['middleware'] ?? [];
+    $at = array_search('api.customer', $list, true);
+    array_splice($list, $at === false ? 0 : $at, 0, ['api.consumer.authorize']);
+    $action['middleware'] = $list;
+    $registeredRoute->setAction($action);
+}
+
+// Transport rollout never grants the remaining protected legacy surface to Leo.
+// Native callers need a literal route capability, with the ordinary ownership/step-up guards retained.
+foreach (Route::getRoutes() as $nativeRoute) {
+    if (! str_starts_with($nativeRoute->uri(), 'api/v1/') || array_key_exists($nativeRoute->getName(), \App\Http\Middleware\Api\V1\AuthorizeRegisteredConsumer::ROUTES)) {
+        continue;
+    }
+    $action = $nativeRoute->getAction();
+    $list = $action['middleware'] ?? [];
+    if (! in_array('auth:sanctum', $list, true) || in_array('api.payment-link.pat', $list, true) || str_contains($nativeRoute->uri(), 'integrations/atix/')) {
+        continue;
+    }
+    array_unshift($list, \App\Http\Middleware\Api\V1\AuthorizeNativeConsumerOperation::class);
+    $action['middleware'] = $list;
+    $nativeRoute->setAction($action);
+}
