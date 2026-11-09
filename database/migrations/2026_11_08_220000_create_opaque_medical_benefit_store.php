@@ -12,15 +12,21 @@ return new class extends Migration
         if (! in_array(DB::getDriverName(), ['sqlite', 'mysql'], true)) {
             throw new RuntimeException('Unsupported benefit revision driver');
         }
+        $this->assertMysqlTriggerPrerequisites();
         foreach (['medical_service_carts', 'coupons', 'coupon_user'] as $table) {
-            Schema::table($table, fn (Blueprint $t) => $t->unsignedBigInteger('opaque_revision')->default(0));
+            if (! Schema::hasColumn($table, 'opaque_revision')) {
+                Schema::table($table, fn (Blueprint $t) => $t->unsignedBigInteger('opaque_revision')->default(0));
+            }
         }
-        Schema::create('opaque_benefit_mutex', function (Blueprint $t) {
-            $t->unsignedInteger('id')->primary();
-            $t->unsignedBigInteger('generation')->default(0);
-        });
-        DB::table('opaque_benefit_mutex')->insert(['id' => 1, 'generation' => 0]);
-        Schema::create('opaque_benefit_contexts', function (Blueprint $t) {
+        if (! Schema::hasTable('opaque_benefit_mutex')) {
+            Schema::create('opaque_benefit_mutex', function (Blueprint $t) {
+                $t->unsignedInteger('id')->primary();
+                $t->unsignedBigInteger('generation')->default(0);
+            });
+        }
+        DB::table('opaque_benefit_mutex')->updateOrInsert(['id' => 1], ['generation' => 0]);
+        if (! Schema::hasTable('opaque_benefit_contexts')) {
+            Schema::create('opaque_benefit_contexts', function (Blueprint $t) {
             $t->id();
             $t->foreignId('cart_id')->constrained('medical_service_carts')->cascadeOnDelete();
             $t->foreignId('user_id')->constrained('users')->cascadeOnDelete();
@@ -35,8 +41,10 @@ return new class extends Migration
             $t->unsignedBigInteger('revision');
             $t->timestamps();
             $t->unique(['cart_id', 'actor_hash'], 'opaque_cart_actor_unique');
-        });
-        Schema::create('opaque_benefit_states', function (Blueprint $t) {
+            });
+        }
+        if (! Schema::hasTable('opaque_benefit_states')) {
+            Schema::create('opaque_benefit_states', function (Blueprint $t) {
             $t->id();
             $t->string('bucket', 20);
             $t->char('key_hash', 64);
@@ -46,8 +54,10 @@ return new class extends Migration
             $t->timestamps();
             $t->unique(['bucket', 'key_hash'], 'opaque_state_identity_unique');
             $t->index(['context_id', 'bucket']);
-        });
-        Schema::create('opaque_benefit_settlements', function (Blueprint $t) {
+            });
+        }
+        if (! Schema::hasTable('opaque_benefit_settlements')) {
+            Schema::create('opaque_benefit_settlements', function (Blueprint $t) {
             $t->id();
             $t->foreignId('context_id')->constrained('opaque_benefit_contexts')->restrictOnDelete();
             $t->foreignId('transaction_id')->unique()->constrained('transactions')->restrictOnDelete();
@@ -58,8 +68,10 @@ return new class extends Migration
             $t->char('application_hash', 64);
             $t->char('source_stamp', 64);
             $t->timestamps();
-        });
-        Schema::create('opaque_benefit_movements', function (Blueprint $t) {
+            });
+        }
+        if (! Schema::hasTable('opaque_benefit_movements')) {
+            Schema::create('opaque_benefit_movements', function (Blueprint $t) {
             $t->id();
             $t->foreignId('settlement_id')->constrained('opaque_benefit_settlements')->restrictOnDelete();
             $t->foreignId('source_id')->constrained('coupons')->restrictOnDelete();
@@ -72,8 +84,23 @@ return new class extends Migration
             $t->unsignedBigInteger('assignment_revision_after');
             $t->timestamp('created_at');
             $t->unique(['settlement_id', 'kind'], 'opaque_movement_once');
-        });
+            });
+        }
         $this->triggers();
+    }
+
+    private function assertMysqlTriggerPrerequisites(): void
+    {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
+        $variables = DB::selectOne('SELECT @@log_bin AS log_bin, @@log_bin_trust_function_creators AS trust_creators');
+        if ((int) ($variables->log_bin ?? 0) === 1 && (int) ($variables->trust_creators ?? 0) !== 1) {
+            throw new RuntimeException(
+                'Opaque benefit store requires AWS RDS log_bin_trust_function_creators=1 before creating revision triggers. No schema changes were attempted.'
+            );
+        }
     }
 
     private function triggers(): void
@@ -82,11 +109,14 @@ return new class extends Migration
         foreach (['medical_service_cart_items' => 'obi', 'medical_service_cart_benefits' => 'obb'] as $table => $prefix) {
             foreach (['INSERT' => 'NEW', 'DELETE' => 'OLD'] as $event => $row) {
                 $name = $prefix.'_'.strtolower($event);
+                DB::unprepared("DROP TRIGGER IF EXISTS $name");
                 DB::unprepared("CREATE TRIGGER $name AFTER $event ON $table FOR EACH ROW BEGIN UPDATE medical_service_carts SET opaque_revision=opaque_revision+1 WHERE id=$row.cart_id; END");
             }
+            DB::unprepared("DROP TRIGGER IF EXISTS {$prefix}_update");
             DB::unprepared("CREATE TRIGGER {$prefix}_update AFTER UPDATE ON $table FOR EACH ROW BEGIN UPDATE medical_service_carts SET opaque_revision=opaque_revision+1 WHERE id=OLD.cart_id OR id=NEW.cart_id; END");
         }
         foreach (['coupons' => 'ob_source', 'coupon_user' => 'ob_assignment'] as $table => $name) {
+            DB::unprepared("DROP TRIGGER IF EXISTS $name");
             if ($sqlite) {
                 DB::unprepared("CREATE TRIGGER $name AFTER UPDATE ON $table FOR EACH ROW WHEN NEW.opaque_revision=OLD.opaque_revision BEGIN UPDATE $table SET opaque_revision=opaque_revision+1 WHERE id=NEW.id; END");
             } else {
@@ -94,6 +124,7 @@ return new class extends Migration
             }
         }
         $cols = ['status', 'subtotal_cents', 'discount_cents', 'credit_applied_cents', 'total_cents'];
+        DB::unprepared('DROP TRIGGER IF EXISTS obc_update');
         if ($sqlite) {
             $condition = implode(' OR ', array_map(fn ($c) => "OLD.$c IS NOT NEW.$c", $cols));
             DB::unprepared("CREATE TRIGGER obc_update AFTER UPDATE ON medical_service_carts FOR EACH ROW WHEN $condition BEGIN UPDATE medical_service_carts SET opaque_revision=opaque_revision+1 WHERE id=NEW.id; END");
