@@ -60,6 +60,7 @@ final class AkubicaMedicalServicesCartM2CIsolatedTest extends TestCase
 
         $this->getJson('/api/v1/cart/totals?service_line=medical_services', $headers)
             ->assertOk()
+            ->assertJsonStructure(['data' => ['service_line', 'subtotal_cents', 'discount_cents', 'credit_applied_cents', 'total_cents', 'currency', 'item_count', 'applied_benefits']])
             ->assertJsonPath('data.applied_benefits', [])
             ->assertJsonPath('data.total_cents', 30000);
 

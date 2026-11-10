@@ -1,0 +1,47 @@
+ID,Fase,Requisito,Endpoint,Postman,Prueba automatizada,Estado local,Evidencia,Dependencia
+A01,A,ATIX reconocido,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, HMAC QA
+A02,A,ATIX desconocido,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture desconocido
+A03,A,HMAC inválida,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, HMAC QA
+A04,A,Timestamp fuera de ventana,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Reloj QA
+A05,A,Nonce repetido,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Persistencia nonce
+A06,A,Idempotencia ATIX,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Persistencia idempotencia
+A07,A,Canal o audiencia no autorizados,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Contrato QA
+A08,A,Solicitud OTP reconocida,POST /auth/login/request-code,OTP-START-UNIFORM,No focalizada,NOT_RUN_STAGING,Sin SMS QA, SMS QA autorizado
+A09,A,Solicitud OTP desconocida,POST /auth/login/request-code,OTP-START-UNIFORM,No focalizada,NOT_RUN_STAGING,Sin SMS QA, Fixture desconocido
+A10,A,OTP válido y Bearer,POST /auth/login/verify-code,OTP-VERIFY-BINDING,No focalizada,NOT_RUN_STAGING,Sin OTP QA, OTP QA válido
+A11,A,OTP inválido vencido o reutilizado,POST /auth/login/verify-code,OTP-VERIFY-BINDING,No focalizada,NOT_RUN_STAGING,Sin OTP QA, Fixtures OTP
+A12,A,Bearer vencido o revocado,Ruta protegida representativa,AUTH-CYCLE,Control offline 24/24,LOCAL_PASS,Control offline sintético, Revocación QA
+B01,B,Precio de estudio,GET /catalog/laboratory-tests,catalogLaboratoryTests,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture estudio
+B02,B,Precio de paquete,GET /catalog/laboratory-tests,catalogLaboratoryTests,No focalizada,BLOCKED,Sin catálogo autorizado, Fuente de paquetes y precios
+B03,B,Precio público ausente,Catálogo listado y detalle,catalogLaboratoryTests,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture sin precio
+B04,B,Precios iguales,Catálogo listado y detalle,catalogLaboratoryTests,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture sin ahorro
+B05,B,Precio inconsistente,Catálogo listado y detalle,catalogLaboratoryTests,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture inconsistente
+B06,B,Revalidación de precio,POST /cart/items,cartItemsStore,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Precio mutable
+B07,B,Plan Básico,GET /memberships/plans,MEMBERSHIP-PLANS,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Configuración comercial
+B08,B,Sin membresía,GET /memberships/status,MEMBERSHIP-STATUS,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture QA
+B09,B,Membresía individual activa,GET /memberships/status,MEMBERSHIP-STATUS,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture QA
+B10,B,Membresía patrocinada,GET /memberships/status,MEMBERSHIP-STATUS,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture QA
+B11,B,Membresía expirada,GET /memberships/status,MEMBERSHIP-STATUS,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture QA
+B12,B,Agregar Plan Básico,POST /cart/items,cartItemsStore,AkubicaMedicalServicesCartM2BIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Fixture elegible
+B13,B,Duplicado de membresía,POST /cart/items,cartItemsStore,AkubicaMedicalServicesCartM2BIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, B12
+B14,B,Membresía activa,POST /cart/items,cartItemsStore,AkubicaMedicalServicesCartM2BIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Fixture activa
+B15,B,Membresía patrocinada,POST /cart/items,cartItemsStore,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture patrocinada
+B16,B,Retirar membresía,DELETE /cart/items/{cart_item_id},cartItemsDestroy,AkubicaMedicalServicesCartM2BIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, B12
+B17,B,Idempotencia membresía,POST o DELETE /cart/items,cartItemsStore,AkubicaMedicalServicesCartM2BIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Idempotencia local
+B18,B,Concurrencia membresía,POST /cart/items,cartItemsStore,No focalizada,NOT_RUN_STAGING,Sin prueba concurrente, RDS QA
+B19,B,Aislamiento médico laboratorio,POST /cart/items,cartItemsStore,AkubicaMedicalServicesCartM2BIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Fixture laboratorio
+B20,B,Aislamiento laboratorio médico,POST /cart/items,cartItemsStore,AkubicaMedicalServicesCartM2CIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Fixture estudio
+B21,B,Retiro aislado,DELETE /cart/items/{cart_item_id},cartItemsDestroy,AkubicaMedicalServicesCartM2CIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Read-back local
+B22,B,Farmacia suspendida,Ruta de farmacia,No colección RC2 positiva,NOT_RUN_STAGING,Fuera de alcance operativo, Flag Farmacia off
+B23,B,Preparación checkout,GET /checkout/prepare,checkoutPrepare,AkubicaMedicalCheckoutPrepareRc1IsolatedTest,LOCAL_PASS,20 Pest 137 assertions, B12
+B24,B,Continuidad FAMEDIC,GET /checkout/prepare,checkoutPrepare,AkubicaMedicalCheckoutPrepareRc1IsolatedTest,BLOCKED,Continuidad deshabilitada, Autorización transporte QA
+B25,B,Pago prohibido Leo,POST /checkout/payment-link,PAYMENT-LINK-LEO-DENIED,AkubicaMedicalCheckoutPrepareRc1IsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Perfil Leo QA
+B26,B,No activación antes del pago,Estado membresía,MEMBERSHIP-STATUS,AkubicaMedicalCheckoutPrepareRc1IsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Pago QA no autorizado
+R01,R,Pedidos,GET /orders,ordersIndex,No focalizada,NOT_RUN_STAGING,Sin fixture QA, Fixture pedido
+R02,R,Resultados,GET /orders/{id}/results,ordersResults,No focalizada,NOT_RUN_STAGING,Sin step-up QA, Fixture resultado
+R03,R,Facturas,GET /orders/{id}/invoices,ordersInvoices,No focalizada,NOT_RUN_STAGING,Sin step-up QA, Fixture factura
+R04,R,Familiares,GET /user/family,userFamily,No focalizada,NOT_RUN_STAGING,Sin fixture QA, Fixture familiar
+R05,R,Citas y concierge,Checkout laboratorio,appointmentsIndex,No focalizada,NOT_RUN_STAGING,Sin HTTP QA, Fixture cita
+R06,R,Observabilidad,Todas las rutas RC2,Correlation checks,No focalizada,NOT_RUN_STAGING,Sin logs QA, Acceso observabilidad
+R07,R,Errores contractuales,Rutas representativas,Negative guards,Control offline 24/24,LOCAL_PASS,Controles offline sintéticos, Validación HTTP QA
+R08,R,UAT conversacional,Leo en WhatsApp,UAT externo,No ejecutada,NOT_RUN_STAGING,Sin sesión UAT, Suite conversacional

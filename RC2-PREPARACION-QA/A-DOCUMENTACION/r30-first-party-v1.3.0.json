@@ -1,0 +1,703 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FAMEDIC RC2 R30 first-party — suplemento privado",
+    "version": "1.3.0-rc2-r30-review-01",
+    "description": "Cuatro operaciones web fuera de las 74 principales. Nunca endpoints de cobro Leo. Implementado local, flags false; texto/autoridad/retención y certificación financiera pendientes."
+  },
+  "servers": [
+    {
+      "url": "https://rc11.invalid"
+    }
+  ],
+  "security": [
+    {
+      "FirstPartySession": []
+    }
+  ],
+  "paths": {
+    "/medical-attention/benefit-checkout": {
+      "get": {
+        "operationId": "firstPartyMedicalPurchaseReview",
+        "summary": "Revisar compra: no reserva ni cobra",
+        "x-status": "COMPLETE_LOCAL",
+        "x-activation": "DISABLED_PENDING_FINANCE_SECURITY",
+        "x-consumer-allowlist": [
+          "first-party-famedic-user"
+        ],
+        "parameters": [
+          {
+            "name": "cart_ref",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^crt_[A-Za-z0-9_-]{43}$"
+            }
+          },
+          {
+            "name": "application_ref",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^app_[A-Za-z0-9_-]{43}$"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "paypal",
+                "efevoopay"
+              ],
+              "default": "paypal"
+            }
+          },
+          {
+            "name": "payment_method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Método Efevoo propio; no PAN ni secreto."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTML: importes MXN, beneficio, condiciones y confirmación de pago separada",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión inválida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permiso/certificación/confirmación reciente ausentes; backend rechazado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referencia ajena/inexistente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Contexto cambiado, expiración o resultado incierto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servicio/almacenamiento no disponible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Web redirige a login; handler global CSRF 419 redirige a home. No acredita éxito."
+          }
+        },
+        "security": [
+          {
+            "FirstPartySession": []
+          }
+        ]
+      }
+    },
+    "/medical-attention/benefit-checkout/confirm": {
+      "post": {
+        "operationId": "firstPartyMedicalPurchaseConfirm",
+        "summary": "Autorizar expresamente e iniciar saga con clave persistida",
+        "x-status": "COMPLETE_LOCAL",
+        "x-activation": "DISABLED_PENDING_FINANCE_SECURITY",
+        "x-consumer-allowlist": [
+          "first-party-famedic-user"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Estado: needs_review no acredita pago",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión inválida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permiso/certificación/confirmación reciente ausentes; backend rechazado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referencia ajena/inexistente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Contexto cambiado, expiración o resultado incierto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servicio/almacenamiento no disponible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Web redirige a login; handler global CSRF 419 redirige a home. No acredita éxito."
+          }
+        },
+        "security": [
+          {
+            "FirstPartySession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "_token",
+                  "checkout_ref",
+                  "authorize_payment"
+                ],
+                "properties": {
+                  "_token": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "checkout_ref": {
+                    "type": "string",
+                    "pattern": "^pur_[A-Za-z0-9_-]{43}$"
+                  },
+                  "authorize_payment": {
+                    "const": "yes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-csrf-protection": "Web CSRF verificado; este contrato documenta formulario con _token requerido. No exige enviar además el header X-CSRF-TOKEN."
+      }
+    },
+    "/medical-attention/benefit-checkout/{checkout_ref}": {
+      "get": {
+        "operationId": "firstPartyMedicalPurchaseStatus",
+        "summary": "Consultar estado sin efectos externos",
+        "x-status": "COMPLETE_LOCAL",
+        "x-activation": "DISABLED_PENDING_FINANCE_SECURITY",
+        "x-consumer-allowlist": [
+          "first-party-famedic-user"
+        ],
+        "parameters": [
+          {
+            "name": "checkout_ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^pur_[A-Za-z0-9_-]{43}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado consultable, no dispara cobro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión inválida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permiso/certificación/confirmación reciente ausentes; backend rechazado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referencia ajena/inexistente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Contexto cambiado, expiración o resultado incierto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servicio/almacenamiento no disponible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Web redirige a login; handler global CSRF 419 redirige a home. No acredita éxito."
+          }
+        },
+        "security": [
+          {
+            "FirstPartySession": []
+          }
+        ]
+      }
+    },
+    "/medical-attention/benefit-checkout/{checkout_ref}/{action}": {
+      "post": {
+        "operationId": "firstPartyMedicalPurchaseAction",
+        "summary": "Recuperar/capturar PayPal aprobado/cancelar no despachado/revertir verificado",
+        "x-status": "COMPLETE_LOCAL",
+        "x-activation": "DISABLED_PENDING_FINANCE_SECURITY",
+        "x-consumer-allowlist": [
+          "first-party-famedic-user"
+        ],
+        "parameters": [
+          {
+            "name": "checkout_ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^pur_[A-Za-z0-9_-]{43}$"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "recover",
+                "capture",
+                "cancel",
+                "reverse"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado; reverse exige permiso independiente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión inválida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permiso/certificación/confirmación reciente ausentes; backend rechazado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referencia ajena/inexistente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Contexto cambiado, expiración o resultado incierto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servicio/almacenamiento no disponible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Web redirige a login; handler global CSRF 419 redirige a home. No acredita éxito."
+          }
+        },
+        "security": [
+          {
+            "FirstPartySession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "_token",
+                  "authorize_payment"
+                ],
+                "properties": {
+                  "_token": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "authorize_payment": {
+                    "const": "yes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-csrf-protection": "Web CSRF verificado; este contrato documenta formulario con _token requerido. No exige enviar además el header X-CSRF-TOKEN."
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "FirstPartySession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "famedic_session",
+        "description": "Nombre de cookie ilustrativo: confirmar nombre operativo. Sesión first-party FAMEDIC; nunca credencial backend Leo."
+      },
+      "FirstPartyCsrf": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-TOKEN",
+        "description": "Token CSRF de la sesión first-party; formulario HTML usa campo _token. No se distribuye en colección."
+      }
+    },
+    "schemas": {
+      "PurchaseResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "purchase_ref",
+          "state",
+          "subtotal_cents",
+          "credit_cents",
+          "discount_cents",
+          "benefit_type",
+          "cash_cents",
+          "currency"
+        ],
+        "properties": {
+          "purchase_ref": {
+            "type": "string",
+            "pattern": "^pmt_[A-Za-z0-9_-]{43}$"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "reserved",
+              "charging",
+              "awaiting_payment",
+              "capture_requested",
+              "needs_review",
+              "confirmed",
+              "debited",
+              "fulfilled",
+              "reversing",
+              "reversed",
+              "cancelled"
+            ]
+          },
+          "subtotal_cents": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "credit_cents": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "discount_cents": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "benefit_type": {
+            "enum": [
+              "coupon",
+              "credit"
+            ]
+          },
+          "cash_cents": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "currency": {
+            "const": "MXN"
+          }
+        },
+        "examples": [
+          {
+            "purchase_ref": "pmt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "state": "fulfilled",
+            "subtotal_cents": 1000,
+            "credit_cents": 400,
+            "discount_cents": 0,
+            "benefit_type": "credit",
+            "cash_cents": 600,
+            "currency": "MXN"
+          }
+        ]
+      },
+      "PurchaseResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/PurchaseResult"
+          }
+        }
+      },
+      "StatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "data": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseResult"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "awaiting_confirmation",
+                      "authorization_recorded"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "retryable",
+              "correlation_id"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fields": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "retryable": {
+                "type": "boolean"
+              },
+              "correlation_id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

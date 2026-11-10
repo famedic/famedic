@@ -24,6 +24,10 @@ abstract class TestCase extends BaseTestCase
             $this->app->bind(\App\Contracts\Api\V1\Auth\BackendCredentialSource::class, LocalMachineCredentialSource::class);
         }
 
+        if (getenv('FAMEDIC_RC2_LOCAL_MYSQL') === '1') {
+            $this->app->bind(\App\Contracts\Api\V1\Auth\BackendCredentialSource::class, LocalMachineCredentialSource::class);
+        }
+
         TestingDatabaseGuard::assertSafeTestingDatabase();
 
         $this->withoutMiddleware([

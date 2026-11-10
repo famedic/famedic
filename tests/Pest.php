@@ -108,6 +108,7 @@ function createOlabTest(array $attributes = []): \App\Models\LaboratoryTest
 {
     return \App\Models\LaboratoryTest::factory()->create(array_merge([
         'brand' => \App\Enums\LaboratoryBrand::OLAB,
+        'gda_id' => 'RC2-TEST-'.bin2hex(random_bytes(6)),
         'famedic_price_cents' => 35000,
         'public_price_cents' => 40000,
     ], $attributes));

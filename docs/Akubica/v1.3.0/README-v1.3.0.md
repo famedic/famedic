@@ -33,8 +33,11 @@ El contrato OpenAPI continúa siendo v1.2.3. Los `operationId` existentes se con
 - `akubica-api-v1.3.0-consumption-guide.md`: guía de consumo y seguridad.
 - `akubica-v1.3.0-checklist-endpoints.md`: matriz de endpoints y criterios.
 - `akubica-v1.3.0-staging-flow.md`: orden seguro de staging.
-- `Famedic-Akubica-v1.3.0.postman_collection.json`: colección sin secretos.
-- `Famedic-Akubica-v1.3.0-staging.postman_environment.json`: environment vacío/sintético.
+- `akubica-openapi-v1.3.0-rc2.json`: contrato principal RC2 con 74 operaciones.
+- `r30-first-party-v1.3.0.json`: suplemento first party separado con cuatro operaciones R30; no es capacidad de Leo.
+- `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: colección reconciliada de 90 solicitudes.
+- `Famedic-Akubica-v1.3.0-rc2-synthetic.environment.json`: environment sin secretos y con URLs reservadas.
+- `RC2-MATRIZ-TRAZABILIDAD-46.csv`: trazabilidad de los 46 escenarios.
 - `openapi-changelog-v1.3.0.md`: cambios documentales y compatibilidad.
 
 ## Uso seguro

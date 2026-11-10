@@ -3441,7 +3441,7 @@ components:
 
     MedicalServiceCartTotals:
       type: object
-      required: [service_line, subtotal_cents, discount_cents, credit_applied_cents, total_cents, currency, item_count]
+      required: [service_line, subtotal_cents, discount_cents, credit_applied_cents, total_cents, currency, item_count, applied_benefits]
       additionalProperties: false
       properties:
         service_line:
@@ -3453,6 +3453,12 @@ components:
         total_cents: {type: integer, minimum: 0}
         currency: {type: string, const: MXN}
         item_count: {type: integer, minimum: 0}
+        applied_benefits:
+          type: array
+          maxItems: 1
+          description: Beneficio actualmente aplicado al carrito médico; se recalcula en servidor y puede estar vacío.
+          items:
+            $ref: '#/components/schemas/MedicalServiceCartBenefit'
 
     MedicalServiceCartTotalsResponse:
       allOf:

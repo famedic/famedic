@@ -1,0 +1,4277 @@
+{
+  "info": {
+    "name": "FAMEDIC RC1.1 — candidato privado offline",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Revisión offline; no existe bandera de colección que habilite red. Sin autorización de distribución/uso externo."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Esta edición es exclusivamente offline. No existe bandera para habilitar red.",
+          "// La edición ejecutable requiere aprobación y una revisión nueva de transporte/UAT.",
+          "pm.request.url.update('https://rc11.invalid/blocked');",
+          "if (pm.execution && typeof pm.execution.skipRequest === 'function') {",
+          "    pm.execution.skipRequest();",
+          "} else {",
+          "    throw new Error('OFFLINE_ONLY_UNSUPPORTED_SKIP_API');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "OTP-START-UNIFORM",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/auth/login/request-code",
+        "description": "case_id=OTP-START-UNIFORM; operationId=authLoginRequestCode; perfil=registered-backend; esperado UAT=202. Sólo identidad QA sintética autorizada; implica SMS, requiere autorización aparte. No se envía ahora. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{vault:synthetic_qa_phone}}\",\n  \"conversation_id\": \"synthetic-conversation\",\n  \"channel_event_id\": \"synthetic-event\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — OTP-START-UNIFORM', function () { pm.expect(pm.response.code).to.eql(202); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "OTP-RESEND-UNIFORM",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/auth/login/resend-code",
+        "description": "case_id=OTP-RESEND-UNIFORM; operationId=authLoginResendCode; perfil=registered-backend; esperado UAT=202.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challenge_id\": \"{{vault:challenge_ref}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — OTP-RESEND-UNIFORM', function () { pm.expect(pm.response.code).to.eql(202); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "OTP-VERIFY-BINDING",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/auth/login/verify-code",
+        "description": "case_id=OTP-VERIFY-BINDING; operationId=authLoginVerifyCode; perfil=registered-backend; esperado UAT=200. No guardar token de salida ni cuerpo de respuesta. Binding sólo con autoridad server-side. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challenge_id\": \"{{vault:challenge_ref}}\",\n  \"code\": \"{{vault:otp_code}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — OTP-VERIFY-BINDING', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "MEMBERSHIP-PLANS",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/memberships/plans",
+        "description": "case_id=MEMBERSHIP-PLANS; operationId=membershipPlansIndex; perfil=native; esperado UAT=200.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — MEMBERSHIP-PLANS', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "MEMBERSHIP-STATUS",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/memberships/status",
+        "description": "case_id=MEMBERSHIP-STATUS; operationId=membershipStatusShow; perfil=leo; esperado UAT=200.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — MEMBERSHIP-STATUS', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BENEFITS-QUERY",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/benefits?service_line=medical_services",
+        "description": "case_id=BENEFITS-QUERY; operationId=opaqueBenefitsIndex; perfil=leo; esperado UAT=200.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — BENEFITS-QUERY', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BENEFITS-APPLY",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/benefits/applications",
+        "description": "case_id=BENEFITS-APPLY; operationId=opaqueBenefitsApply; perfil=leo; esperado UAT=201.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_line\": \"medical_services\",\n  \"cart_ref\": \"{{vault:cart_ref}}\",\n  \"cart_version\": \"{{vault:cart_version}}\",\n  \"benefit_ref\": \"{{vault:benefit_ref}}\",\n  \"confirmation_ref\": \"{{vault:confirmation_ref}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — BENEFITS-APPLY', function () { pm.expect(pm.response.code).to.eql(201); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BENEFITS-REMOVE",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/benefits/applications/{{vault:application_ref}}/remove",
+        "description": "case_id=BENEFITS-REMOVE; operationId=opaqueBenefitsRemove; perfil=leo; esperado UAT=200.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_line\": \"medical_services\",\n  \"cart_ref\": \"{{vault:cart_ref}}\",\n  \"cart_version\": \"{{vault:cart_version}}\",\n  \"confirmation_ref\": \"{{vault:confirmation_ref}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — BENEFITS-REMOVE', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BENEFITS-NO-CONSENT",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/benefits/applications",
+        "description": "case_id=BENEFITS-NO-CONSENT; operationId=opaqueBenefitsApply; perfil=leo; esperado UAT=422.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_line\": \"medical_services\",\n  \"cart_ref\": \"{{vault:cart_ref}}\",\n  \"cart_version\": \"{{vault:cart_version}}\",\n  \"benefit_ref\": \"{{vault:benefit_ref}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — BENEFITS-NO-CONSENT', function () { pm.expect(pm.response.code).to.eql(422); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BENEFITS-ALIEN-REF",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/benefits/applications",
+        "description": "case_id=BENEFITS-ALIEN-REF; operationId=opaqueBenefitsApply; perfil=leo; esperado UAT=404.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_line\": \"medical_services\",\n  \"cart_ref\": \"{{vault:cart_ref}}\",\n  \"cart_version\": \"{{vault:cart_version}}\",\n  \"benefit_ref\": \"{{vault:other_user_benefit_ref}}\",\n  \"confirmation_ref\": \"{{vault:confirmation_ref}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — BENEFITS-ALIEN-REF', function () { pm.expect(pm.response.code).to.eql(404); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BENEFITS-REPLAY",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/benefits/applications",
+        "description": "case_id=BENEFITS-REPLAY; operationId=opaqueBenefitsApply; perfil=leo; esperado UAT=201. Reutilizar sólo clave del primer apply y body idéntico; Idempotency-Replayed=true; sin nuevo efecto. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_line\": \"medical_services\",\n  \"cart_ref\": \"{{vault:cart_ref}}\",\n  \"cart_version\": \"{{vault:cart_version}}\",\n  \"benefit_ref\": \"{{vault:benefit_ref}}\",\n  \"confirmation_ref\": \"{{vault:confirmation_ref}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — BENEFITS-REPLAY', function () { pm.expect(pm.response.code).to.eql(201); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BENEFITS-CONFLICT",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/benefits/applications",
+        "description": "case_id=BENEFITS-CONFLICT; operationId=opaqueBenefitsApply; perfil=leo; esperado UAT=409.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_line\": \"medical_services\",\n  \"cart_ref\": \"{{vault:cart_ref}}\",\n  \"cart_version\": \"{{vault:changed_cart_version}}\",\n  \"benefit_ref\": \"{{vault:benefit_ref}}\",\n  \"confirmation_ref\": \"{{vault:confirmation_ref}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — BENEFITS-CONFLICT', function () { pm.expect(pm.response.code).to.eql(409); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "CART-LEO-CONTINUITY",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart?service_line=medical_services",
+        "description": "case_id=CART-LEO-CONTINUITY; operationId=cartIndex; perfil=leo; esperado UAT=200. PENDIENTE_DE_INTEGRACIÓN cuando hay beneficio; no cuenta como runtime PASS. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — CART-LEO-CONTINUITY', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "CHECKOUT-LEO-CONTINUITY",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/checkout/prepare?service_line=medical_services",
+        "description": "case_id=CHECKOUT-LEO-CONTINUITY; operationId=checkoutPrepare; perfil=leo; esperado UAT=200. PENDIENTE_DE_INTEGRACIÓN; proyección opaca; jamás URL de pago. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — CHECKOUT-LEO-CONTINUITY', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PAYMENT-LINK-LEO-DENIED",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/checkout/payment-link",
+        "description": "case_id=PAYMENT-LINK-LEO-DENIED; operationId=checkoutPaymentLink; perfil=leo; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"brand\": \"olab\",\n  \"expires_in_minutes\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — PAYMENT-LINK-LEO-DENIED', function () { pm.expect(pm.response.code).to.eql(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PAYMENT-LINK-WILDCARD-DENIED",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/checkout/payment-link",
+        "description": "case_id=PAYMENT-LINK-WILDCARD-DENIED; operationId=checkoutPaymentLink; perfil=leo-wildcard; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"brand\": \"olab\",\n  \"expires_in_minutes\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — PAYMENT-LINK-WILDCARD-DENIED', function () { pm.expect(pm.response.code).to.eql(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PAYMENT-LINK-READONLY-DENIED",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/checkout/payment-link",
+        "description": "case_id=PAYMENT-LINK-READONLY-DENIED; operationId=checkoutPaymentLink; perfil=native-readonly; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"brand\": \"olab\",\n  \"expires_in_minutes\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — PAYMENT-LINK-READONLY-DENIED', function () { pm.expect(pm.response.code).to.eql(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PAYMENT-LINK-NATIVE",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/checkout/payment-link",
+        "description": "case_id=PAYMENT-LINK-NATIVE; operationId=checkoutPaymentLink; perfil=native-payments; esperado UAT=200. Checkout nativo de laboratorio con marca válida; sin ruta de pago médico Leo; efecto real de emisión prohibido en esta edición; autorización separada. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"brand\": \"olab\",\n  \"expires_in_minutes\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — PAYMENT-LINK-NATIVE', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "LEGACY-LEO-DENIED-medicalServiceBenefitShow",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/medical-benefit?service_line=medical_services",
+        "description": "case_id=LEGACY-LEO-DENIED-medicalServiceBenefitShow; operationId=medicalServiceBenefitShow; perfil=leo; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — LEGACY-LEO-DENIED-medicalServiceBenefitShow', function () { pm.expect(pm.response.code).to.eql(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "LEGACY-NATIVE-medicalServiceBenefitShow",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/medical-benefit?service_line=medical_services",
+        "description": "case_id=LEGACY-NATIVE-medicalServiceBenefitShow; operationId=medicalServiceBenefitShow; perfil=native; esperado UAT=200.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — LEGACY-NATIVE-medicalServiceBenefitShow', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "LEGACY-LEO-DENIED-medicalServiceBenefitApply",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/medical-benefit?service_line=medical_services",
+        "description": "case_id=LEGACY-LEO-DENIED-medicalServiceBenefitApply; operationId=medicalServiceBenefitApply; perfil=leo; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"service_line\": \"medical_services\", \"code\": \"{{vault:synthetic_coupon_code}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — LEGACY-LEO-DENIED-medicalServiceBenefitApply', function () { pm.expect(pm.response.code).to.eql(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "LEGACY-LEO-DENIED-medicalServiceBenefitRemove",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/medical-benefit?service_line=medical_services",
+        "description": "case_id=LEGACY-LEO-DENIED-medicalServiceBenefitRemove; operationId=medicalServiceBenefitRemove; perfil=leo; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — LEGACY-LEO-DENIED-medicalServiceBenefitRemove', function () { pm.expect(pm.response.code).to.eql(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "LEGACY-LEO-DENIED-cartCouponShow",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/coupon?service_line=laboratory&brand=olab",
+        "description": "case_id=LEGACY-LEO-DENIED-cartCouponShow; operationId=cartCouponShow; perfil=leo; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — LEGACY-LEO-DENIED-cartCouponShow', function () { pm.expect(pm.response.code).to.eql(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "LEGACY-NATIVE-cartCouponShow",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/coupon?service_line=laboratory&brand=olab",
+        "description": "case_id=LEGACY-NATIVE-cartCouponShow; operationId=cartCouponShow; perfil=native; esperado UAT=200.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — LEGACY-NATIVE-cartCouponShow', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "LEGACY-LEO-DENIED-cartCouponApply",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/coupon?service_line=laboratory&brand=olab",
+        "description": "case_id=LEGACY-LEO-DENIED-cartCouponApply; operationId=cartCouponApply; perfil=leo; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"brand\": \"olab\", \"code\": \"{{vault:synthetic_coupon_code}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — LEGACY-LEO-DENIED-cartCouponApply', function () { pm.expect(pm.response.code).to.eql(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "LEGACY-LEO-DENIED-cartCouponRemove",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}"
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "description": "Propuesta sin adaptador operativo; requiere aprobación de transporte."
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/coupon?service_line=laboratory&brand=olab",
+        "description": "case_id=LEGACY-LEO-DENIED-cartCouponRemove; operationId=cartCouponRemove; perfil=leo; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — LEGACY-LEO-DENIED-cartCouponRemove', function () { pm.expect(pm.response.code).to.eql(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "CONSENT-BROWSER-PAGE",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "text/html"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{vault:first_party_csrf}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/benefits/consent?cart_ref={{vault:cart_ref}}&cart_version={{vault:cart_version}}&target_ref={{vault:benefit_ref}}&operation=apply&text_version={{vault:text_version}}",
+        "description": "case_id=CONSENT-BROWSER-PAGE; operationId=firstPartyConsentPage; perfil=first-party-browser; esperado UAT=200. Requiere contexto completo, sesión FAMEDIC, contraseña reciente y texto aprobado. No acredita consentimiento una página deshabilitada. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — CONSENT-BROWSER-PAGE', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "CONSENT-BROWSER-REVIEW",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{vault:first_party_csrf}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/benefits/consent/review",
+        "description": "case_id=CONSENT-BROWSER-REVIEW; operationId=firstPartyConsentReview; perfil=first-party-browser; esperado UAT=200.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cart_ref\": \"{{vault:cart_ref}}\",\n  \"cart_version\": \"{{vault:cart_version}}\",\n  \"target_ref\": \"{{vault:benefit_ref}}\",\n  \"operation\": \"apply\",\n  \"text_version\": \"{{vault:text_version}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — CONSENT-BROWSER-REVIEW', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "CONSENT-BROWSER-CONFIRM",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{vault:first_party_csrf}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/benefits/consent/confirm",
+        "description": "case_id=CONSENT-BROWSER-CONFIRM; operationId=firstPartyConsentConfirm; perfil=first-party-browser; esperado UAT=200. Contraseña reciente, CSRF y autoridad aprobada; nunca emisión unilateral Leo. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cart_ref\": \"{{vault:cart_ref}}\",\n  \"cart_version\": \"{{vault:cart_version}}\",\n  \"target_ref\": \"{{vault:benefit_ref}}\",\n  \"operation\": \"apply\",\n  \"text_version\": \"{{vault:text_version}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — CONSENT-BROWSER-CONFIRM', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "CONSENT-BROWSER-REVOKE",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{vault:first_party_csrf}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/benefits/consent/{{vault:confirmation_ref}}/revoke",
+        "description": "case_id=CONSENT-BROWSER-REVOKE; operationId=firstPartyConsentRevoke; perfil=first-party-browser; esperado UAT=200.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — CONSENT-BROWSER-REVOKE', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "H04-PHONE-LOOKUP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Integration-Key-Id",
+            "value": "{{vault:hmac_key_id}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Timestamp",
+            "value": "{{vault:hmac_timestamp}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Nonce",
+            "value": "{{vault:hmac_nonce}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Signature",
+            "value": "{{vault:hmac_signature}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/integrations/atix/phone-lookups",
+        "description": "case_id=H04-PHONE-LOOKUP; operationId=atixPhoneLookup; perfil=hmac; esperado UAT=200. Sólo HMAC V1/H04; signer aprobado fuera de colección; no reutilizar material anterior. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{vault:synthetic_qa_phone}}\",\n  \"conversation_id\": \"synthetic-conversation\",\n  \"channel_event_id\": \"synthetic-event\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP esperado — H04-PHONE-LOOKUP', function () { pm.expect(pm.response.code).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "authRegister",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/auth/register",
+        "description": "operationId=authRegister; Iniciar registro (OTP). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{vault:email}}\",\n  \"phone\": \"{{vault:phone}}\",\n  \"full_name\": \"{{vault:full_name}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 202]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "authRegisterVerifyCode",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/auth/register/verify-code",
+        "description": "operationId=authRegisterVerifyCode; Verificar OTP de registro y emitir token. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challenge_id\": \"{{vault:challenge_id}}\",\n  \"code\": \"{{vault:code}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "authRegisterResendCode",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/auth/register/resend-code",
+        "description": "operationId=authRegisterResendCode; Reenviar OTP de registro (P0-A). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challenge_id\": \"{{vault:challenge_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "authRevokeToken",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/auth/token",
+        "description": "operationId=authRevokeToken; Revocar token Bearer actual (logout). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "secureDownloadShow",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/secure-downloads/{{vault:token}}",
+        "description": "operationId=secureDownloadShow; Descargar PDF mediante token opaco. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "catalogLaboratoryBrands",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/catalog/laboratory-brands",
+        "description": "operationId=catalogLaboratoryBrands; Listar marcas de laboratorio. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "catalogLaboratoryTests",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/catalog/laboratory-tests",
+        "description": "operationId=catalogLaboratoryTests; Listar estudios. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "catalogLaboratoryTestCategories",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/catalog/laboratory-test-categories",
+        "description": "operationId=catalogLaboratoryTestCategories; Listar categorías. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "catalogLaboratoryStores",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/catalog/laboratory-stores",
+        "description": "operationId=catalogLaboratoryStores; Listar sucursales. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "catalogShowLaboratoryTest",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/catalog/laboratory-tests/{{vault:laboratory_test_id}}",
+        "description": "operationId=catalogShowLaboratoryTest; Detalle de estudio. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "catalogShowMedication",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/catalog/medications/{{vault:medication_id}}",
+        "description": "operationId=catalogShowMedication; Medicamento (deshabilitado). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cartClear",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart?brand={{vault:brand}}",
+        "description": "operationId=cartClear; Vaciar carrito. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cartTotals",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/totals",
+        "description": "operationId=cartTotals; Totales del carrito. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cartItemsStore",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/cart/items",
+        "description": "operationId=cartItemsStore; Agregar ítem. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"laboratory_test_id\": \"{{vault:laboratory_test_id}}\",\n  \"brand\": \"olab\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cartItemsDestroy",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/cart/items/{{vault:cart_item_id}}",
+        "description": "operationId=cartItemsDestroy; Eliminar ítem. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "checkoutDraft",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/checkout/draft",
+        "description": "operationId=checkoutDraft; Sincronizar draft de checkout. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"brand\": \"olab\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "appointmentsRequirements",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/laboratory-appointments/requirements?brand={{vault:brand}}",
+        "description": "operationId=appointmentsRequirements; Requisitos de cita. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "appointmentsIndex",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/laboratory-appointments",
+        "description": "operationId=appointmentsIndex; Listar citas. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "appointmentsStore",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/laboratory-appointments",
+        "description": "operationId=appointmentsStore; Crear cita. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"brand\": \"olab\",\n  \"contact_id\": \"{{vault:contact_id}}\",\n  \"address_id\": \"{{vault:address_id}}\",\n  \"scheduled_at\": \"{{vault:scheduled_at}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "appointmentsDestroy",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/laboratory-appointments/{{vault:appointment_id}}",
+        "description": "operationId=appointmentsDestroy; Eliminar cita propia. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersIndex",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders",
+        "description": "operationId=ordersIndex; Listar pedidos. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersResultsIndex",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders/results",
+        "description": "operationId=ordersResultsIndex; Listar resultados agregados. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersInvoicesIndex",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders/invoices",
+        "description": "operationId=ordersInvoicesIndex; Listar facturas agregadas. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersProducts",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/products",
+        "description": "operationId=ordersProducts; Productos del pedido. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersStatus",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/status",
+        "description": "operationId=ordersStatus; Estado del pedido. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersCancel",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/cancel",
+        "description": "operationId=ordersCancel; Cancelar pedido (deshabilitado). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersResults",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/results",
+        "description": "operationId=ordersResults; Metadata de resultados del pedido. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersResultsDownload",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Step-Up-Grant",
+            "value": "{{vault:x_step_up_grant}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/results/download",
+        "description": "operationId=ordersResultsDownload; Descargar PDF resultados (Bearer). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersResultsStepUpRequest",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/results/step-up/request",
+        "description": "operationId=ordersResultsStepUpRequest; Solicitar OTP step-up resultados. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersResultsStepUpVerify",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/results/step-up/verify",
+        "description": "operationId=ordersResultsStepUpVerify; Verificar OTP step-up resultados → grant. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challenge_id\": \"{{vault:challenge_id}}\",\n  \"code\": \"{{vault:code}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersResultsSecureLink",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/results/secure-link",
+        "description": "operationId=ordersResultsSecureLink; Emitir secure link de resultados. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"grant_id\": \"{{vault:grant_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersInvoices",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/invoices",
+        "description": "operationId=ordersInvoices; Facturas del pedido. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersInvoiceDownload",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Step-Up-Grant",
+            "value": "{{vault:x_step_up_grant}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/invoices/{{vault:invoice_id}}/download",
+        "description": "operationId=ordersInvoiceDownload; Descargar PDF factura (Bearer). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersInvoiceStepUpRequest",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/invoices/{{vault:invoice_id}}/step-up/request",
+        "description": "operationId=ordersInvoiceStepUpRequest; Solicitar OTP step-up factura. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersInvoiceStepUpVerify",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/invoices/{{vault:invoice_id}}/step-up/verify",
+        "description": "operationId=ordersInvoiceStepUpVerify; Verificar OTP step-up factura → grant. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challenge_id\": \"{{vault:challenge_id}}\",\n  \"code\": \"{{vault:code}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersInvoiceSecureLink",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/invoices/{{vault:invoice_id}}/secure-link",
+        "description": "operationId=ordersInvoiceSecureLink; Emitir secure link de factura. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"grant_id\": \"{{vault:grant_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersInvoiceRequestStatus",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/invoice-request/status",
+        "description": "operationId=ordersInvoiceRequestStatus; Estado de solicitud de factura. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordersInvoiceRequestStore",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{vault:idempotency_key}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/orders/{{vault:order_id}}/invoice-request",
+        "description": "operationId=ordersInvoiceRequestStore; Solicitar factura. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tax_profile_id\": \"{{vault:tax_profile_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userFamily",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/user/family",
+        "description": "operationId=userFamily; Cuentas familiares. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userPaymentMethods",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/user/payment-methods",
+        "description": "operationId=userPaymentMethods; Métodos de pago (sin datos sensibles). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userTaxProfilesIndex",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/user/tax-profiles",
+        "description": "operationId=userTaxProfilesIndex; Listar perfiles fiscales. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userTaxProfilesStore",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/user/tax-profiles",
+        "description": "operationId=userTaxProfilesStore; Crear perfil fiscal. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rfc\": \"{{vault:rfc}}\",\n  \"business_name\": \"{{vault:business_name}}\",\n  \"tax_regime\": \"{{vault:tax_regime}}\",\n  \"postal_code\": \"{{vault:postal_code}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userTaxProfilesUpdate",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/user/tax-profiles/{{vault:tax_profile_id}}",
+        "description": "operationId=userTaxProfilesUpdate; Actualizar perfil fiscal. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rfc\": \"{{vault:rfc}}\",\n  \"business_name\": \"{{vault:business_name}}\",\n  \"tax_regime\": \"{{vault:tax_regime}}\",\n  \"postal_code\": \"{{vault:postal_code}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userTaxProfilesDestroy",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/user/tax-profiles/{{vault:tax_profile_id}}",
+        "description": "operationId=userTaxProfilesDestroy; Eliminar perfil fiscal. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userAddressesIndex",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/user/addresses",
+        "description": "operationId=userAddressesIndex; Listar direcciones. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userAddressesStore",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/user/addresses",
+        "description": "operationId=userAddressesStore; Crear dirección. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"street\": \"{{vault:street}}\",\n  \"number\": \"{{vault:number}}\",\n  \"neighborhood\": \"{{vault:neighborhood}}\",\n  \"state\": \"{{vault:state}}\",\n  \"city\": \"{{vault:city}}\",\n  \"zipcode\": \"{{vault:zipcode}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userAddressesUpdate",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/user/addresses/{{vault:address_id}}",
+        "description": "operationId=userAddressesUpdate; Actualizar dirección. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"street\": \"{{vault:street}}\",\n  \"number\": \"{{vault:number}}\",\n  \"neighborhood\": \"{{vault:neighborhood}}\",\n  \"state\": \"{{vault:state}}\",\n  \"city\": \"{{vault:city}}\",\n  \"zipcode\": \"{{vault:zipcode}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userAddressesDestroy",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/user/addresses/{{vault:address_id}}",
+        "description": "operationId=userAddressesDestroy; Eliminar dirección. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userContactsIndex",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/user/contacts",
+        "description": "operationId=userContactsIndex; Listar contactos. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userContactsStore",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/user/contacts",
+        "description": "operationId=userContactsStore; Crear contacto. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{vault:name}}\",\n  \"paternal_lastname\": \"{{vault:paternal_lastname}}\",\n  \"maternal_lastname\": \"{{vault:maternal_lastname}}\",\n  \"phone\": \"{{vault:phone}}\",\n  \"phone_country\": \"{{vault:phone_country}}\",\n  \"birth_date\": \"{{vault:birth_date}}\",\n  \"gender\": \"{{vault:gender}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userContactsUpdate",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/user/contacts/{{vault:contact_id}}",
+        "description": "operationId=userContactsUpdate; Actualizar contacto. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{vault:name}}\",\n  \"paternal_lastname\": \"{{vault:paternal_lastname}}\",\n  \"maternal_lastname\": \"{{vault:maternal_lastname}}\",\n  \"phone\": \"{{vault:phone}}\",\n  \"phone_country\": \"{{vault:phone_country}}\",\n  \"birth_date\": \"{{vault:birth_date}}\",\n  \"gender\": \"{{vault:gender}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "userContactsDestroy",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vault:user_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Consumer-Credential",
+            "value": "{{vault:machine_pat}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:x_correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{base_url}}/user/contacts/{{vault:contact_id}}",
+        "description": "operationId=userContactsDestroy; Eliminar contacto. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "firstPartyMedicalPurchaseReview",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "text/html"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/medical-attention/benefit-checkout?cart_ref={{vault:cart_ref}}&application_ref={{vault:application_ref}}",
+        "description": "operationId=firstPartyMedicalPurchaseReview; Revisar compra: no reserva ni cobra. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "firstPartyMedicalPurchaseConfirm",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{vault:first_party_csrf}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/medical-attention/benefit-checkout/confirm",
+        "description": "operationId=firstPartyMedicalPurchaseConfirm; Autorizar expresamente e iniciar saga con clave persistida. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "_token",
+              "value": "{{vault:first_party_csrf}}",
+              "type": "text"
+            },
+            {
+              "key": "checkout_ref",
+              "value": "{{vault:checkout_ref}}",
+              "type": "text"
+            },
+            {
+              "key": "authorize_payment",
+              "value": "yes",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "firstPartyMedicalPurchaseStatus",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/medical-attention/benefit-checkout/{{vault:checkout_ref}}",
+        "description": "operationId=firstPartyMedicalPurchaseStatus; Consultar estado sin efectos externos. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "firstPartyMedicalPurchaseAction-recover",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{vault:first_party_csrf}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/medical-attention/benefit-checkout/{{vault:checkout_ref}}/recover",
+        "description": "operationId=firstPartyMedicalPurchaseAction; Recuperar/capturar PayPal aprobado/cancelar no despachado/revertir verificado. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "_token",
+              "value": "{{vault:first_party_csrf}}",
+              "type": "text"
+            },
+            {
+              "key": "authorize_payment",
+              "value": "yes",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "firstPartyMedicalPurchaseAction-capture",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{vault:first_party_csrf}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/medical-attention/benefit-checkout/{{vault:checkout_ref}}/capture",
+        "description": "operationId=firstPartyMedicalPurchaseAction; Recuperar/capturar PayPal aprobado/cancelar no despachado/revertir verificado. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "_token",
+              "value": "{{vault:first_party_csrf}}",
+              "type": "text"
+            },
+            {
+              "key": "authorize_payment",
+              "value": "yes",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "firstPartyMedicalPurchaseAction-cancel",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{vault:first_party_csrf}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/medical-attention/benefit-checkout/{{vault:checkout_ref}}/cancel",
+        "description": "operationId=firstPartyMedicalPurchaseAction; Recuperar/capturar PayPal aprobado/cancelar no despachado/revertir verificado. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "_token",
+              "value": "{{vault:first_party_csrf}}",
+              "type": "text"
+            },
+            {
+              "key": "authorize_payment",
+              "value": "yes",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "firstPartyMedicalPurchaseAction-reverse",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{vault:first_party_csrf}}",
+            "disabled": true
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "{{vault:correlation_id}}",
+            "disabled": true
+          }
+        ],
+        "url": "{{first_party_base_url}}/medical-attention/benefit-checkout/{{vault:checkout_ref}}/reverse",
+        "description": "operationId=firstPartyMedicalPurchaseAction; Recuperar/capturar PayPal aprobado/cancelar no despachado/revertir verificado. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "_token",
+              "value": "{{vault:first_party_csrf}}",
+              "type": "text"
+            },
+            {
+              "key": "authorize_payment",
+              "value": "yes",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -18,7 +18,16 @@ final class SyntheticConsumerRegistryFixture
 
     public static function issue(User $user, string $kind = 'native', ?array $caps = null): array
     {
-        if (! app()->environment('testing') || !((config('database.default')==='sqlite' && config('database.connections.sqlite.database') === ':memory:') || (config('benefits.synthetic_mysql')===true && config('database.connections.mysql.database')==='benefits_synthetic_testing' && config('database.connections.mysql.unix_socket')==='/phase-socket/mysql.sock'))) {
+        $safeSqlite = config('database.default') === 'sqlite'
+            && config('database.connections.sqlite.database') === ':memory:';
+        $safeLegacyMysql = config('benefits.synthetic_mysql') === true
+            && config('database.connections.mysql.database') === 'benefits_synthetic_testing'
+            && config('database.connections.mysql.unix_socket') === '/phase-socket/mysql.sock';
+        $safeRc2Mysql = config('database.default') === 'mysql'
+            && config('database.connections.mysql.database') === 'famedic_rc2_local_20261110_testing'
+            && config('database.connections.mysql.host') === 'rc2-local-mysql-20261110';
+
+        if (! app()->environment('testing') || ! ($safeSqlite || $safeLegacyMysql || $safeRc2Mysql)) {
             throw new \LogicException('Unsafe fixture environment');
         }
         $defaultCaps=$caps===null;

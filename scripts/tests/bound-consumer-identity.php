@@ -1,6 +1,6 @@
 <?php
 $root = dirname(__DIR__, 2);
-$vendor = '/home/developer/projects/famedic/vendor';
+$vendor = getenv('COMPOSER_VENDOR_DIR') ?: $root.'/vendor';
 // Domain-only test: no Laravel boot, no environment, database or external I/O.
 $loader = require $vendor.'/autoload.php';
 $loader->setPsr4('App\\', [$root.'/app']);
@@ -36,7 +36,7 @@ checkCase('REPOSITORY_FAILURE_REJECTS',function()use($proof){[$r,$u,$t]=fixture(
 checkCase('TOKEN_OWNER_MISMATCH_REJECTS',function()use($proof){[$r,$u,$t]=fixture(context(),$proof);$t->tokenable_id=99;expectSame('rejected',$r->resolve(Request::create('/'),$u,$t)->status);});
 checkCase('WILDCARD_CANNOT_GRANT_PAYMENT',function()use($proof){[$r,$u,$t]=fixture(context(),$proof);$t->abilities=['*',PaymentLinkAccessPolicy::CAPABILITY];expectSame('CONSUMER_NOT_AUTHORIZED',(new PaymentLinkAccessPolicy)->denial($u,$t,$r->resolve(Request::create('/'),$u,$t),time()));});
 checkCase('TOKEN_NAME_CANNOT_GRANT_IDENTITY',function(){[$r,$u,$t]=fixture(context(),null);$t->name='native';expectSame('rejected',$r->resolve(Request::create('/'),$u,$t)->status);});
-checkCase('DORMANT_ADAPTER_NOT_REGISTERED',function()use($root){$s=file_get_contents($root.'/app/Providers/AppServiceProvider.php');expectSame(false,str_contains($s,'BoundConsumerIdentityResolver'));expectSame(true,str_contains($s,'UnavailableConsumerIdentityResolver'));});
+checkCase('BOUND_ADAPTER_REGISTERED_FAIL_CLOSED_BY_POLICY',function()use($root){$s=file_get_contents($root.'/app/Providers/AppServiceProvider.php');expectSame(true,str_contains($s,'BoundConsumerIdentityResolver'));expectSame(false,str_contains($s,'UnavailableConsumerIdentityResolver'));});
 
 checkCase('LEO_MEMBERSHIP_CAPABILITY_REQUIRES_THREE_LITERAL_GRANTS',function()use($proof){$cap='memberships:read';[$r,$u,$t]=fixture(context('leo',['consumerCapabilities'=>[$cap],'delegationCapabilities'=>[$cap]]),$proof);$t->abilities=[$cap];$i=$r->resolve(Request::create('/'),$u,$t);expectSame(null,(new \App\Services\Api\V1\Auth\ConsumerCapabilityPolicy)->denial($u,$t,$i,$cap,time()));$t->abilities=['*'];expectSame('CONSUMER_NOT_AUTHORIZED',(new \App\Services\Api\V1\Auth\ConsumerCapabilityPolicy)->denial($u,$t,$i,$cap,time()));});
 foreach(['payments:create','legacy-benefits:apply',PaymentLinkAccessPolicy::CAPABILITY] as $cap){checkCase('LEO_FORBIDDEN_OPERATION_'.$cap,function()use($proof,$cap){[$r,$u,$t]=fixture(context('leo',['consumerCapabilities'=>[$cap],'delegationCapabilities'=>[$cap]]),$proof);$t->abilities=[$cap];expectSame('CONSUMER_NOT_AUTHORIZED',(new \App\Services\Api\V1\Auth\ConsumerCapabilityPolicy)->denial($u,$t,$r->resolve(Request::create('/'),$u,$t),$cap,time()));});}

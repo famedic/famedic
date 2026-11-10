@@ -42,6 +42,13 @@ final class AkubicaMedicalCheckoutPrepareRc1IsolatedTest extends TestCase
     }
 
     #[Test]
+    public function opaque_leo_continuity_remains_disabled_until_certification(): void
+    {
+        $this->assertFalse(config('akubica_connectors.continuity.enabled'));
+        $this->assertFalse(config('akubica_connectors.continuity.certified'));
+    }
+
+    #[Test]
     public function medical_checkout_does_not_create_payments_or_payment_links(): void
     {
         [$user, $token] = akubicaCustomerToken();

@@ -1,0 +1,16 @@
+{
+  "name": "FAMEDIC RC2 OFFLINE SYNTHETIC",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "https://rc11.invalid/api/v1",
+      "enabled": true
+    },
+    {
+      "key": "first_party_base_url",
+      "value": "https://rc11.invalid",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}
