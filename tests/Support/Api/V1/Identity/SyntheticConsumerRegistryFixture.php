@@ -16,6 +16,12 @@ final class SyntheticConsumerRegistryFixture
 
     private static array $actors = [];
 
+    public static function reset(): void
+    {
+        self::$transport = [];
+        self::$actors = [];
+    }
+
     public static function issue(User $user, string $kind = 'native', ?array $caps = null): array
     {
         $safeSqlite = config('database.default') === 'sqlite'

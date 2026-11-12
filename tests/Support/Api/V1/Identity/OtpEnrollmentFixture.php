@@ -14,6 +14,11 @@ final class OtpEnrollmentFixture
 {
     private static ?array $actor = null;
 
+    public static function reset(): void
+    {
+        self::$actor = null;
+    }
+
     public static function existing(User $user, string $kind = 'leo'): void
     {
         self::$actor = SyntheticConsumerRegistryFixture::issue($user, $kind, ['memberships:read', 'cart:read']);

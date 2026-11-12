@@ -2,12 +2,15 @@
 
 namespace Tests\Feature\Api\V1;
 
+require_once __DIR__.'/../../../Support/Otp/akubica_otp_testing_helpers.php';
+require_once __DIR__.'/../../../Support/Api/V1/rc2_feature_test_helpers.php';
+
 use App\Enums\MedicalSubscriptionType;
 use App\Models\AccountContext;
 use App\Models\MedicalAttentionSubscription;
 use App\Models\OtpChallenge;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use Tests\Support\Database\Rc2IsolatedDatabase;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
@@ -19,13 +22,20 @@ use Tests\TestCase;
  */
 final class AkubicaMembershipsM1IsolatedTest extends TestCase
 {
+    use Rc2IsolatedDatabase;
     private string $runId;
     private string $clientIp;
+    private ?string $previousRegisteredFixtures;
 
     protected function setUp(): void
     {
-        RefreshDatabaseState::$migrated = true;
         parent::setUp();
+        $this->resetRc2IsolatedState();
+        $previous = getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES');
+        $this->previousRegisteredFixtures = $previous === false ? null : $previous;
+        putenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES=1');
+        config()->set('services.activecampaign.endpoint', 'https://activecampaign.invalid');
+        config()->set('services.activecampaign.token', 'synthetic-test-token');
         Carbon::setTestNow(Carbon::parse('2026-10-21 12:00:00'));
         $this->runId = (string) random_int(10000000, 99999999);
         $this->clientIp = '10.'.random_int(1, 254).'.'.random_int(1, 254).'.'.random_int(1, 254);
@@ -38,12 +48,12 @@ final class AkubicaMembershipsM1IsolatedTest extends TestCase
     {
         Carbon::setTestNow();
         disableAllAkubicaOtpFeatures();
+        if ($this->previousRegisteredFixtures === null) {
+            putenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES');
+        } else {
+            putenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES='.$this->previousRegisteredFixtures);
+        }
         parent::tearDown();
-    }
-
-    protected function connectionsToTransact(): array
-    {
-        return [];
     }
 
     #[Test]
@@ -116,6 +126,8 @@ final class AkubicaMembershipsM1IsolatedTest extends TestCase
             'phone' => $this->phone('80'), 'phone_country' => 'MX',
             'phone_verified_at' => now(), 'name' => 'Ada Lovelace',
         ]);
+        \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::existing($user);
+        $this->withHeaders(\Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::headers());
         $payload = [
             'phone' => $this->phone('80'), 'conversation_id' => 'm1-otp-conversation-'.$this->runId,
             'channel_event_id' => 'm1-otp-event-'.$this->runId, 'channel' => 'whatsapp',
@@ -150,10 +162,12 @@ final class AkubicaMembershipsM1IsolatedTest extends TestCase
     #[Test]
     public function it_blocks_private_membership_data_before_otp_and_does_not_enumerate(): void
     {
-        User::factory()->withRegularCustomer()->create([
+        $knownUser = User::factory()->withRegularCustomer()->create([
             'phone' => $this->phone('81'), 'phone_country' => 'MX',
             'phone_verified_at' => now(), 'name' => 'Ada Lovelace',
         ]);
+        \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::existing($knownUser);
+        $this->withHeaders(\Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::headers());
 
         $unknown = $this->otpPost('/api/v1/auth/login/request-code', [
             'phone' => $this->phone('90'), 'conversation_id' => 'm1-private-unknown-'.$this->runId,

@@ -2,13 +2,16 @@
 
 namespace Tests\Feature\Api\V1;
 
+require_once __DIR__.'/../../../Support/Otp/akubica_otp_testing_helpers.php';
+require_once __DIR__.'/../../../Support/Api/V1/rc2_feature_test_helpers.php';
+
 use App\Models\AccountContext;
 use App\Models\Api\V1\ApiV1AuditEvent;
 use App\Services\Api\V1\Audit\AuditEventDefinitions;
 use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
-use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use Tests\Support\Database\Rc2IsolatedDatabase;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\Atix\AtixSandboxRequestBuilder;
@@ -16,14 +19,15 @@ use Tests\TestCase;
 
 final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
 {
+    use Rc2IsolatedDatabase;
     private string $runId;
 
     private string $clientIp;
 
     protected function setUp(): void
     {
-        RefreshDatabaseState::$migrated = true;
         parent::setUp();
+        $this->resetRc2IsolatedState();
 
         $this->runId = strtolower(substr(preg_replace('/[^a-z0-9]/i', '', uniqid('', true)), 0, 10));
         $this->clientIp = '10.'.random_int(1, 254).'.'.random_int(1, 254).'.'.random_int(1, 254);
@@ -42,11 +46,6 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
         Carbon::setTestNow();
         disableAllAkubicaOtpFeatures();
         parent::tearDown();
-    }
-
-    protected function connectionsToTransact(): array
-    {
-        return [];
     }
 
     #[Test]
@@ -115,8 +114,15 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'none');
 
-        $otherToken = akubicaCustomerToken($other)[1];
-        $this->getJson('/api/v1/memberships/status', authHeaders($otherToken))
+        $otherActor = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue(
+            $other,
+            'leo',
+            ['memberships:read', 'cart:read'],
+        );
+        $otherToken = $otherActor['token']->plainTextToken;
+        $this->getJson('/api/v1/memberships/status', [
+            'Authorization' => 'Bearer '.$otherToken,
+        ] + \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::headers($otherToken))
             ->assertOk();
 
         $this->assertNotSame(
@@ -146,10 +152,14 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
         $challengeId = $this->startContextualOtp($user);
         Carbon::setTestNow(now()->addMinutes(6));
 
-        $this->verifyPost([
+        $response = $this->verifyPost([
             'challenge_id' => $challengeId,
             'code' => '123456',
-        ])->assertStatus(422);
+        ]);
+        $response->assertStatus(config('akubica_connectors.otp_enrollment.enabled') === true ? 403 : 422);
+        if (config('akubica_connectors.otp_enrollment.enabled') === true) {
+            $response->assertJsonPath('error.code', 'OTP_BACKEND_CONTEXT_INVALID');
+        }
     }
 
     #[Test]
@@ -272,6 +282,8 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
 
     private function startContextualOtp(User $user): string
     {
+        \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::existing($user);
+        $this->withHeaders(\Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::headers());
         $conversationId = 'conv-'.$this->runId;
         $eventId = 'event-'.$this->runId;
         $atixPayload = [
@@ -310,6 +322,13 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
 
     private function requestCodePost(array $payload)
     {
+        if (isset($payload['phone'])) {
+            $user = User::query()->where('phone', $payload['phone'])->first();
+            if ($user !== null) {
+                \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::existing($user);
+                $this->withHeaders(\Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::headers());
+            }
+        }
         return $this->withServerVariables(['REMOTE_ADDR' => $this->clientIp])
             ->postJson('/api/v1/auth/login/request-code', $payload);
     }

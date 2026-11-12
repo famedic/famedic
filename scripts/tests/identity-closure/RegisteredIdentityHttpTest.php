@@ -1,6 +1,8 @@
 <?php
 
 namespace Famedic\IdentityClosure;
+require_once __DIR__.'/../../../tests/Support/Otp/akubica_otp_testing_helpers.php';
+require_once __DIR__.'/../../../tests/Support/Api/V1/rc2_identity_test_helpers.php';
 
 use App\Contracts\Api\V1\Auth\BackendCredentialSource;
 use App\Enums\Gender;
@@ -20,6 +22,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
+use Tests\Support\Database\Rc2IsolatedDatabase;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\Api\V1\Identity\LocalMachineCredentialSource;
@@ -31,9 +34,11 @@ use Tests\TestCase;
  */
 final class RegisteredIdentityHttpTest extends TestCase
 {
+    use Rc2IsolatedDatabase;
     protected function setUp(): void
     {
         parent::setUp();
+        $this->resetRc2IsolatedState();
         Bus::fake();
         Queue::fake();
         Notification::fake();
