@@ -42,4 +42,39 @@ final class ConsumerLifecycle
         }
         DB::table('api_consumer_otp_issuers')->updateOrInsert(['channel_id' => $current->id], ['consumer_id' => $current->consumer_id, 'operator_id' => $issuer->id, 'enabled' => true, 'approval_ref' => $approvalRef, 'expires_at' => $expiresAt, 'created_at' => now(), 'updated_at' => now()]);
     }
+
+    public function revokeOtp(User $administrator, ApiConsumerChannel $channel, string $approvalRef): void
+    {
+        Gate::forUser($administrator)->authorize('manageApiConsumerRegistry');
+        if (! preg_match('/\A[A-Za-z0-9_-]{8,128}\z/D', $approvalRef)) {
+            throw new \DomainException('Invalid OTP issuer revocation');
+        }
+
+        DB::transaction(function () use ($administrator, $channel, $approvalRef): void {
+            $current = ApiConsumerChannel::query()->lockForUpdate()->findOrFail($channel->id);
+            $issuer = DB::table('api_consumer_otp_issuers')
+                ->where('channel_id', $current->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $issuer) {
+                return;
+            }
+            if ((int) $issuer->consumer_id !== (int) $current->consumer_id) {
+                throw new \DomainException('OTP issuer consumer mismatch');
+            }
+
+            DB::table('api_consumer_otp_issuers')
+                ->where('id', $issuer->id)
+                ->update(['enabled' => false, 'updated_at' => now()]);
+            DB::table('api_consumer_lifecycle_events')->insert([
+                'operator_id' => $administrator->id,
+                'record_type' => 'otp_issuer',
+                'record_id' => $issuer->id,
+                'action' => 'revoke',
+                'approval_ref' => $approvalRef,
+                'created_at' => now(),
+            ]);
+        });
+    }
 }

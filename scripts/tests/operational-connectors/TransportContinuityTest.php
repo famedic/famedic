@@ -2,6 +2,8 @@
 
 namespace Famedic\OperationalConnectors;
 
+require_once __DIR__.'/../../../tests/Support/Otp/akubica_otp_testing_helpers.php';
+
 use App\Contracts\Api\V1\Auth\BackendClientAuthenticator;
 use App\Contracts\Api\V1\Auth\BackendCredentialSource;
 use App\Models\ApiConsumerTokenBinding;
@@ -14,6 +16,7 @@ use App\Services\Api\V1\Auth\RegistryOtpEnrollmentOperator;
 use App\Services\Api\V1\Auth\TlsMachinePatCredentialSource;
 use App\Services\Api\V1\Benefits\BenefitApprovals;
 use Illuminate\Http\Request;
+use Tests\Support\Database\Rc2IsolatedDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -47,9 +50,11 @@ final class ConnectorApprovals implements BenefitApprovals
 }
 final class TransportContinuityTest extends TestCase
 {
+    use Rc2IsolatedDatabase;
     protected function setUp(): void
     {
         parent::setUp();
+        $this->resetRc2IsolatedState();
         Bus::fake();
         Queue::fake();
         Notification::fake();
@@ -65,7 +70,13 @@ final class TransportContinuityTest extends TestCase
 
     private function actor(): array
     {
-        return Fixture::issue(User::factory()->withRegularCustomer()->create(), 'leo', ['memberships:read', 'cart:read', 'checkout:prepare', 'benefits:read', 'benefits:apply', 'benefits:remove']);
+        $actor = Fixture::issue(User::factory()->withRegularCustomer()->create(), 'leo', ['memberships:read', 'cart:read', 'checkout:prepare', 'benefits:read', 'benefits:apply', 'benefits:remove']);
+        \Illuminate\Support\Facades\Gate::define('manageBenefitConsentText', fn (User $operator) => (int) $operator->id === (int) $actor['issuer']->id);
+        $registry = app(\App\Services\Api\V1\Benefits\ConsentTextRegistry::class);
+        $registry->register($actor['issuer'], 'synthetic-connectors-v1', 'SYNTHETIC CONSENT: confirm this benefit and these totals; no payment.', 'synthetic-connectors-approval');
+        $registry->activate($actor['issuer'], 'synthetic-connectors-v1', true);
+
+        return $actor;
     }
 
     private function headers(array $a): array
@@ -80,6 +91,7 @@ final class TransportContinuityTest extends TestCase
         $source = new TlsMachinePatCredentialSource;
         $r = Request::create('https://local.invalid/api/v1/cart');
         $r->headers->set('X-Consumer-Credential', $a['machine']->plainTextToken);
+        config()->set('akubica_connectors.transport', ['enabled' => false, 'certified' => false]);
         $this->assertNull($source->credentialFor($r));
         $this->enabled();
         $this->assertSame($a['machine']->plainTextToken, $source->credentialFor($r));
@@ -153,6 +165,51 @@ final class TransportContinuityTest extends TestCase
         } catch (\Illuminate\Auth\Access\AuthorizationException) {
             $this->assertSame($n, \Laravel\Sanctum\PersonalAccessToken::count());
         }
+    }
+
+    #[Test]
+    public function otp_issuer_revocation_is_authorized_bound_idempotent_and_expiry_safe(): void
+    {
+        $a = $this->actor();
+        $lifecycle = app(ConsumerLifecycle::class);
+        $lifecycle->authorizeOtp($a['issuer'], $a['channel'], $a['issuer'], 'synthetic-otp-revoke', now()->addMinutes(20));
+
+        $lifecycle->revokeOtp($a['issuer'], $a['channel'], 'synthetic-otp-revoke-1');
+        $row = DB::table('api_consumer_otp_issuers')->where('channel_id', $a['channel']->id)->first();
+        $this->assertNotNull($row);
+        $this->assertFalse((bool) $row->enabled);
+        $this->assertSame(1, DB::table('api_consumer_lifecycle_events')->where('record_type', 'otp_issuer')->count());
+
+        $lifecycle->revokeOtp($a['issuer'], $a['channel'], 'synthetic-otp-revoke-2');
+        $this->assertFalse((bool) DB::table('api_consumer_otp_issuers')->where('channel_id', $a['channel']->id)->value('enabled'));
+        $this->assertSame(2, DB::table('api_consumer_lifecycle_events')->where('record_type', 'otp_issuer')->count());
+
+        $unauthorized = User::factory()->create();
+        $this->expectException(\Illuminate\Auth\Access\AuthorizationException::class);
+        $lifecycle->revokeOtp($unauthorized, $a['channel'], 'synthetic-otp-revoke-3');
+    }
+
+    #[Test]
+    public function otp_issuer_revoke_rejects_cross_consumer_rows_and_expired_authority(): void
+    {
+        $a = Fixture::issue(User::factory()->withRegularCustomer()->create(), 'leo', ['memberships:read']);
+        $b = Fixture::issue(User::factory()->withRegularCustomer()->create(), 'leo', ['memberships:read']);
+        \Illuminate\Support\Facades\Gate::define('manageApiConsumerRegistry', fn (User $operator) => in_array((int) $operator->id, [(int) $a['issuer']->id, (int) $b['issuer']->id], true));
+        config()->set('akubica_connectors.otp_enrollment', ['enabled' => true, 'certified' => true]);
+        app(ConsumerLifecycle::class)->authorizeOtp($a['issuer'], $a['channel'], $a['issuer'], 'synthetic-otp-expiry', now()->addMinutes(1));
+        DB::table('api_consumer_otp_issuers')->where('channel_id', $a['channel']->id)->update(['expires_at' => now()->subMinute()]);
+        $this->assertNull((new RegistryOtpEnrollmentOperator)->operatorFor(
+            new \App\Services\Api\V1\Auth\AuthenticatedBackendClient(
+                (string) $a['consumer']->id,
+                (string) $a['channel']->id,
+                now()->addMinutes(20)->timestamp,
+            ),
+            $a['user'],
+        ));
+
+        DB::table('api_consumer_otp_issuers')->where('channel_id', $a['channel']->id)->update(['consumer_id' => $b['consumer']->id, 'enabled' => true]);
+        $this->expectException(\DomainException::class);
+        app(ConsumerLifecycle::class)->revokeOtp($a['issuer'], $a['channel'], 'synthetic-otp-cross');
     }
 
     #[Test]
