@@ -248,6 +248,9 @@ foreach (Route::getRoutes() as $nativeRoute) {
     if (! str_starts_with($nativeRoute->uri(), 'api/v1/') || array_key_exists($nativeRoute->getName(), \App\Http\Middleware\Api\V1\AuthorizeRegisteredConsumer::ROUTES)) {
         continue;
     }
+    if ($nativeRoute->getName() === 'api.v1.auth.token.revoke') {
+        continue;
+    }
     $action = $nativeRoute->getAction();
     $list = $action['middleware'] ?? [];
     if (! in_array('auth:sanctum', $list, true) || in_array('api.payment-link.pat', $list, true) || str_contains($nativeRoute->uri(), 'integrations/atix/')) {
