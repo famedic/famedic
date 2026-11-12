@@ -203,6 +203,18 @@ class AppServiceProvider extends ServiceProvider
             return (bool) $user->administrator?->hasRole('superadmin');
         });
 
+        Gate::define('manageApiConsumerRegistry', function ($user): bool {
+            if (! $user instanceof \App\Models\User || ! $user->administrator) {
+                return false;
+            }
+
+            try {
+                return $user->administrator->hasPermissionTo('api-consumers.manage');
+            } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist) {
+                return false;
+            }
+        });
+
         Gate::define('access-laboratory-billing', function ($user): bool {
             return app(\App\Services\LaboratoryBilling\LaboratoryBillingAccess::class)->allows($user);
         });

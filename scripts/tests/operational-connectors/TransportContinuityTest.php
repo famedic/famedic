@@ -194,7 +194,6 @@ final class TransportContinuityTest extends TestCase
     {
         $a = Fixture::issue(User::factory()->withRegularCustomer()->create(), 'leo', ['memberships:read']);
         $b = Fixture::issue(User::factory()->withRegularCustomer()->create(), 'leo', ['memberships:read']);
-        \Illuminate\Support\Facades\Gate::define('manageApiConsumerRegistry', fn (User $operator) => in_array((int) $operator->id, [(int) $a['issuer']->id, (int) $b['issuer']->id], true));
         config()->set('akubica_connectors.otp_enrollment', ['enabled' => true, 'certified' => true]);
         app(ConsumerLifecycle::class)->authorizeOtp($a['issuer'], $a['channel'], $a['issuer'], 'synthetic-otp-expiry', now()->addMinutes(1));
         DB::table('api_consumer_otp_issuers')->where('channel_id', $a['channel']->id)->update(['expires_at' => now()->subMinute()]);
@@ -277,7 +276,6 @@ final class TransportContinuityTest extends TestCase
         $bh = ['X-Consumer-Credential' => $b['machine']->plainTextToken];
         $this->postJson('https://local.invalid/api/v1/auth/login/verify-code', ['challenge_id' => $start['challenge_id'], 'code' => '000000'], $bh)->assertForbidden()->assertJsonPath('error.code', 'OTP_BACKEND_CONTEXT_INVALID');
         $this->postJson('https://local.invalid/api/v1/auth/login/resend-code', ['challenge_id' => $start['challenge_id']], $bh)->assertForbidden();
-        \Illuminate\Support\Facades\Gate::define('manageApiConsumerRegistry', fn (User $u) => (int) $u->id === (int) $a['issuer']->id);
         $this->postJson('https://local.invalid/api/v1/auth/login/verify-code', ['challenge_id' => $start['challenge_id'], 'code' => '000000'], $h)->assertOk();
     }
 

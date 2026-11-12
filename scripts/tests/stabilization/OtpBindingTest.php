@@ -135,7 +135,6 @@ final class OtpBindingTest extends TestCase
     {
         $u = $this->user();
         $this->client($u);
-        Gate::define('manageApiConsumerRegistry', fn () => false);
         $before = PersonalAccessToken::count();
         $this->denied(fn () => app(IssueAkubicaTokenAction::class)($u));
         $this->assertSame($before, PersonalAccessToken::count());

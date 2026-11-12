@@ -5,10 +5,11 @@ namespace Tests\Support\Api\V1\Identity;
 use App\Models\ApiConsumer;
 use App\Models\ApiConsumerChannel;
 use App\Models\ApiConsumerDelegation;
+use App\Models\Administrator;
+use App\Models\Permission;
 use App\Models\User;
 use App\Services\Api\V1\Auth\ConsumerTokenBindingWriter;
 use App\Services\Api\V1\Auth\PaymentLinkAccessPolicy;
-use Illuminate\Support\Facades\Gate;
 
 final class SyntheticConsumerRegistryFixture
 {
@@ -40,7 +41,8 @@ final class SyntheticConsumerRegistryFixture
         $caps ??= [PaymentLinkAccessPolicy::CAPABILITY, 'cart:read', 'memberships:read', 'cart:membership:write', 'checkout:prepare', 'legacy-benefits:read', 'legacy-benefits:write'];
         if($defaultCaps && $kind==='native')$caps=array_merge($caps,['cart:write','payments:draft']);
         $issuer = User::factory()->create();
-        Gate::define('manageApiConsumerRegistry', fn (User $operator) => $operator->id === $issuer->id);
+        $administrator = Administrator::create(['user_id' => $issuer->id]);
+        $administrator->givePermissionTo(Permission::firstOrCreate(['name' => 'api-consumers.manage', 'guard_name' => 'web']));
         $consumer = ApiConsumer::forceCreate(['kind' => $kind, 'capabilities' => $caps, 'enabled' => true, 'expires_at' => now()->addHour()]);
         $channel = ApiConsumerChannel::forceCreate(['consumer_id' => $consumer->id, 'enabled' => true, 'expires_at' => now()->addHour()]);
         $issued = app(\App\Services\Api\V1\Auth\ConsumerMachineCredentialIssuer::class)->issue($issuer, $channel, now()->addMinutes(40));

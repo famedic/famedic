@@ -10,8 +10,8 @@ return [
     'consent' => ['enabled' => false, 'certified' => false, 'text_version' => null],
     'providers' => ['paypal' => ['certified' => false], 'efevoopay' => ['certified' => false], 'odessa' => ['certified' => false]],
     'paypal_merchant_id' => null,
-    'transport' => ['enabled' => true, 'certified' => true],
-    'otp_enrollment' => ['enabled' => true, 'certified' => true],
+    'transport' => ['enabled' => false, 'certified' => false],
+    'otp_enrollment' => ['enabled' => false, 'certified' => false],
     'continuity' => ['enabled' => false, 'certified' => false],
     'financial' => ['enabled' => false, 'certified' => false, 'legacy_writers_coordinated' => false],
 ];
