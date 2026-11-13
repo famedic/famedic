@@ -29,6 +29,10 @@ Route::get('/checkout/continue/{token}', AkubicaCheckoutLinkController::class)
     ->middleware('throttle:30,1')
     ->name('akubica.checkout.continue');
 
+Route::get('/checkout/continue', AkubicaCheckoutLinkController::class)
+    ->middleware('throttle:30,1')
+    ->name('akubica.checkout.continue.resume');
+
 #Route::get('/terms-of-service', TermsOfServiceController::class)->name('terms-of-service');
 #Route::get('/privacy-policy', PrivacyPolicyController::class)->name('privacy-policy');
 Route::get('/documentation-accept', [DocumentationAcceptController::class, 'index'])->name('documentation.accept');

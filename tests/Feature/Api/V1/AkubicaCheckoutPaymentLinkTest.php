@@ -292,6 +292,12 @@ test('GET checkout continuation accepts only its purpose and claims the token on
     ]);
 
     $this->get("/checkout/continue/{$plainToken}")
+        ->assertRedirect(route('login'));
+
+    expect(session('akubica.checkout.continue_token'))->toBe($plainToken);
+
+    $this->actingAs($user)
+        ->get('/checkout/continue')
         ->assertRedirect(route('laboratory.checkout', [
             'laboratory_brand' => LaboratoryBrand::OLAB->value,
             'step' => 'confirmation',
@@ -304,6 +310,24 @@ test('GET checkout continuation accepts only its purpose and claims the token on
         ->assertSessionHas('error', 'La liga de checkout ya fue utilizada.');
 
     expect(AkubicaCheckoutLink::query()->first()->used_at)->not->toBeNull();
+});
+
+test('GET checkout continuation rejects a different authenticated user without claiming', function () {
+    [$owner] = akubicaCustomerToken();
+    [$other] = akubicaCustomerToken();
+    setupReadyCheckout($owner);
+
+    $plainToken = Str::random(64);
+    createAkubicaCheckoutLink($owner, $plainToken, LaboratoryBrand::OLAB, null, [
+        'purpose' => 'akubica_continuity',
+    ]);
+
+    $this->actingAs($other)
+        ->get("/checkout/continue/{$plainToken}")
+        ->assertRedirect(route('login'))
+        ->assertSessionHas('error', 'La liga de checkout no corresponde a la sesión activa.');
+
+    expect(AkubicaCheckoutLink::query()->first()->used_at)->toBeNull();
 });
 
 test('GET checkout continuation rejects a legacy payment-link token', function () {
