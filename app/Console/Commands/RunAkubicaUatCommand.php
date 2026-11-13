@@ -41,6 +41,9 @@ final class RunAkubicaUatCommand extends Command
     private const STATE_PATH = 'akubica-uat-v1/uat-session.json';
     private const CAPABILITIES = ['memberships', 'cart', 'cart:membership'];
 
+    /** @var array{http: int, remote_error_code: string|null}|null */
+    private ?array $lastHttpTelemetry = null;
+
     public function handle(
         ConsumerRegistryWriter $registry,
         ConsumerMachineCredentialIssuer $issuer,
@@ -223,6 +226,8 @@ final class RunAkubicaUatCommand extends Command
                     'exception_type' => $e::class,
                     'correlation_id' => $correlationId,
                     'error_code' => $errorCode,
+                'http' => $this->lastHttpTelemetry['http'] ?? null,
+                'remote_error_code' => $this->lastHttpTelemetry['remote_error_code'] ?? null,
                     'cleanup' => $cleanupError === null ? 'complete' : $cleanupError,
                 ]);
             } catch (Throwable) {
@@ -234,6 +239,8 @@ final class RunAkubicaUatCommand extends Command
                 'exception_type' => $e::class,
                 'correlation_id' => $correlationId,
                 'error_code' => $errorCode,
+                'http' => $this->lastHttpTelemetry['http'] ?? null,
+                'remote_error_code' => $this->lastHttpTelemetry['remote_error_code'] ?? null,
                 'credentials_revoked' => $credential !== null ? 1 : 0,
                 'delegations_revoked' => count($delegations),
                 'sms' => 0,
@@ -307,7 +314,7 @@ final class RunAkubicaUatCommand extends Command
     private function cleanup(ConsumerLifecycle $lifecycle, User $operator, ?ApiConsumer $consumer, ?ApiConsumerChannel $channel, ?ApiConsumerCredential $credential, array $delegations, ?PersonalAccessToken $pat): void
     {
         foreach ([$credential, ...array_reverse($delegations), $channel, $consumer] as $record) {
-            if ($record !== null && $record->exists && $record->enabled) {
+            if ($record !== null && $record->exists) {
                 $lifecycle->transition($operator, $record, false, 'RC2_UAT_CLEANUP');
             }
         }
@@ -499,6 +506,13 @@ final class RunAkubicaUatCommand extends Command
         if (! is_array($json)) {
             throw new \DomainException('UAT_NON_JSON_RESPONSE');
         }
+        $remoteErrorCode = data_get($json, 'error.code');
+        $this->lastHttpTelemetry = [
+            'http' => $response->status(),
+            'remote_error_code' => is_string($remoteErrorCode) && preg_match('/\A[A-Z0-9_.-]{1,80}\z/', $remoteErrorCode) === 1
+                ? $remoteErrorCode
+                : null,
+        ];
         return ['status' => $response->status(), 'json' => $json];
     }
 
@@ -518,6 +532,13 @@ final class RunAkubicaUatCommand extends Command
         if (! is_array($json)) {
             throw new \DomainException('UAT_ATIX_NON_JSON_RESPONSE');
         }
+        $remoteErrorCode = data_get($json, 'error.code');
+        $this->lastHttpTelemetry = [
+            'http' => $response->status(),
+            'remote_error_code' => is_string($remoteErrorCode) && preg_match('/\A[A-Z0-9_.-]{1,80}\z/', $remoteErrorCode) === 1
+                ? $remoteErrorCode
+                : null,
+        ];
         return ['status' => $response->status(), 'json' => $json];
     }
 
