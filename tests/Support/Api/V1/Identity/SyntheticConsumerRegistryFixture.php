@@ -34,8 +34,9 @@ final class SyntheticConsumerRegistryFixture
             && in_array(config('database.connections.mysql.database'), [
                 'famedic_rc2_local_20261110_testing',
                 'famedic_rc2_uat_20261112_testing',
+                'famedic_b24_clean_testing',
             ], true)
-            && config('database.connections.mysql.host') === 'rc2-local-mysql-20261110';
+            && in_array(config('database.connections.mysql.host'), ['rc2-local-mysql-20261110', 'mysql'], true);
 
         if (! app()->environment('testing') || ! ($safeSqlite || $safeLegacyMysql || $safeRc2Mysql)) {
             throw new \LogicException('Unsafe fixture environment');
