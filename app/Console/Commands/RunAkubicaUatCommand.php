@@ -179,6 +179,9 @@ final class RunAkubicaUatCommand extends Command
             $stage = 'enableChannel';
             $lifecycle->transition($operator, $channel, true, 'RC2_UAT_ENABLE');
 
+            $stage = 'authorizeOtp';
+            $lifecycle->authorizeOtp($operator, $channel, $operator, 'RC2_UAT_OTP', $expiresAt);
+
             foreach ($users as $user) {
                 $stage = 'registerDelegation';
                 $delegation = $registry->delegate($operator, $channel, $user, self::CAPABILITIES, $expiresAt);
@@ -314,6 +317,9 @@ final class RunAkubicaUatCommand extends Command
 
     private function cleanup(ConsumerLifecycle $lifecycle, User $operator, ?ApiConsumer $consumer, ?ApiConsumerChannel $channel, ?ApiConsumerCredential $credential, array $delegations, ?PersonalAccessToken $pat): void
     {
+        if ($channel?->exists) {
+            $lifecycle->revokeOtp($operator, $channel, 'RC2_UAT_REVOKE');
+        }
         // Challenges are owned by the temporary consumer/channel created by this
         // run. Remove only that pair so failed OTP attempts cannot remain valid
         // after the binding is disabled, without touching other consumers.
