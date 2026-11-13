@@ -16,6 +16,8 @@ use App\Services\Api\V1\Uat\AkubicaUatFixturePlanner;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 use Throwable;
 
@@ -24,9 +26,13 @@ final class RunAkubicaUatCommand extends Command
     protected $signature = 'akubica:uat
         {--dry-run : Validate the QA preconditions without writes}
         {--apply : Provision the temporary registry records, then stop before OTP/Bearer issuance}
+        {--full : Run the sequential OTP/Bearer UAT flow after provisioning}
+        {--allow-sms : Explicitly allow OTP SMS in a real QA run}
         {--recover : Revoke records from the last interrupted apply}
         {--confirm= : Exact namespace confirmation required by apply/recover}
+        {--confirm-sms= : Exact SMS authorization phrase required by full}
         {--expected-sha= : Expected deployed commit SHA}
+        {--base-url= : QA base URL for full}
         {--scenarios=B08,B09,B10,B11 : Comma-separated membership scenarios}';
 
     protected $description = 'Controlled RC2 UAT provisioning; fails closed when Bearer issuance needs OTP.';
@@ -92,6 +98,10 @@ final class RunAkubicaUatCommand extends Command
                 return $this->recover($lifecycle, $operator);
             }
 
+            if ($mode === 'full' && ((string) $this->option('confirm-sms') !== 'RC2-UAT-SMS' || ! (bool) $this->option('allow-sms'))) {
+                return $this->failWithCode('UAT_SMS_AUTHORIZATION_REQUIRED');
+            }
+
             if ($operator === null) {
                 return $this->failWithCode('UAT_OPERATOR_NOT_CONFIGURED');
             }
@@ -100,7 +110,7 @@ final class RunAkubicaUatCommand extends Command
                 return $this->failWithCode('UAT_APPLY_CONFIRMATION_REQUIRED');
             }
 
-            return $this->apply($registry, $issuer, $lifecycle, $operator, $users);
+            return $this->apply($registry, $issuer, $lifecycle, $operator, $users, $mode === 'full');
         } catch (Throwable $e) {
             $this->line(json_encode(['status' => 'error', 'error_code' => 'UAT_EXECUTOR_FAILED'], JSON_THROW_ON_ERROR));
 
@@ -114,6 +124,7 @@ final class RunAkubicaUatCommand extends Command
         ConsumerLifecycle $lifecycle,
         User $operator,
         array $users,
+        bool $full,
     ): int {
         $expiresAt = Carbon::now()->addMinutes((int) env('AKUBICA_UAT_REGISTRY_TTL_MINUTES', 45));
         $consumer = null;
@@ -139,9 +150,16 @@ final class RunAkubicaUatCommand extends Command
             $pat = $issued['token']->accessToken;
             $this->writeState($consumer, $channel, $credential, $delegations, $pat);
 
-            // The deployed contract requires OTP for a user Bearer. This command
-            // deliberately refuses to fabricate OTPs or bypass that contract.
-            throw new \DomainException('UAT_BEARER_FLOW_REQUIRES_APPROVED_OTP');
+            if (! $full) {
+                throw new \DomainException('UAT_BEARER_FLOW_REQUIRES_APPROVED_OTP');
+            }
+
+            $results = $this->runFull($users, $issued['token']->plainTextToken, $this->scenarios());
+            $this->cleanup($lifecycle, $operator, $consumer, $channel, $credential, $delegations, $pat);
+            $this->deleteState();
+            $this->line(json_encode(['status' => 'ok', 'action' => 'full', 'results' => $results, 'cleanup' => 'complete'], JSON_THROW_ON_ERROR));
+
+            return self::SUCCESS;
         } catch (Throwable $e) {
             $cleanupError = null;
             try {
@@ -261,6 +279,124 @@ final class RunAkubicaUatCommand extends Command
         return $scenarios;
     }
 
+    /** @return list<array<string, mixed>> */
+    private function runFull(array $users, string $machineCredential, array $scenarios): array
+    {
+        $baseUrl = rtrim((string) ($this->option('base-url') ?: env('AKUBICA_UAT_BASE_URL')), '/');
+        if ($baseUrl !== 'https://famedic-otp.on-forge.com') {
+            throw new \DomainException('UAT_BASE_URL_NOT_AUTHORIZED');
+        }
+        $keys = config('atix.sandbox.keys', []);
+        $keyId = is_array($keys) ? (string) array_key_first($keys) : '';
+        $secret = is_array($keys) ? (string) ($keys[$keyId] ?? '') : '';
+        if ($keyId === '' || $secret === '') {
+            throw new \DomainException('UAT_ATIX_NOT_CONFIGURED');
+        }
+
+        $results = [];
+        foreach ($users as $index => $user) {
+            $payload = [
+                'phone' => (string) $user->phone,
+                'phone_country' => (string) ($user->phone_country ?: 'MX'),
+                'conversation_id' => 'rc2-uat-'.Str::lower(Str::random(20)),
+                'channel_event_id' => Str::lower(Str::random(24)),
+                'channel' => 'whatsapp',
+                'audience' => 'leo',
+                'personalization' => ['allowed' => false],
+            ];
+            $atix = $this->postAtix($baseUrl, $payload, $keyId, $secret);
+            if ($atix['status'] !== 202) {
+                throw new \DomainException('UAT_ATIX_UNEXPECTED_HTTP');
+            }
+
+            $authHeaders = [
+                'Accept' => 'application/json',
+                'X-Consumer-Credential' => $machineCredential,
+            ];
+            $request = $this->requestJson('POST', $baseUrl.'/api/v1/auth/login/request-code', $payload, $authHeaders + ['Idempotency-Key' => Str::uuid()->toString()]);
+            if ($request['status'] !== 202 || ! is_string($request['json']['data']['challenge_id'] ?? null)) {
+                throw new \DomainException('UAT_OTP_REQUEST_UNEXPECTED');
+            }
+
+            $code = $this->readHidden('OTP for identity '.($index + 1));
+            $verify = $this->requestJson('POST', $baseUrl.'/api/v1/auth/login/verify-code', [
+                'challenge_id' => $request['json']['data']['challenge_id'],
+                'code' => $code,
+            ], $authHeaders);
+            if ($verify['status'] !== 200 || (($verify['json']['data']['otp_verified'] ?? false) !== true) || ! is_string($verify['json']['data']['token'] ?? null)) {
+                throw new \DomainException('UAT_OTP_VERIFY_UNEXPECTED');
+            }
+
+            $bearer = $verify['json']['data']['token'];
+            $headers = $authHeaders + ['Authorization' => 'Bearer '.$bearer];
+            $membership = $this->requestJson('GET', $baseUrl.'/api/v1/memberships/status', null, $headers);
+            if ($membership['status'] !== 200) {
+                throw new \DomainException('UAT_MEMBERSHIP_UNEXPECTED_HTTP');
+            }
+            $row = ['scenario' => $scenarios[$index] ?? 'UNKNOWN', 'membership_http' => $membership['status']];
+            if (($scenarios[$index] ?? null) === 'B08') {
+                $totals = $this->requestJson('GET', $baseUrl.'/api/v1/cart/totals?service_line=medical_services', null, $headers);
+                if ($totals['status'] !== 200) {
+                    throw new \DomainException('UAT_CART_TOTALS_UNEXPECTED_HTTP');
+                }
+                $row['cart_totals_http'] = $totals['status'];
+            }
+            $results[] = $row;
+        }
+
+        return $results;
+    }
+
+    /** @return array{status: int, json: array<string, mixed>} */
+    private function requestJson(string $method, string $url, ?array $body, array $headers): array
+    {
+        $request = Http::withOptions(['http_errors' => false, 'allow_redirects' => false, 'timeout' => 20])->withHeaders($headers)->acceptJson();
+        $response = $body === null ? $request->{$method}($url) : $request->{$method}($url, $body);
+        $json = $response->json();
+        if (! is_array($json)) {
+            throw new \DomainException('UAT_NON_JSON_RESPONSE');
+        }
+        return ['status' => $response->status(), 'json' => $json];
+    }
+
+    /** @return array{status: int, json: array<string, mixed>} */
+    private function postAtix(string $baseUrl, array $payload, string $keyId, string $secret): array
+    {
+        $body = json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $timestamp = (string) now()->timestamp;
+        $nonce = Str::lower(Str::random(24));
+        $canonical = implode("\n", ['POST', '/api/v1/integrations/atix/phone-lookups', $timestamp, $nonce, hash('sha256', $body)]);
+        $signature = hash_hmac((string) config('atix.sandbox.algorithm', 'sha256'), $canonical, $secret);
+        $response = Http::withOptions(['http_errors' => false, 'allow_redirects' => false, 'timeout' => 20])
+            ->withHeaders(['X-Correlation-ID' => Str::uuid()->toString(), 'X-Integration-Key-Id' => $keyId, 'X-Timestamp' => $timestamp, 'X-Nonce' => $nonce, 'X-Signature' => $signature, 'Idempotency-Key' => Str::uuid()->toString(), 'Accept' => 'application/json'])
+            ->withBody($body, 'application/json')
+            ->post($baseUrl.'/api/v1/integrations/atix/phone-lookups');
+        $json = $response->json();
+        if (! is_array($json)) {
+            throw new \DomainException('UAT_ATIX_NON_JSON_RESPONSE');
+        }
+        return ['status' => $response->status(), 'json' => $json];
+    }
+
+    private function readHidden(string $label): string
+    {
+        if (app()->environment('testing') && (string) env('AKUBICA_UAT_FAKE_OTP') !== '') {
+            return (string) env('AKUBICA_UAT_FAKE_OTP');
+        }
+        $this->output->write($label.': ');
+        $state = trim((string) shell_exec('stty -g 2>/dev/null'));
+        try {
+            shell_exec('stty -echo 2>/dev/null');
+            $value = trim((string) fgets(STDIN));
+            $this->output->writeln('');
+            return $value;
+        } finally {
+            if ($state !== '') {
+                shell_exec('stty '.$state.' 2>/dev/null');
+            }
+        }
+    }
+
     private function assertSha(): void
     {
         $expected = trim((string) ($this->option('expected-sha') ?: env('AKUBICA_UAT_EXPECTED_SHA')));
@@ -272,7 +408,7 @@ final class RunAkubicaUatCommand extends Command
 
     private function mode(): ?string
     {
-        $selected = array_filter(['dry-run' => $this->option('dry-run'), 'apply' => $this->option('apply'), 'recover' => $this->option('recover')]);
+        $selected = array_filter(['dry-run' => $this->option('dry-run'), 'apply' => $this->option('apply'), 'full' => $this->option('full'), 'recover' => $this->option('recover')]);
         if (count($selected) !== 1) {
             $this->line('{"status":"error","error_code":"UAT_MODE_REQUIRED"}');
             return null;
