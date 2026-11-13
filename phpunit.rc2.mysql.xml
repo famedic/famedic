@@ -19,13 +19,31 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- Synthetic-only application key; never use a QA/production key here. -->
+        <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" force="true"/>
+        <!-- Makes TestCase bind the real consumer pipeline to the local-only credential source. -->
+        <env name="FAMEDIC_RC2_LOCAL_MYSQL" value="1" force="true"/>
+        <!-- Prevents all ActiveCampaign network calls; target suites receive deterministic fake responses. -->
+        <env name="FAMEDIC_RC2_ACTIVE_CAMPAIGN_FAKE" value="1" force="true"/>
+        <env name="ACTIVE_CAMPAIGN_API_ENDPOINT" value="https://activecampaign.invalid" force="true"/>
+        <env name="ACTIVE_CAMPAIGN_API_TOKEN" value="synthetic-test-token" force="true"/>
+        <env name="AKUBICA_UAT_MEMBERSHIP_NONE_EMAIL" value="membership-none@synthetic.invalid" force="true"/>
+        <env name="AKUBICA_UAT_MEMBERSHIP_NONE_PHONE" value="5550000011" force="true"/>
+        <env name="AKUBICA_UAT_MEMBERSHIP_REGULAR_EMAIL" value="membership-regular@synthetic.invalid" force="true"/>
+        <env name="AKUBICA_UAT_MEMBERSHIP_REGULAR_PHONE" value="5550000012" force="true"/>
+        <env name="AKUBICA_UAT_MEMBERSHIP_INSTITUTIONAL_EMAIL" value="membership-institutional@synthetic.invalid" force="true"/>
+        <env name="AKUBICA_UAT_MEMBERSHIP_INSTITUTIONAL_PHONE" value="5550000013" force="true"/>
+        <env name="AKUBICA_UAT_MEMBERSHIP_EXPIRED_EMAIL" value="membership-expired@synthetic.invalid" force="true"/>
+        <env name="AKUBICA_UAT_MEMBERSHIP_EXPIRED_PHONE" value="5550000014" force="true"/>
+        <!-- Prevents Scout from contacting Algolia in local UAT tests. -->
+        <env name="SCOUT_DRIVER" value="null" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="mysql" force="true"/>
         <env name="DB_HOST" value="rc2-local-mysql-20261110" force="true"/>
         <env name="DB_PORT" value="3306" force="true"/>
-        <env name="DB_DATABASE" value="famedic_rc2_local_20261110_testing" force="true"/>
+        <env name="DB_DATABASE" value="famedic_rc2_uat_20261112_testing" force="true"/>
         <env name="DB_USERNAME" value="famedic_rc2_test" force="true"/>
         <env name="DB_PASSWORD" value="famedic_rc2_test_pw" force="true"/>
         <env name="MAIL_MAILER" value="array"/>

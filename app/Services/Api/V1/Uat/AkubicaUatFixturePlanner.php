@@ -16,7 +16,7 @@ class AkubicaUatFixturePlanner
     {
         $identities = config('akubica_uat.identities', []);
 
-        return collect(['primary', 'foreign', 'disposable'])
+        return collect(['primary', 'foreign', 'disposable', 'membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'])
             ->mapWithKeys(function (string $key) use ($identities): array {
                 $identity = (array) ($identities[$key] ?? []);
 
@@ -44,8 +44,9 @@ class AkubicaUatFixturePlanner
             configured: $configured,
             counts: [
                 'apply' => [
-                    'users' => 2,
-                    'customers' => 2,
+                    'users' => 6,
+                    'customers' => 6,
+                    'subscriptions' => 3,
                     'contacts' => 2,
                     'addresses' => 2,
                     'tax_profiles' => 2,
@@ -67,6 +68,10 @@ class AkubicaUatFixturePlanner
                 'primary' => isset($identities['primary']) ? $this->identityHash($identities['primary']['email'], $identities['primary']['phone']) : 'not_configured',
                 'foreign' => isset($identities['foreign']) ? $this->identityHash($identities['foreign']['email'], $identities['foreign']['phone']) : 'not_configured',
                 'disposable' => isset($identities['disposable']) ? $this->identityHash($identities['disposable']['email'], $identities['disposable']['phone']) : 'not_configured',
+                'membership_none' => isset($identities['membership_none']) ? $this->identityHash($identities['membership_none']['email'], $identities['membership_none']['phone']) : 'not_configured',
+                'membership_regular' => isset($identities['membership_regular']) ? $this->identityHash($identities['membership_regular']['email'], $identities['membership_regular']['phone']) : 'not_configured',
+                'membership_institutional' => isset($identities['membership_institutional']) ? $this->identityHash($identities['membership_institutional']['email'], $identities['membership_institutional']['phone']) : 'not_configured',
+                'membership_expired' => isset($identities['membership_expired']) ? $this->identityHash($identities['membership_expired']['email'], $identities['membership_expired']['phone']) : 'not_configured',
             ],
             storageHashes: collect($storageDefinitions)->mapWithKeys(
                 fn (array $definition, string $path): array => [$path => hash('sha256', $definition['content'])]
@@ -97,7 +102,7 @@ class AkubicaUatFixturePlanner
         $identities = (array) config('akubica_uat.identities', []);
         $normalized = [];
 
-        foreach (['primary', 'foreign', 'disposable'] as $role) {
+        foreach (["primary", "foreign", "disposable", "membership_none", "membership_regular", "membership_institutional", "membership_expired"] as $role) {
             $identity = (array) ($identities[$role] ?? []);
             $email = mb_strtolower(trim((string) ($identity['email'] ?? '')));
             $phone = preg_replace('/\D+/', '', (string) ($identity['phone'] ?? '')) ?? '';
@@ -118,7 +123,7 @@ class AkubicaUatFixturePlanner
             $normalized[$role] = compact('email', 'phone', 'country');
         }
 
-        if ($validateCompleteSet && count($normalized) !== 3) {
+        if ($validateCompleteSet && count($normalized) !== 7) {
             throw new AkubicaUatFixtureException('UAT_CONFIG_REQUIRED');
         }
 

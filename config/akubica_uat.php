@@ -28,5 +28,9 @@ return [
             'phone' => env('AKUBICA_UAT_DISPOSABLE_PHONE'),
             'country' => env('AKUBICA_UAT_DISPOSABLE_PHONE_COUNTRY', 'MX'),
         ],
+        'membership_none' => ['email' => env('AKUBICA_UAT_MEMBERSHIP_NONE_EMAIL'), 'phone' => env('AKUBICA_UAT_MEMBERSHIP_NONE_PHONE'), 'country' => env('AKUBICA_UAT_MEMBERSHIP_NONE_PHONE_COUNTRY', 'MX')],
+        'membership_regular' => ['email' => env('AKUBICA_UAT_MEMBERSHIP_REGULAR_EMAIL'), 'phone' => env('AKUBICA_UAT_MEMBERSHIP_REGULAR_PHONE'), 'country' => env('AKUBICA_UAT_MEMBERSHIP_REGULAR_PHONE_COUNTRY', 'MX')],
+        'membership_institutional' => ['email' => env('AKUBICA_UAT_MEMBERSHIP_INSTITUTIONAL_EMAIL'), 'phone' => env('AKUBICA_UAT_MEMBERSHIP_INSTITUTIONAL_PHONE'), 'country' => env('AKUBICA_UAT_MEMBERSHIP_INSTITUTIONAL_PHONE_COUNTRY', 'MX')],
+        'membership_expired' => ['email' => env('AKUBICA_UAT_MEMBERSHIP_EXPIRED_EMAIL'), 'phone' => env('AKUBICA_UAT_MEMBERSHIP_EXPIRED_PHONE'), 'country' => env('AKUBICA_UAT_MEMBERSHIP_EXPIRED_PHONE_COUNTRY', 'MX')],
     ],
 ];
