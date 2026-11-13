@@ -87,4 +87,5 @@ final class RunAkubicaUatCommandTelemetryTest extends TestCase
         $this->assertStringContainsString('"error_code":"UAT_ASSERTSHA_FAILED"', $output);
         $this->assertStringNotContainsString('telemetry-test-sha', $output);
     }
+
 }
