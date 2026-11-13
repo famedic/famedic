@@ -15,6 +15,7 @@ use App\Services\Api\V1\Auth\ConsumerRegistryWriter;
 use App\Services\Api\V1\Uat\AkubicaUatFixturePlanner;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -313,6 +314,10 @@ final class RunAkubicaUatCommand extends Command
 
     private function cleanup(ConsumerLifecycle $lifecycle, User $operator, ?ApiConsumer $consumer, ?ApiConsumerChannel $channel, ?ApiConsumerCredential $credential, array $delegations, ?PersonalAccessToken $pat): void
     {
+        // Challenges are owned by the temporary consumer/channel created by this
+        // run. Remove only that pair so failed OTP attempts cannot remain valid
+        // after the binding is disabled, without touching other consumers.
+        $this->forgetOwnedChallenges($consumer, $channel);
         foreach ([$credential, ...array_reverse($delegations), $channel, $consumer] as $record) {
             if ($record !== null && $record->exists) {
                 $lifecycle->transition($operator, $record, false, 'RC2_UAT_CLEANUP');
@@ -320,6 +325,16 @@ final class RunAkubicaUatCommand extends Command
         }
         if ($pat?->exists) {
             $pat->delete();
+        }
+    }
+
+    private function forgetOwnedChallenges(?ApiConsumer $consumer, ?ApiConsumerChannel $channel): void
+    {
+        if ($consumer?->exists && $channel?->exists) {
+            DB::table('otp_backend_challenges')
+                ->where('consumer_id', $consumer->id)
+                ->where('channel_id', $channel->id)
+                ->delete();
         }
     }
 

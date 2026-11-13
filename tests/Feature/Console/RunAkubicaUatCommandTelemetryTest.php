@@ -3,6 +3,8 @@
 namespace Tests\Feature\Console;
 
 use App\Data\Api\V1\Uat\AkubicaUatFixtureContract;
+use App\Models\ApiConsumer;
+use App\Models\ApiConsumerChannel;
 use App\Models\Api\V1\AkubicaUatFixtureManifest;
 use Illuminate\Console\Command;
 use Illuminate\Database\Schema\Blueprint;
@@ -37,6 +39,13 @@ final class RunAkubicaUatCommandTelemetryTest extends TestCase
             $table->unsignedInteger('fixture_version');
             $table->string('status');
             $table->json('metadata');
+            $table->timestamps();
+        });
+        Schema::create('otp_backend_challenges', static function (Blueprint $table): void {
+            $table->string('challenge_hash')->primary();
+            $table->unsignedBigInteger('consumer_id');
+            $table->unsignedBigInteger('channel_id');
+            $table->timestamp('expires_at');
             $table->timestamps();
         });
 
@@ -86,6 +95,29 @@ final class RunAkubicaUatCommandTelemetryTest extends TestCase
         $this->assertStringContainsString('"exception_type":"DomainException"', $output);
         $this->assertStringContainsString('"error_code":"UAT_ASSERTSHA_FAILED"', $output);
         $this->assertStringNotContainsString('telemetry-test-sha', $output);
+    }
+
+    public function test_cleanup_removes_only_challenges_owned_by_the_uat_pair(): void
+    {
+        \DB::table('otp_backend_challenges')->insert([
+            ['challenge_hash' => 'owned', 'consumer_id' => 10, 'channel_id' => 20, 'expires_at' => now()->addHour(), 'created_at' => now(), 'updated_at' => now()],
+            ['challenge_hash' => 'foreign', 'consumer_id' => 99, 'channel_id' => 98, 'expires_at' => now()->addHour(), 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $consumer = new ApiConsumer;
+        $consumer->id = 10;
+        $channel = new ApiConsumerChannel;
+        $channel->id = 20;
+        $consumer->exists = true;
+        $channel->exists = true;
+
+        $command = app(\App\Console\Commands\RunAkubicaUatCommand::class);
+        $method = new \ReflectionMethod($command, 'forgetOwnedChallenges');
+        $method->setAccessible(true);
+        $method->invoke($command, $consumer, $channel);
+
+        $this->assertDatabaseMissing('otp_backend_challenges', ['challenge_hash' => 'owned']);
+        $this->assertDatabaseHas('otp_backend_challenges', ['challenge_hash' => 'foreign']);
     }
 
 }
