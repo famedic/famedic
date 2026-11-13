@@ -709,7 +709,7 @@
           }
         ],
         "url": "{{base_url}}/checkout/prepare?service_line=medical_services",
-        "description": "case_id=CHECKOUT-LEO-CONTINUITY; operationId=checkoutPrepare; perfil=leo; esperado UAT=200. PENDIENTE_DE_INTEGRACIÓN; proyección opaca; jamás URL de pago. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas."
+        "description": "case_id=CHECKOUT-LEO-CONTINUITY; operationId=checkoutPrepare; perfil=leo; esperado UAT=200. B24 permanece deshabilitado hasta UAT y aprobación de Seguridad. Cuando esté habilitado, data.continuity_url será una URL HTTPS FAMEDIC con token opaco de un solo uso y TTL máximo de 10 minutos; nunca incluirá Bearer, PAT, OTP ni PII. NO EJECUTAR sin autorización operativa."
       },
       "response": [],
       "event": [

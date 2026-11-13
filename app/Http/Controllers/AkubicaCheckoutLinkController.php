@@ -23,6 +23,13 @@ class AkubicaCheckoutLinkController extends Controller
                 ->with('error', 'La liga de pago no es válida.');
         }
 
+        if ($request->routeIs('akubica.checkout.continue')
+            && ($link->metadata['purpose'] ?? null) !== 'akubica_continuity') {
+            return redirect()
+                ->route('login')
+                ->with('error', 'La liga de checkout no es válida.');
+        }
+
         if ($link->isExpired()) {
             return redirect()
                 ->route('login')
@@ -57,7 +64,18 @@ class AkubicaCheckoutLinkController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        $link->markUsed();
+        if ($request->routeIs('akubica.checkout.continue')) {
+            $claimed = $link->claim();
+        } else {
+            $link->markUsed();
+            $claimed = true;
+        }
+
+        if (! $claimed) {
+            return redirect()
+                ->route('login')
+                ->with('error', 'La liga de checkout ya fue utilizada.');
+        }
 
         /** @var \App\Models\LaboratoryCheckoutDraft $draft */
         $draft = $readiness['draft'];
