@@ -12,8 +12,8 @@ class AkubicaCheckoutLinkController extends Controller
 {
     public function __invoke(
         Request $request,
-        ?string $token,
         CheckoutPreparation $checkoutPreparation,
+        ?string $token = null,
     ): RedirectResponse {
         if ($request->routeIs('akubica.checkout.continue', 'akubica.checkout.continue.resume')) {
             return $this->continueToCheckout($request, $token, $checkoutPreparation);
