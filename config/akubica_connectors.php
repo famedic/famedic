@@ -12,6 +12,11 @@ return [
     'paypal_merchant_id' => null,
     'transport' => ['enabled' => true, 'certified' => true],
     'otp_enrollment' => ['enabled' => true, 'certified' => true],
-    'continuity' => ['enabled' => false, 'certified' => false],
+    'continuity' => [
+        'enabled' => false,
+        'certified' => false,
+        'ttl_minutes' => 10,
+        'allowed_host' => env('AKUBICA_CONTINUITY_ALLOWED_HOST', null),
+    ],
     'financial' => ['enabled' => false, 'certified' => false, 'legacy_writers_coordinated' => false],
 ];

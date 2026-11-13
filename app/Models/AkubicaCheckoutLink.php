@@ -43,4 +43,13 @@ class AkubicaCheckoutLink extends Model
             $this->update(['used_at' => now()]);
         }
     }
+
+    public function claim(): bool
+    {
+        return static::query()
+            ->whereKey($this->getKey())
+            ->whereNull('used_at')
+            ->where('expires_at', '>', now())
+            ->update(['used_at' => now(), 'updated_at' => now()]) === 1;
+    }
 }

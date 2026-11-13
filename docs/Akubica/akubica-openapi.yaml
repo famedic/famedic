@@ -1165,7 +1165,12 @@ paths:
         - $ref: '#/components/parameters/BrandOptional'
       responses:
         '200':
-          description: Payload prepare
+          description: |
+            Payload prepare. Con continuidad deshabilitada, el contrato conserva
+            la respuesta de preparación sin URL. Cuando B24 esté habilitado y
+            certificado, puede incluir `data.continuity_url` y
+            `data.continuity_expires_at`; la URL contiene únicamente un token
+            opaco de un solo uso y no incluye Bearer, PAT, OTP ni PII.
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/X-Correlation-ID'

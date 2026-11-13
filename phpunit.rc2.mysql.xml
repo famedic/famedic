@@ -23,6 +23,7 @@
         <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" force="true"/>
         <!-- Makes TestCase bind the real consumer pipeline to the local-only credential source. -->
         <env name="FAMEDIC_RC2_LOCAL_MYSQL" value="1" force="true"/>
+        <env name="FAMEDIC_REGISTERED_NATIVE_FIXTURES" value="1" force="true"/>
         <!-- Prevents all ActiveCampaign network calls; target suites receive deterministic fake responses. -->
         <env name="FAMEDIC_RC2_ACTIVE_CAMPAIGN_FAKE" value="1" force="true"/>
         <env name="ACTIVE_CAMPAIGN_API_ENDPOINT" value="https://activecampaign.invalid" force="true"/>

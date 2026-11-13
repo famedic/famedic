@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Laravel\Scout\Searchable;
@@ -88,6 +90,21 @@ class LaboratoryTest extends Model
     public function laboratoryTestCategory(): BelongsTo
     {
         return $this->belongsTo(LaboratoryTestCategory::class);
+    }
+
+    public function packageDefinition(): HasOne
+    {
+        return $this->hasOne(LaboratoryTestPackage::class, 'package_test_id');
+    }
+
+    public function packageComponents(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            self::class,
+            'laboratory_test_package_components',
+            'package_id',
+            'component_test_id',
+        )->withPivot('sort_order')->orderBy('laboratory_test_package_components.sort_order');
     }
 
     public function scopeOfBrand(Builder $query, LaboratoryBrand $brand): void

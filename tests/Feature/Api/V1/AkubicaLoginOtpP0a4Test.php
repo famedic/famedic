@@ -20,7 +20,10 @@ use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\PersonalAccessToken;
 use Monolog\Handler\TestHandler;
 use Monolog\Logger;
+use Tests\Support\Database\Rc2IsolatedDatabase;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
+
+uses(Rc2IsolatedDatabase::class);
 
 function enableAkubicaLoginOtpFlags(): void
 {
@@ -45,8 +48,14 @@ function loginOtpUser(string $nationalPhone, array $attrs = []): User
 }
 
 beforeEach(function () {
+    $this->resetRc2IsolatedState();
     Carbon::setTestNow(Carbon::parse('2026-07-23 18:00:00'));
     Notification::fake();
+    // This suite covers the legacy/P0-A login contract. The registered
+    // consumer backend is enabled explicitly by tests that exercise the
+    // RC2 enrollment flow; keeping it off here avoids a staging-only
+    // middleware prerequisite in these isolated tests.
+    config()->set('akubica_connectors.otp_enrollment', ['enabled' => false, 'certified' => false]);
     disableAkubicaLoginOtpFlags();
     config()->set('otp.p0a.policy.max_attempts', 5);
     config()->set('otp.p0a.policy.ttl_minutes', 5);
@@ -160,7 +169,7 @@ test('p0a4 decoy and existing user start responses share public contract shape',
         'phone' => '5599999999',
     ])->assertStatus(202)->json('data');
 
-    $keys = ['requires_otp', 'challenge_id', 'purpose', 'channel', 'destination_masked', 'expires_at', 'resend_available_at'];
+    $keys = ['requires_otp', 'challenge_id', 'purpose', 'channel', 'destination_masked', 'expires_at', 'resend_available_at', 'personalization'];
     expect(array_keys($existing))->toEqualCanonicalizing($keys)
         ->and(array_keys($decoy))->toEqualCanonicalizing($keys)
         ->and($existing['requires_otp'])->toBeTrue()
@@ -170,6 +179,8 @@ test('p0a4 decoy and existing user start responses share public contract shape',
         ->and($decoy['channel'])->toBe('sms')
         ->and($existing['destination_masked'])->toBe('***5678')
         ->and($decoy['destination_masked'])->toBe('***9999')
+        ->and($existing['personalization'])->toBe(['allowed' => false])
+        ->and($decoy['personalization'])->toBe(['allowed' => false])
         ->and($existing)->not->toHaveKey('token')
         ->and($decoy)->not->toHaveKey('token');
 

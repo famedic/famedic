@@ -23,6 +23,10 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        if ($request->session()->has('akubica.checkout.continue_token')) {
+            return redirect()->route('akubica.checkout.continue.resume');
+        }
+
         return redirect()->intended(route('home', absolute: false))->flashMessage('¡Bienvenido a Famedic!');
     }
 

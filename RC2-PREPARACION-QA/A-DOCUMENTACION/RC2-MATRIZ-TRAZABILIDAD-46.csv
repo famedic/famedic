@@ -1,18 +1,18 @@
 ID,Fase,Requisito,Endpoint,Postman,Prueba automatizada,Estado local,Evidencia,Dependencia
 A01,A,ATIX reconocido,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, HMAC QA
-A02,A,ATIX desconocido,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture desconocido
+A02,A,ATIX desconocido,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,LOCAL_PASS,AtixPhoneLookupIsolatedTest: escenario desconocido y anti-enumeración PASS en MySQL aislado; acreditar HTTP QA si se requiere
 A03,A,HMAC inválida,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, HMAC QA
 A04,A,Timestamp fuera de ventana,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Reloj QA
 A05,A,Nonce repetido,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Persistencia nonce
 A06,A,Idempotencia ATIX,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Persistencia idempotencia
 A07,A,Canal o audiencia no autorizados,POST /integrations/atix/phone-lookups,H04-PHONE-LOOKUP,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Contrato QA
 A08,A,Solicitud OTP reconocida,POST /auth/login/request-code,OTP-START-UNIFORM,No focalizada,NOT_RUN_STAGING,Sin SMS QA, SMS QA autorizado
-A09,A,Solicitud OTP desconocida,POST /auth/login/request-code,OTP-START-UNIFORM,No focalizada,NOT_RUN_STAGING,Sin SMS QA, Fixture desconocido
+A09,A,Solicitud OTP desconocida,POST /auth/login/request-code,OTP-START-UNIFORM,No focalizada,LOCAL_PASS,AkubicaLoginOtpP0a4Test: decoy y existente comparten contrato con OTP fake; no SMS real; validar QA solo si se exige evidencia remota
 A10,A,OTP válido y Bearer,POST /auth/login/verify-code,OTP-VERIFY-BINDING,No focalizada,NOT_RUN_STAGING,Sin OTP QA, OTP QA válido
-A11,A,OTP inválido vencido o reutilizado,POST /auth/login/verify-code,OTP-VERIFY-BINDING,No focalizada,NOT_RUN_STAGING,Sin OTP QA, Fixtures OTP
+A11,A,OTP inválido vencido o reutilizado,POST /auth/login/verify-code,OTP-VERIFY-BINDING,No focalizada,LOCAL_PASS,AkubicaLoginOtpP0a4Test: códigos incorrectos; expirados; agotados y replay sin token; no SMS real; validar QA solo si se exige evidencia remota
 A12,A,Bearer vencido o revocado,Ruta protegida representativa,AUTH-CYCLE,Control offline 24/24,LOCAL_PASS,Control offline sintético, Revocación QA
 B01,B,Precio de estudio,GET /catalog/laboratory-tests,catalogLaboratoryTests,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture estudio
-B02,B,Precio de paquete,GET /catalog/laboratory-tests,catalogLaboratoryTests,No focalizada,BLOCKED,Sin catálogo autorizado, Fuente de paquetes y precios
+B02,B,Precio de paquete,GET /catalog/packages[/id],catalogPackages/catalogPackage,No focalizada,LOCAL_PASS,AkubicaPackagesB02Test: clasificación persistida explícita; composición y pricing; feature_list solo no clasifica; pendiente UAT y aceptación de propuesta de endpoint
 B03,B,Precio público ausente,Catálogo listado y detalle,catalogLaboratoryTests,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture sin precio
 B04,B,Precios iguales,Catálogo listado y detalle,catalogLaboratoryTests,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture sin ahorro
 B05,B,Precio inconsistente,Catálogo listado y detalle,catalogLaboratoryTests,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture inconsistente
@@ -21,7 +21,7 @@ B07,B,Plan Básico,GET /memberships/plans,MEMBERSHIP-PLANS,No focalizada,NOT_RUN
 B08,B,Sin membresía,GET /memberships/status,MEMBERSHIP-STATUS,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture QA
 B09,B,Membresía individual activa,GET /memberships/status,MEMBERSHIP-STATUS,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture QA
 B10,B,Membresía patrocinada,GET /memberships/status,MEMBERSHIP-STATUS,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture QA
-B11,B,Membresía expirada,GET /memberships/status,MEMBERSHIP-STATUS,No focalizada,NOT_RUN_STAGING,Sin HTTP local, Fixture QA
+B11,B,Membresía expirada,GET /memberships/status,MEMBERSHIP-STATUS,No focalizada,LOCAL_PASS,AkubicaMembershipsM1IsolatedTest: estado expirado y ownership PASS en MySQL aislado; pendiente evidencia HTTP QA
 B12,B,Agregar Plan Básico,POST /cart/items,cartItemsStore,AkubicaMedicalServicesCartM2BIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Fixture elegible
 B13,B,Duplicado de membresía,POST /cart/items,cartItemsStore,AkubicaMedicalServicesCartM2BIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, B12
 B14,B,Membresía activa,POST /cart/items,cartItemsStore,AkubicaMedicalServicesCartM2BIsolatedTest,LOCAL_PASS,20 Pest 137 assertions, Fixture activa
@@ -42,6 +42,6 @@ R02,R,Resultados,GET /orders/{id}/results,ordersResults,No focalizada,NOT_RUN_ST
 R03,R,Facturas,GET /orders/{id}/invoices,ordersInvoices,No focalizada,NOT_RUN_STAGING,Sin step-up QA, Fixture factura
 R04,R,Familiares,GET /user/family,userFamily,No focalizada,NOT_RUN_STAGING,Sin fixture QA, Fixture familiar
 R05,R,Citas y concierge,Checkout laboratorio,appointmentsIndex,No focalizada,NOT_RUN_STAGING,Sin HTTP QA, Fixture cita
-R06,R,Observabilidad,Todas las rutas RC2,Correlation checks,No focalizada,NOT_RUN_STAGING,Sin logs QA, Acceso observabilidad
+R06,R,Observabilidad,Todas las rutas RC2,Correlation checks,No focalizada,LOCAL_PASS,AkubicaAuditInfrastructureP1Test: auditoría; correlation; sanitización y ausencia de secretos PASS local; pendiente revisión de logs QA sanitizados
 R07,R,Errores contractuales,Rutas representativas,Negative guards,Control offline 24/24,LOCAL_PASS,Controles offline sintéticos, Validación HTTP QA
 R08,R,UAT conversacional,Leo en WhatsApp,UAT externo,No ejecutada,NOT_RUN_STAGING,Sin sesión UAT, Suite conversacional

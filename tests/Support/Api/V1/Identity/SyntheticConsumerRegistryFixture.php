@@ -34,14 +34,32 @@ final class SyntheticConsumerRegistryFixture
             && in_array(config('database.connections.mysql.database'), [
                 'famedic_rc2_local_20261110_testing',
                 'famedic_rc2_uat_20261112_testing',
+                'famedic_rc2_a12_20261113_testing',
+                'famedic_b24_clean_testing',
             ], true)
-            && config('database.connections.mysql.host') === 'rc2-local-mysql-20261110';
+            && in_array(config('database.connections.mysql.host'), ['rc2-local-mysql-20261110', 'mysql'], true);
 
         if (! app()->environment('testing') || ! ($safeSqlite || $safeLegacyMysql || $safeRc2Mysql)) {
             throw new \LogicException('Unsafe fixture environment');
         }
         $defaultCaps=$caps===null;
-        $caps ??= [PaymentLinkAccessPolicy::CAPABILITY, 'cart:read', 'memberships:read', 'cart:membership:write', 'checkout:prepare', 'legacy-benefits:read', 'legacy-benefits:write'];
+        $caps ??= [
+            PaymentLinkAccessPolicy::CAPABILITY,
+            'cart:read',
+            'memberships:read',
+            'cart:membership:write',
+            'checkout:prepare',
+            'legacy-benefits:read',
+            'legacy-benefits:write',
+            'api:operation:api:v1:orders:index',
+            'api:operation:api:v1:orders:results:index',
+            'api:operation:api:v1:orders:results',
+            'api:operation:api:v1:orders:invoices:index',
+            'api:operation:api:v1:orders:invoices',
+            'api:operation:api:v1:user:family',
+            'api:operation:api:v1:laboratory-appointments:requirements',
+            'api:operation:api:v1:laboratory-appointments:index',
+        ];
         if($defaultCaps && $kind==='native')$caps=array_merge($caps,['cart:write','payments:draft']);
         $issuer = User::factory()->create();
         $administrator = Administrator::create(['user_id' => $issuer->id]);
