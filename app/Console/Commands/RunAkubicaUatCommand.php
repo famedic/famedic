@@ -301,7 +301,7 @@ final class RunAkubicaUatCommand extends Command
             ->filter()
             ->values()
             ->all();
-        return User::query()->whereIn('id', array_map('intval', $ids))->get()->filter(fn (User $u) => $u->customers()->count() === 1)->values()->all();
+        return User::query()->whereIn('id', array_map('intval', $ids))->get()->filter(fn (User $u) => $u->customer()->count() === 1)->values()->all();
     }
 
     /** @return list<string> */
