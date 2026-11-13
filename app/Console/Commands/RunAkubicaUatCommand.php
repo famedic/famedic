@@ -355,11 +355,38 @@ final class RunAkubicaUatCommand extends Command
             }
             $row = ['scenario' => $scenarios[$index] ?? 'UNKNOWN', 'membership_http' => $membership['status']];
             if (($scenarios[$index] ?? null) === 'B08') {
+                $membershipPayload = [
+                    'service_line' => 'medical_services',
+                    'item_type' => 'membership',
+                    'membership_plan_code' => 'basic_annual',
+                    'quantity' => 1,
+                ];
+                $added = $this->requestJson('POST', $baseUrl.'/api/v1/cart/items', $membershipPayload, $headers + ['Idempotency-Key' => Str::uuid()->toString()]);
+                if ($added['status'] !== 201) {
+                    throw new \DomainException('UAT_CART_ADD_UNEXPECTED_HTTP');
+                }
                 $totals = $this->requestJson('GET', $baseUrl.'/api/v1/cart/totals?service_line=medical_services', null, $headers);
                 if ($totals['status'] !== 200) {
                     throw new \DomainException('UAT_CART_TOTALS_UNEXPECTED_HTTP');
                 }
-                $row['cart_totals_http'] = $totals['status'];
+                $duplicate = $this->requestJson('POST', $baseUrl.'/api/v1/cart/items', $membershipPayload, $headers + ['Idempotency-Key' => Str::uuid()->toString()]);
+                if ($duplicate['status'] !== 409) {
+                    throw new \DomainException('UAT_CART_DUPLICATE_UNEXPECTED_HTTP');
+                }
+                $cart = $this->requestJson('GET', $baseUrl.'/api/v1/cart?service_line=medical_services', null, $headers);
+                $itemId = $cart['json']['data']['items'][0]['id'] ?? null;
+                if ($cart['status'] !== 200 || ! is_numeric($itemId)) {
+                    throw new \DomainException('UAT_CART_ITEM_NOT_FOUND');
+                }
+                $removed = $this->requestJson('DELETE', $baseUrl.'/api/v1/cart/items/'.(int) $itemId, null, $headers + ['Idempotency-Key' => Str::uuid()->toString()]);
+                if ($removed['status'] !== 200) {
+                    throw new \DomainException('UAT_CART_REMOVE_UNEXPECTED_HTTP');
+                }
+                $finalTotals = $this->requestJson('GET', $baseUrl.'/api/v1/cart/totals?service_line=medical_services', null, $headers);
+                if ($finalTotals['status'] !== 200 || (int) ($finalTotals['json']['data']['item_count'] ?? -1) !== 0) {
+                    throw new \DomainException('UAT_CART_FINAL_STATE_UNEXPECTED');
+                }
+                $row['cart'] = ['add_http' => 201, 'totals_http' => 200, 'duplicate_http' => 409, 'remove_http' => 200, 'final_totals_http' => 200];
             }
             $revoked = $this->requestJson('DELETE', $baseUrl.'/api/v1/auth/token', null, $headers);
             if ($revoked['status'] !== 200 || (($revoked['json']['data']['revoked'] ?? false) !== true)) {
