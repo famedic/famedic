@@ -199,6 +199,9 @@ final class RunAkubicaUatCommand extends Command
         $credential = ApiConsumerCredential::query()->find((int) ($state['credential_id'] ?? 0));
         $delegations = ApiConsumerDelegation::query()->whereIn('id', array_map('intval', (array) ($state['delegation_ids'] ?? [])))->get()->all();
         $pat = PersonalAccessToken::query()->find((int) ($state['personal_access_token_id'] ?? 0));
+        foreach (array_map('intval', (array) ($state['bearer_ids'] ?? [])) as $bearerId) {
+            PersonalAccessToken::query()->whereKey($bearerId)->delete();
+        }
         try {
             $this->cleanup($lifecycle, $operator, $consumer, $channel, $credential, $delegations, $pat);
             $this->deleteState();
@@ -231,7 +234,19 @@ final class RunAkubicaUatCommand extends Command
             'credential_id' => $credential->id,
             'delegation_ids' => array_map(fn ($d) => $d->id, $delegations),
             'personal_access_token_id' => $pat->id,
+            'bearer_ids' => [],
         ], JSON_THROW_ON_ERROR));
+    }
+
+    private function appendBearerState(int $id): void
+    {
+        $path = Storage::disk('local')->path(self::STATE_PATH);
+        if (! is_file($path)) {
+            throw new \DomainException('UAT_RECOVERY_STATE_MISSING');
+        }
+        $state = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        $state['bearer_ids'] = array_values(array_unique(array_merge((array) ($state['bearer_ids'] ?? []), [$id])));
+        Storage::disk('local')->put(self::STATE_PATH, json_encode($state, JSON_THROW_ON_ERROR));
     }
 
     private function deleteState(): void
@@ -328,6 +343,11 @@ final class RunAkubicaUatCommand extends Command
             }
 
             $bearer = $verify['json']['data']['token'];
+            $bearerPat = PersonalAccessToken::findToken($bearer);
+            if ($bearerPat === null) {
+                throw new \DomainException('UAT_BEARER_NOT_PERSISTED');
+            }
+            $this->appendBearerState($bearerPat->id);
             $headers = $authHeaders + ['Authorization' => 'Bearer '.$bearer];
             $membership = $this->requestJson('GET', $baseUrl.'/api/v1/memberships/status', null, $headers);
             if ($membership['status'] !== 200) {
@@ -341,6 +361,11 @@ final class RunAkubicaUatCommand extends Command
                 }
                 $row['cart_totals_http'] = $totals['status'];
             }
+            $revoked = $this->requestJson('DELETE', $baseUrl.'/api/v1/auth/token', null, $headers);
+            if ($revoked['status'] !== 200 || (($revoked['json']['data']['revoked'] ?? false) !== true)) {
+                throw new \DomainException('UAT_BEARER_REVOKE_UNEXPECTED');
+            }
+            $row['bearer_revoke_http'] = $revoked['status'];
             $results[] = $row;
         }
 
