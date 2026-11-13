@@ -17,6 +17,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 use Throwable;
@@ -45,36 +46,43 @@ final class RunAkubicaUatCommand extends Command
         ConsumerMachineCredentialIssuer $issuer,
         ConsumerLifecycle $lifecycle,
     ): int {
+        $stage = 'mode';
         $mode = $this->mode();
         if ($mode === null) {
             return self::FAILURE;
         }
 
         if (! app()->environment(['staging', 'testing'])) {
-            return $this->failWithCode('UAT_ENVIRONMENT_NOT_ALLOWED');
+            return $this->failWithCode('UAT_ENVIRONMENT_NOT_ALLOWED', 'environment');
         }
 
         if ((string) ($this->option('confirm') ?? '') !== ''
             && (string) $this->option('confirm') !== AkubicaUatFixtureContract::NAMESPACE) {
-            return $this->failWithCode('UAT_CONFIRMATION_MISMATCH');
+            return $this->failWithCode('UAT_CONFIRMATION_MISMATCH', 'confirmation');
         }
 
         try {
+            $stage = 'assertSha';
             $this->assertSha();
+            $stage = 'buildPlan';
             $plan = (new AkubicaUatFixturePlanner())->buildPlan('dry-run', false);
+            $stage = 'manifest';
             $manifest = AkubicaUatFixtureManifest::query()->where('namespace', $plan->namespace)->first();
             if (! $manifest || $manifest->status !== AkubicaUatFixtureContract::STATUS_ACTIVE) {
-                return $this->failWithCode('UAT_FIXTURES_NOT_ACTIVE');
+                return $this->failWithCode('UAT_FIXTURES_NOT_ACTIVE', $stage);
             }
 
+            $stage = 'configuredUser';
             $operator = $this->configuredUser('AKUBICA_UAT_OPERATOR_ID');
+            $stage = 'scenarios';
             $scenarios = $this->scenarios();
             if ($scenarios === []) {
-                return $this->failWithCode('UAT_SCENARIOS_INVALID');
+                return $this->failWithCode('UAT_SCENARIOS_INVALID', $stage);
             }
+            $stage = 'manifestUsers';
             $users = $this->manifestUsers($manifest, $scenarios);
             if (count($users) !== count($scenarios)) {
-                return $this->failWithCode('UAT_MEMBERSHIP_USERS_INCOMPLETE');
+                return $this->failWithCode('UAT_MEMBERSHIP_USERS_INCOMPLETE', $stage);
             }
 
             if ($mode === 'dry-run') {
@@ -99,20 +107,39 @@ final class RunAkubicaUatCommand extends Command
             }
 
             if ($mode === 'full' && ((string) $this->option('confirm-sms') !== 'RC2-UAT-SMS' || ! (bool) $this->option('allow-sms'))) {
-                return $this->failWithCode('UAT_SMS_AUTHORIZATION_REQUIRED');
+                return $this->failWithCode('UAT_SMS_AUTHORIZATION_REQUIRED', 'authorization');
             }
 
             if ($operator === null) {
-                return $this->failWithCode('UAT_OPERATOR_NOT_CONFIGURED');
+                return $this->failWithCode('UAT_OPERATOR_NOT_CONFIGURED', 'configuredUser');
             }
 
             if ((string) ($this->option('confirm') ?? '') !== AkubicaUatFixtureContract::NAMESPACE) {
-                return $this->failWithCode('UAT_APPLY_CONFIRMATION_REQUIRED');
+                return $this->failWithCode('UAT_APPLY_CONFIRMATION_REQUIRED', 'confirmation');
             }
 
+            $stage = 'apply';
             return $this->apply($registry, $issuer, $lifecycle, $operator, $users, $mode === 'full');
         } catch (Throwable $e) {
-            $this->line(json_encode(['status' => 'error', 'error_code' => 'UAT_EXECUTOR_FAILED'], JSON_THROW_ON_ERROR));
+            $correlationId = (string) Str::uuid();
+            $errorCode = 'UAT_'.strtoupper(preg_replace('/[^A-Za-z0-9]+/', '_', $stage)).'_FAILED';
+            try {
+                Log::warning('akubica_uat_precondition_failed', [
+                    'stage' => $stage,
+                    'exception_type' => $e::class,
+                    'correlation_id' => $correlationId,
+                    'error_code' => $errorCode,
+                ]);
+            } catch (Throwable) {
+                // Console evidence remains available even when the local log sink is unavailable.
+            }
+            $this->line(json_encode([
+                'status' => 'error',
+                'stage' => $stage,
+                'exception_type' => $e::class,
+                'correlation_id' => $correlationId,
+                'error_code' => $errorCode,
+            ], JSON_THROW_ON_ERROR));
 
             return self::FAILURE;
         }
@@ -274,7 +301,7 @@ final class RunAkubicaUatCommand extends Command
             ->filter()
             ->values()
             ->all();
-        return User::query()->whereIn('id', array_map('intval', $ids))->get()->filter(fn (User $u) => $u->customers()->count() === 1)->values()->all();
+        return User::query()->whereIn('id', array_map('intval', $ids))->get()->filter(fn (User $u) => $u->customer()->count() === 1)->values()->all();
     }
 
     /** @return list<string> */
@@ -469,9 +496,26 @@ final class RunAkubicaUatCommand extends Command
         return array_key_first($selected);
     }
 
-    private function failWithCode(string $code): int
+    private function failWithCode(string $code, string $stage = 'validation'): int
     {
-        $this->line(json_encode(['status' => 'error', 'error_code' => $code], JSON_THROW_ON_ERROR));
+        $correlationId = (string) Str::uuid();
+        try {
+            Log::warning('akubica_uat_precondition_rejected', [
+                'stage' => $stage,
+                'exception_type' => 'controlled',
+                'correlation_id' => $correlationId,
+                'error_code' => $code,
+            ]);
+        } catch (Throwable) {
+            // Console evidence remains available even when the local log sink is unavailable.
+        }
+        $this->line(json_encode([
+            'status' => 'error',
+            'stage' => $stage,
+            'exception_type' => 'controlled',
+            'correlation_id' => $correlationId,
+            'error_code' => $code,
+        ], JSON_THROW_ON_ERROR));
         return self::FAILURE;
     }
 }
