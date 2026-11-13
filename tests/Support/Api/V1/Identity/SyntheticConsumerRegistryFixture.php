@@ -42,7 +42,23 @@ final class SyntheticConsumerRegistryFixture
             throw new \LogicException('Unsafe fixture environment');
         }
         $defaultCaps=$caps===null;
-        $caps ??= [PaymentLinkAccessPolicy::CAPABILITY, 'cart:read', 'memberships:read', 'cart:membership:write', 'checkout:prepare', 'legacy-benefits:read', 'legacy-benefits:write'];
+        $caps ??= [
+            PaymentLinkAccessPolicy::CAPABILITY,
+            'cart:read',
+            'memberships:read',
+            'cart:membership:write',
+            'checkout:prepare',
+            'legacy-benefits:read',
+            'legacy-benefits:write',
+            'api:operation:api:v1:orders:index',
+            'api:operation:api:v1:orders:results:index',
+            'api:operation:api:v1:orders:results',
+            'api:operation:api:v1:orders:invoices:index',
+            'api:operation:api:v1:orders:invoices',
+            'api:operation:api:v1:user:family',
+            'api:operation:api:v1:laboratory-appointments:requirements',
+            'api:operation:api:v1:laboratory-appointments:index',
+        ];
         if($defaultCaps && $kind==='native')$caps=array_merge($caps,['cart:write','payments:draft']);
         $issuer = User::factory()->create();
         $administrator = Administrator::create(['user_id' => $issuer->id]);
