@@ -159,29 +159,41 @@ final class RunAkubicaUatCommand extends Command
         $credential = null;
         $delegations = [];
         $pat = null;
+        $stage = 'registerConsumer';
 
         try {
+            $stage = 'registerConsumer';
             $consumer = $registry->register($operator, 'leo', self::CAPABILITIES, $expiresAt);
+            $stage = 'registerChannel';
             $channel = $registry->channel($operator, $consumer, $expiresAt);
+            $stage = 'enableConsumer';
             $lifecycle->transition($operator, $consumer, true, 'RC2_UAT_ENABLE');
+            $stage = 'enableChannel';
             $lifecycle->transition($operator, $channel, true, 'RC2_UAT_ENABLE');
 
             foreach ($users as $user) {
+                $stage = 'registerDelegation';
                 $delegation = $registry->delegate($operator, $channel, $user, self::CAPABILITIES, $expiresAt);
+                $stage = 'enableDelegation';
                 $lifecycle->transition($operator, $delegation, true, 'RC2_UAT_ENABLE');
                 $delegations[] = $delegation;
             }
 
+            $stage = 'issueMachineCredential';
             $issued = $issuer->issue($operator, $channel, $expiresAt);
             $credential = $issued['credential'];
             $pat = $issued['token']->accessToken;
+            $stage = 'writeRecoveryState';
             $this->writeState($consumer, $channel, $credential, $delegations, $pat);
 
             if (! $full) {
+                $stage = 'otpAuthorization';
                 throw new \DomainException('UAT_BEARER_FLOW_REQUIRES_APPROVED_OTP');
             }
 
+            $stage = 'fullUat';
             $results = $this->runFull($users, $issued['token']->plainTextToken, $this->scenarios());
+            $stage = 'cleanup';
             $this->cleanup($lifecycle, $operator, $consumer, $channel, $credential, $delegations, $pat);
             $this->deleteState();
             $this->line(json_encode(['status' => 'ok', 'action' => 'full', 'results' => $results, 'cleanup' => 'complete'], JSON_THROW_ON_ERROR));
@@ -195,11 +207,28 @@ final class RunAkubicaUatCommand extends Command
             } catch (Throwable $cleanupFailure) {
                 $cleanupError = 'UAT_CLEANUP_FAILED';
             }
+            $errorCode = $e instanceof \DomainException
+                && $e->getMessage() === 'UAT_BEARER_FLOW_REQUIRES_APPROVED_OTP'
+                    ? $e->getMessage()
+                    : 'UAT_'.strtoupper(preg_replace('/[^A-Za-z0-9]+/', '_', $stage)).'_FAILED';
+            $correlationId = (string) Str::uuid();
+            try {
+                Log::warning('akubica_uat_apply_failed', [
+                    'stage' => $stage,
+                    'exception_type' => $e::class,
+                    'correlation_id' => $correlationId,
+                    'error_code' => $errorCode,
+                    'cleanup' => $cleanupError === null ? 'complete' : $cleanupError,
+                ]);
+            } catch (Throwable) {
+                // Console evidence remains available even when the local log sink is unavailable.
+            }
             $this->line(json_encode([
                 'status' => 'blocked',
-                'error_code' => $e->getMessage() === 'UAT_BEARER_FLOW_REQUIRES_APPROVED_OTP'
-                    ? $e->getMessage()
-                    : 'UAT_PROVISIONING_FAILED',
+                'stage' => $stage,
+                'exception_type' => $e::class,
+                'correlation_id' => $correlationId,
+                'error_code' => $errorCode,
                 'credentials_revoked' => $credential !== null ? 1 : 0,
                 'delegations_revoked' => count($delegations),
                 'sms' => 0,
