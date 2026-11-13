@@ -31,7 +31,10 @@ final class SyntheticConsumerRegistryFixture
             && config('database.connections.mysql.database') === 'benefits_synthetic_testing'
             && config('database.connections.mysql.unix_socket') === '/phase-socket/mysql.sock';
         $safeRc2Mysql = config('database.default') === 'mysql'
-            && config('database.connections.mysql.database') === 'famedic_rc2_local_20261110_testing'
+            && in_array(config('database.connections.mysql.database'), [
+                'famedic_rc2_local_20261110_testing',
+                'famedic_rc2_uat_20261112_testing',
+            ], true)
             && config('database.connections.mysql.host') === 'rc2-local-mysql-20261110';
 
         if (! app()->environment('testing') || ! ($safeSqlite || $safeLegacyMysql || $safeRc2Mysql)) {

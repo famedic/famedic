@@ -9,6 +9,7 @@ use App\Enums\CouponApprovalStatus;
 use App\Enums\CouponType;
 use App\Enums\Gender;
 use App\Enums\LaboratoryBrand;
+use App\Enums\MedicalSubscriptionType;
 use App\Exceptions\AkubicaUatFixtureException;
 use App\Models\Address;
 use App\Models\Api\V1\AkubicaUatFixtureManifest;
@@ -26,6 +27,7 @@ use App\Models\LaboratoryPurchaseItem;
 use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
+use App\Models\MedicalAttentionSubscription;
 use App\Models\OtpChallenge;
 use App\Models\OtpDeliveryOperation;
 use App\Models\OtpRateLimit;
@@ -109,7 +111,7 @@ class AkubicaUatFixtureMaterializer
         $identities = $this->requiredIdentities();
         $naturalKeys = $this->naturalKeys($plan->namespace);
 
-        foreach (['primary', 'foreign'] as $role) {
+        foreach (['primary', 'foreign', 'membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $role) {
             $email = $identities[$role]['email'];
             $phone = $identities[$role]['phone'];
 
@@ -248,9 +250,31 @@ class AkubicaUatFixtureMaterializer
 
                         $primaryUser = $this->upsertUser('primary', $identities['primary'], $ids, $counts);
                         $foreignUser = $this->upsertUser('foreign', $identities['foreign'], $ids, $counts);
+                        $ids['users']['primary'] = $primaryUser->id;
+                        $ids['users']['foreign'] = $foreignUser->id;
 
                         $primaryCustomer = $this->upsertCustomer('primary', $primaryUser, $ids, $counts);
                         $foreignCustomer = $this->upsertCustomer('foreign', $foreignUser, $ids, $counts);
+                        $ids['customers']['primary'] = $primaryCustomer->id;
+                        $ids['customers']['foreign'] = $foreignCustomer->id;
+                        $ids['regular_accounts']['primary'] = $primaryCustomer->customerable_id;
+                        $ids['regular_accounts']['foreign'] = $foreignCustomer->customerable_id;
+                        $membershipCustomers = [];
+                        $membershipSubscriptions = [];
+                        foreach (['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $membershipRole) {
+                            $membershipUser = $this->upsertUser($membershipRole, $identities[$membershipRole], $ids, $counts);
+                            $membershipCustomer = $this->upsertCustomer($membershipRole, $membershipUser, $ids, $counts);
+                            $membershipCustomer->forceFill([
+                                'medical_attention_subscription_expires_at' => $membershipRole === 'membership_none'
+                                    ? null
+                                    : ($membershipRole === 'membership_expired' ? now()->subDay() : now()->addDays(30)),
+                            ])->save();
+                            $ids['users'][$membershipRole] = $membershipUser->id;
+                            $ids['customers'][$membershipRole] = $membershipCustomer->id;
+                            $ids['regular_accounts'][$membershipRole] = $membershipCustomer->customerable_id;
+                            $membershipCustomers[$membershipRole] = $membershipCustomer;
+                            $membershipSubscriptions[$membershipRole] = $this->upsertMembershipSubscription($membershipRole, $membershipCustomer, $ids, $counts);
+                        }
 
                         $primaryContact = $this->upsertContact('primary', $primaryCustomer, $ids, $counts);
                         $foreignContact = $this->upsertContact('foreign', $foreignCustomer, $ids, $counts);
@@ -287,18 +311,13 @@ class AkubicaUatFixtureMaterializer
 
                         $activeMetadata = [
                                 'ids' => [
-                                    'users' => [
-                                        'primary' => $primaryUser->id,
-                                        'foreign' => $foreignUser->id,
-                                    ],
-                                    'regular_accounts' => [
-                                        'primary' => $primaryCustomer->customerable_id,
-                                        'foreign' => $foreignCustomer->customerable_id,
-                                    ],
-                                    'customers' => [
-                                        'primary' => $primaryCustomer->id,
-                                        'foreign' => $foreignCustomer->id,
-                                    ],
+                                    'users' => (array) $ids['users'],
+                                    'regular_accounts' => (array) $ids['regular_accounts'],
+                                    'customers' => (array) $ids['customers'],
+                                    'membership_users' => collect($membershipCustomers)->mapWithKeys(fn (Customer $customer, string $role): array => [$role => $customer->user_id])->all(),
+                                    'membership_customers' => collect($membershipCustomers)->mapWithKeys(fn (Customer $customer, string $role): array => [$role => $customer->id])->all(),
+                                    'membership_regular_accounts' => collect($membershipCustomers)->mapWithKeys(fn (Customer $customer, string $role): array => [$role => $customer->customerable_id])->all(),
+                                    'subscriptions' => collect($membershipSubscriptions)->mapWithKeys(fn (?MedicalAttentionSubscription $subscription, string $role): array => [$role => $subscription?->id])->all(),
                                     'contacts' => [
                                         'primary' => $primaryContact->id,
                                         'foreign' => $foreignContact->id,
@@ -406,6 +425,10 @@ class AkubicaUatFixtureMaterializer
         $customerIdentifiers = [
             $namespace.'-customer-primary',
             $namespace.'-customer-foreign',
+            $namespace.'-customer-membership-none',
+            $namespace.'-customer-membership-regular',
+            $namespace.'-customer-membership-institutional',
+            $namespace.'-customer-membership-expired',
         ];
 
         if (LaboratoryCartItem::query()->withTrashed()
@@ -535,8 +558,8 @@ class AkubicaUatFixtureMaterializer
 
         if (
             ! is_string(Arr::get($metadata, 'run_id_hash'))
-            || (array) Arr::get($metadata, 'storage_hashes', []) !== $plan->storageHashes
-            || (array) Arr::get($metadata, 'natural_key_hashes', []) !== $this->naturalKeyHashes($plan->namespace)
+            || $this->canonicalize((array) Arr::get($metadata, 'storage_hashes', [])) !== $this->canonicalize($plan->storageHashes)
+            || $this->canonicalize((array) Arr::get($metadata, 'natural_key_hashes', [])) !== $this->canonicalize($this->naturalKeyHashes($plan->namespace))
         ) {
             throw new AkubicaUatFixtureException('UAT_MANIFEST_CORRUPT');
         }
@@ -665,9 +688,13 @@ class AkubicaUatFixtureMaterializer
                     $this->deleteVerifiedRecords(TaxProfile::query()->withTrashed(), array_values((array) Arr::get($ids, 'tax_profiles', [])), $counts);
                     $this->deleteVerifiedRecords(Address::query()->withTrashed(), array_values((array) Arr::get($ids, 'addresses', [])), $counts);
                     $this->deleteVerifiedRecords(Contact::query()->withTrashed(), array_values((array) Arr::get($ids, 'contacts', [])), $counts);
+                    $this->deleteVerifiedRecords(MedicalAttentionSubscription::query()->withTrashed(), array_filter(array_values((array) Arr::get($ids, 'subscriptions', []))), $counts);
                     $this->deleteVerifiedRecords(Customer::query()->withTrashed(), array_values((array) Arr::get($ids, 'customers', [])), $counts);
+                    $this->deleteVerifiedRecords(Customer::query()->withTrashed(), array_values((array) Arr::get($ids, 'membership_customers', [])), $counts);
                     $this->deleteVerifiedRecords(RegularAccount::query()->withTrashed(), array_values((array) Arr::get($ids, 'regular_accounts', [])), $counts);
+                    $this->deleteVerifiedRecords(RegularAccount::query()->withTrashed(), array_values((array) Arr::get($ids, 'membership_regular_accounts', [])), $counts);
                     $this->deleteVerifiedRecords(User::query(), array_values((array) Arr::get($ids, 'users', [])), $counts);
+                    $this->deleteVerifiedRecords(User::query(), array_values((array) Arr::get($ids, 'membership_users', [])), $counts);
 
                     $manifest->beginReset();
                     $manifest->delete();
@@ -707,7 +734,7 @@ class AkubicaUatFixtureMaterializer
     {
         $identities = $this->optionalIdentities();
 
-        if (count($identities) !== 3) {
+        if (count($identities) !== 7) {
             throw new AkubicaUatFixtureException('UAT_CONFIG_REQUIRED');
         }
 
@@ -723,7 +750,7 @@ class AkubicaUatFixtureMaterializer
 
         $normalized = [];
 
-        foreach (['primary', 'foreign', 'disposable'] as $role) {
+        foreach (['primary', 'foreign', 'disposable', 'membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $role) {
             $identity = (array) ($identities[$role] ?? []);
             $email = mb_strtolower(trim((string) ($identity['email'] ?? '')));
             $phone = preg_replace('/\D+/', '', (string) ($identity['phone'] ?? '')) ?? '';
@@ -765,6 +792,10 @@ class AkubicaUatFixtureMaterializer
             'customer_identifiers' => [
                 'primary' => $namespace.'-customer-primary',
                 'foreign' => $namespace.'-customer-foreign',
+                'membership_none' => $namespace.'-customer-membership-none',
+                'membership_regular' => $namespace.'-customer-membership-regular',
+                'membership_institutional' => $namespace.'-customer-membership-institutional',
+                'membership_expired' => $namespace.'-customer-membership-expired',
             ],
             'category_name' => '[UAT] Akubica UAT v1 - Laboratorio',
             'store_name' => '[UAT] Akubica UAT v1 - Sucursal',
@@ -891,8 +922,12 @@ class AkubicaUatFixtureMaterializer
                 throw new AkubicaUatFixtureException('UAT_STORAGE_PROMOTION_FAILED');
             }
 
+            if ($write['temporary_path'] === null) {
+                continue;
+            }
+
             if (hash('sha256', (string) $disk->get($write['final_path'])) !== hash('sha256', $write['content'])) {
-                throw new AkubicaUatFixtureException('UAT_STORAGE_HASH_MISMATCH');
+                throw new AkubicaUatFixtureException("UAT_STORAGE_HASH_MISMATCH_".str_replace("/", "_", (string) $write["final_path"]));
             }
         }
     }
@@ -1085,6 +1120,39 @@ class AkubicaUatFixtureMaterializer
      * @param  array<string, mixed>  $ids
      * @param  array<string, int>  $counts
      */
+
+    private function upsertMembershipSubscription(string $role, Customer $customer, array &$ids, array &$counts): ?MedicalAttentionSubscription
+    {
+        if ($role === 'membership_none') {
+            $ids['subscriptions'][$role] = null;
+            return null;
+        }
+
+        $subscriptionId = (int) Arr::get($ids, "subscriptions.{$role}", 0);
+        $isExpired = $role === 'membership_expired';
+        $type = $role === 'membership_institutional' ? MedicalSubscriptionType::INSTITUTIONAL : MedicalSubscriptionType::REGULAR;
+        $attributes = [
+            'customer_id' => $customer->id,
+            'type' => $type,
+            'price_cents' => $type === MedicalSubscriptionType::REGULAR ? 30000 : 0,
+            'start_date' => $isExpired ? now()->subDays(60) : now()->subDay(),
+            'end_date' => $isExpired ? now()->subDay() : now()->addDays(30),
+        ];
+
+        if ($subscriptionId > 0 && ($subscription = MedicalAttentionSubscription::query()->withTrashed()->find($subscriptionId))) {
+            if ($subscription->trashed()) {
+                $subscription->restore();
+            }
+            $subscription->fill($attributes);
+            $subscription->save();
+            $counts['updated']++;
+            return $subscription->fresh();
+        }
+
+        $subscription = MedicalAttentionSubscription::query()->create($attributes);
+        $counts['created']++;
+        return $subscription;
+    }
     private function upsertContact(string $role, Customer $customer, array &$ids, array &$counts): Contact
     {
         $contactId = (int) Arr::get($ids, "contacts.{$role}", 0);
@@ -1768,7 +1836,7 @@ class AkubicaUatFixtureMaterializer
         $ids = (array) Arr::get($manifest->metadata, 'ids', []);
         $naturalKeys = $this->naturalKeys($plan->namespace);
 
-        foreach (['users', 'regular_accounts', 'customers', 'contacts', 'addresses', 'tax_profiles', 'tests', 'coupons', 'coupon_assignments', 'purchases', 'purchase_items', 'invoices', 'invoice_requests'] as $key) {
+        foreach (['users', 'membership_users', 'regular_accounts', 'membership_regular_accounts', 'customers', 'membership_customers', 'subscriptions', 'contacts', 'addresses', 'tax_profiles', 'tests', 'coupons', 'coupon_assignments', 'purchases', 'purchase_items', 'invoices', 'invoice_requests'] as $key) {
             if (! is_array(Arr::get($ids, $key))) {
                 throw new AkubicaUatFixtureException('UAT_MANIFEST_CORRUPT');
             }
@@ -1780,11 +1848,11 @@ class AkubicaUatFixtureMaterializer
             }
         }
 
-        if ((array) Arr::get($manifest->metadata, 'storage_hashes', []) !== $plan->storageHashes) {
+        if ($this->canonicalize((array) Arr::get($manifest->metadata, 'storage_hashes', [])) !== $this->canonicalize($plan->storageHashes)) {
             throw new AkubicaUatFixtureException('UAT_MANIFEST_CORRUPT');
         }
 
-        if ((array) Arr::get($manifest->metadata, 'natural_key_hashes', []) !== $this->naturalKeyHashes($plan->namespace)) {
+        if ($this->canonicalize((array) Arr::get($manifest->metadata, 'natural_key_hashes', [])) !== $this->canonicalize($this->naturalKeyHashes($plan->namespace))) {
             throw new AkubicaUatFixtureException('UAT_MANIFEST_CORRUPT');
         }
 
@@ -1792,6 +1860,22 @@ class AkubicaUatFixtureMaterializer
         $this->assertSyntheticUser('foreign', $ids);
         $this->assertSyntheticCustomer('primary', $ids);
         $this->assertSyntheticCustomer('foreign', $ids);
+        foreach (['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $membershipRole) {
+            $this->assertSyntheticUser($membershipRole, $ids);
+            $this->assertSyntheticCustomer($membershipRole, $ids);
+            $subscriptionId = Arr::get($ids, "subscriptions.{$membershipRole}");
+            if ($membershipRole === 'membership_none') {
+                if ($subscriptionId !== null) {
+                    throw new AkubicaUatFixtureException('UAT_RESET_SUBSCRIPTION_MISMATCH');
+                }
+                continue;
+            }
+            $subscription = MedicalAttentionSubscription::query()->withTrashed()->find((int) $subscriptionId);
+            $expectedType = $membershipRole === 'membership_institutional' ? MedicalSubscriptionType::INSTITUTIONAL : MedicalSubscriptionType::REGULAR;
+            if ($subscription === null || (int) $subscription->customer_id !== (int) Arr::get($ids, "customers.{$membershipRole}") || $subscription->type !== $expectedType) {
+                throw new AkubicaUatFixtureException('UAT_RESET_SUBSCRIPTION_MISMATCH');
+            }
+        }
         $this->assertChild(Customer::class, (int) Arr::get($ids, 'customers.primary'), Contact::class, (int) Arr::get($ids, 'contacts.primary'), 'customer_id');
         $this->assertChild(Customer::class, (int) Arr::get($ids, 'customers.foreign'), Contact::class, (int) Arr::get($ids, 'contacts.foreign'), 'customer_id');
         $this->assertChild(Customer::class, (int) Arr::get($ids, 'customers.primary'), Address::class, (int) Arr::get($ids, 'addresses.primary'), 'customer_id');
@@ -2202,10 +2286,27 @@ class AkubicaUatFixtureMaterializer
      */
     private function userIdsFromMetadata(array $ids): array
     {
-        return collect((array) Arr::get($ids, 'users', []))
+        return collect(array_merge(
+            array_values((array) Arr::get($ids, 'users', [])),
+            array_values((array) Arr::get($ids, 'membership_users', [])),
+        ))
             ->filter(fn ($id) => is_numeric($id))
             ->map(fn ($id) => (int) $id)
             ->values()
             ->all();
+    }
+    private function canonicalize(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+        $canonical = [];
+        foreach ($value as $key => $item) {
+            $canonical[$key] = $this->canonicalize($item);
+        }
+        if (! array_is_list($canonical)) {
+            ksort($canonical);
+        }
+        return $canonical;
     }
 }

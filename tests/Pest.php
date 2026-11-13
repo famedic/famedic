@@ -36,6 +36,14 @@ require_once __DIR__.'/Support/Otp/akubica_otp_testing_helpers.php';
 */
 uses()->beforeEach(function () {
     disableAllAkubicaOtpFeatures();
+
+    if (getenv('FAMEDIC_RC2_ACTIVE_CAMPAIGN_FAKE') === '1') {
+        \Illuminate\Support\Facades\Http::fake([
+            'https://activecampaign.invalid/*' => \Illuminate\Support\Facades\Http::response([
+                'contact' => ['id' => 'rc2-synthetic-contact'],
+            ], 200),
+        ]);
+    }
 })->in('Feature/Api/V1');
 
 /*
