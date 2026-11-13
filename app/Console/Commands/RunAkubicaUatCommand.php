@@ -211,14 +211,15 @@ final class RunAkubicaUatCommand extends Command
             } catch (Throwable $cleanupFailure) {
                 $cleanupError = 'UAT_CLEANUP_FAILED';
             }
+            [$reportedStage, $errorCode] = $this->classifyApplyFailure($stage, $e);
             $errorCode = $e instanceof \DomainException
                 && $e->getMessage() === 'UAT_BEARER_FLOW_REQUIRES_APPROVED_OTP'
                     ? $e->getMessage()
-                    : 'UAT_'.strtoupper(preg_replace('/[^A-Za-z0-9]+/', '_', $stage)).'_FAILED';
+                    : $errorCode;
             $correlationId = (string) Str::uuid();
             try {
                 Log::warning('akubica_uat_apply_failed', [
-                    'stage' => $stage,
+                    'stage' => $reportedStage,
                     'exception_type' => $e::class,
                     'correlation_id' => $correlationId,
                     'error_code' => $errorCode,
@@ -229,7 +230,7 @@ final class RunAkubicaUatCommand extends Command
             }
             $this->line(json_encode([
                 'status' => 'blocked',
-                'stage' => $stage,
+                'stage' => $reportedStage,
                 'exception_type' => $e::class,
                 'correlation_id' => $correlationId,
                 'error_code' => $errorCode,
@@ -242,6 +243,36 @@ final class RunAkubicaUatCommand extends Command
 
             return self::FAILURE;
         }
+    }
+
+    /** @return array{0: string, 1: string} */
+    private function classifyApplyFailure(string $stage, Throwable $exception): array
+    {
+        $known = [
+            'UAT_BASE_URL_NOT_AUTHORIZED' => 'baseUrl',
+            'UAT_ATIX_NOT_CONFIGURED' => 'atix',
+            'UAT_ATIX_UNEXPECTED_HTTP' => 'atix',
+            'UAT_ATIX_NON_JSON_RESPONSE' => 'atix',
+            'UAT_OTP_REQUEST_UNEXPECTED' => 'otpRequest',
+            'UAT_OTP_INPUT_EOF' => 'otpInput',
+            'UAT_OTP_VERIFY_UNEXPECTED' => 'otpVerify',
+            'UAT_BEARER_NOT_PERSISTED' => 'bearer',
+            'UAT_MEMBERSHIP_UNEXPECTED_HTTP' => 'membership',
+            'UAT_CART_ADD_UNEXPECTED_HTTP' => 'cartAdd',
+            'UAT_CART_TOTALS_UNEXPECTED_HTTP' => 'cartTotals',
+            'UAT_CART_DUPLICATE_UNEXPECTED_HTTP' => 'cartDuplicate',
+            'UAT_CART_ITEM_NOT_FOUND' => 'cartRead',
+            'UAT_CART_REMOVE_UNEXPECTED_HTTP' => 'cartRemove',
+            'UAT_CART_FINAL_STATE_UNEXPECTED' => 'cartFinal',
+            'UAT_BEARER_REVOKE_UNEXPECTED' => 'revoke',
+        ];
+        $message = $exception->getMessage();
+
+        if (isset($known[$message])) {
+            return [$known[$message], $message];
+        }
+
+        return [$stage, 'UAT_'.strtoupper(preg_replace('/[^A-Za-z0-9]+/', '_', $stage)).'_FAILED'];
     }
 
     private function recover(ConsumerLifecycle $lifecycle, ?User $operator): int
@@ -499,7 +530,11 @@ final class RunAkubicaUatCommand extends Command
         $state = trim((string) shell_exec('stty -g 2>/dev/null'));
         try {
             shell_exec('stty -echo 2>/dev/null');
-            $value = trim((string) fgets(STDIN));
+            $line = fgets(STDIN);
+            if ($line === false) {
+                throw new \DomainException('UAT_OTP_INPUT_EOF');
+            }
+            $value = trim($line);
             $this->output->writeln('');
             return $value;
         } finally {
