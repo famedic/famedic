@@ -40,7 +40,8 @@ final class RunAkubicaUatCommand extends Command
     protected $description = 'Controlled RC2 UAT provisioning; fails closed when Bearer issuance needs OTP.';
 
     private const STATE_PATH = 'akubica-uat-v1/uat-session.json';
-    private const CAPABILITIES = ['memberships', 'cart', 'cart:membership'];
+    /** Exact route capabilities required by AuthorizeRegisteredConsumer. */
+    private const CAPABILITIES = ['memberships:read', 'cart:read', 'cart:membership:write'];
 
     /** @var array{http: int, remote_error_code: string|null}|null */
     private ?array $lastHttpTelemetry = null;
