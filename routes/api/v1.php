@@ -95,6 +95,11 @@ Route::middleware(['force.json', 'api.correlation', 'api.token.guard'])->name('a
         Route::get('laboratory-tests/{laboratory_test_id}', [CatalogController::class, 'showLaboratoryTest'])
             ->name('laboratory-tests.show');
 
+        Route::get('packages', [CatalogController::class, 'indexPackages'])
+            ->name('packages.index');
+        Route::get('packages/{package_id}', [CatalogController::class, 'showPackage'])
+            ->name('packages.show');
+
         Route::get('medications/{medication_id}', [CatalogController::class, 'showMedication'])
             ->name('medications.show');
     });

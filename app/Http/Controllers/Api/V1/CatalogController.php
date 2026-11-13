@@ -15,10 +15,12 @@ use App\Http\Resources\Api\V1\LaboratoryStoreResource;
 use App\Http\Resources\Api\V1\LaboratoryTestCategoryResource;
 use App\Http\Resources\Api\V1\LaboratoryTestListResource;
 use App\Http\Resources\Api\V1\LaboratoryTestResource;
+use App\Http\Resources\Api\V1\LaboratoryPackageResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
+use App\Models\LaboratoryTestPackage;
 use Illuminate\Http\JsonResponse;
 
 class CatalogController extends Controller
@@ -152,6 +154,43 @@ class CatalogController extends Controller
         }
 
         return ApiResponse::success($resource);
+    }
+
+    public function indexPackages(ListLaboratoryTestsRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $paginator = LaboratoryTestPackage::query()
+            ->with(['packageTest.laboratoryTestCategory', 'components'])
+            ->whereHas('packageTest', function ($query) use ($validated): void {
+                $query->when($validated['brand'] ?? null, fn ($q, $brand) => $q->where('brand', $brand))
+                    ->when($validated['search'] ?? null, fn ($q, $search) => $q->where('name', 'like', "%{$search}%"))
+                    ->when($validated['category_id'] ?? null, fn ($q, $category) => $q->where('laboratory_test_category_id', $category));
+            })
+            ->orderBy('id')
+            ->paginate($validated['per_page'] ?? 20, ['*'], 'page', $validated['page'] ?? null);
+
+        return ApiResponse::success([
+            'packages' => LaboratoryPackageResource::collection($paginator->items())->resolve($request),
+            'pagination' => $this->paginationMeta($paginator),
+        ]);
+    }
+
+    public function showPackage(int $packageId): JsonResponse
+    {
+        $package = LaboratoryTestPackage::query()
+            ->with(['packageTest.laboratoryTestCategory', 'components'])
+            ->where('package_test_id', $packageId)
+            ->first();
+
+        if (! $package) {
+            return ApiResponse::error('PACKAGE_NOT_FOUND', 'Paquete no encontrado.', 404);
+        }
+
+        try {
+            return ApiResponse::success((new LaboratoryPackageResource($package))->resolve(request()));
+        } catch (PricingSourceUnavailableException) {
+            return $this->pricingSourceUnavailable();
+        }
     }
 
     public function showMedication(int $medicationId): JsonResponse

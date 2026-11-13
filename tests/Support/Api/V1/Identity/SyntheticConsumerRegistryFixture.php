@@ -34,6 +34,7 @@ final class SyntheticConsumerRegistryFixture
             && in_array(config('database.connections.mysql.database'), [
                 'famedic_rc2_local_20261110_testing',
                 'famedic_rc2_uat_20261112_testing',
+                'famedic_rc2_a12_20261113_testing',
                 'famedic_b24_clean_testing',
             ], true)
             && in_array(config('database.connections.mysql.host'), ['rc2-local-mysql-20261110', 'mysql'], true);

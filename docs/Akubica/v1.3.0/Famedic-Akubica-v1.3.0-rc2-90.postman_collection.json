@@ -1760,6 +1760,28 @@
       ]
     },
     {
+      "name": "catalogPackages",
+      "request": {
+        "method": "GET",
+        "header": [{"key": "Accept", "value": "application/json"}],
+        "url": "{{base_url}}/catalog/packages",
+        "description": "operationId=catalogPackages; Solo paquetes con clasificación persistida explícita. B02 propuesta pendiente de aceptación contractual."
+      },
+      "response": [],
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"B02 devuelve 200 o error contractual explícito\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 422, 503]); });"]}}]
+    },
+    {
+      "name": "catalogPackage",
+      "request": {
+        "method": "GET",
+        "header": [{"key": "Accept", "value": "application/json"}],
+        "url": "{{base_url}}/catalog/packages/{{vault:package_id}}",
+        "description": "operationId=catalogPackage; Detalle y composición del paquete explícito."
+      },
+      "response": [],
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"B02 detalle contractual\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 404, 503]); });"]}}]
+    },
+    {
       "name": "catalogLaboratoryBrands",
       "request": {
         "method": "GET",
