@@ -26,7 +26,8 @@ final class RunAkubicaUatCommand extends Command
         {--apply : Provision the temporary registry records, then stop before OTP/Bearer issuance}
         {--recover : Revoke records from the last interrupted apply}
         {--confirm= : Exact namespace confirmation required by apply/recover}
-        {--expected-sha= : Expected deployed commit SHA}';
+        {--expected-sha= : Expected deployed commit SHA}
+        {--scenarios=B08,B09,B10,B11 : Comma-separated membership scenarios}';
 
     protected $description = 'Controlled RC2 UAT provisioning; fails closed when Bearer issuance needs OTP.';
 
@@ -61,8 +62,12 @@ final class RunAkubicaUatCommand extends Command
             }
 
             $operator = $this->configuredUser('AKUBICA_UAT_OPERATOR_ID');
-            $users = $this->manifestUsers($manifest);
-            if (count($users) !== 4) {
+            $scenarios = $this->scenarios();
+            if ($scenarios === []) {
+                return $this->failWithCode('UAT_SCENARIOS_INVALID');
+            }
+            $users = $this->manifestUsers($manifest, $scenarios);
+            if (count($users) !== count($scenarios)) {
                 return $this->failWithCode('UAT_MEMBERSHIP_USERS_INCOMPLETE');
             }
 
@@ -72,6 +77,7 @@ final class RunAkubicaUatCommand extends Command
                     'action' => 'dry-run',
                     'namespace' => $plan->namespace,
                     'operator_id' => $operator?->id,
+                    'scenarios' => $scenarios,
                     'membership_users' => count($users),
                     'machine_credential' => 'planned',
                     'delegations' => 4,
@@ -222,17 +228,37 @@ final class RunAkubicaUatCommand extends Command
         return $id > 0 ? User::query()->find($id) : null;
     }
 
-    private function manifestUsers(AkubicaUatFixtureManifest $manifest): array
+    private function manifestUsers(AkubicaUatFixtureManifest $manifest, array $scenarios): array
     {
-        $ids = (array) data_get($manifest->metadata, 'ids.membership_users', []);
-        if ($ids === []) {
-            $ids = collect(['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'])
-                ->map(fn (string $role) => data_get($manifest->metadata, "ids.users.{$role}"))
-                ->filter()
-                ->values()
-                ->all();
-        }
+        $roles = [
+            'B08' => 'membership_none',
+            'B09' => 'membership_regular',
+            'B10' => 'membership_institutional',
+            'B11' => 'membership_expired',
+        ];
+        $ids = collect($scenarios)
+            ->map(fn (string $scenario) => data_get($manifest->metadata, 'ids.users.'.($roles[$scenario] ?? '')))
+            ->filter()
+            ->values()
+            ->all();
         return User::query()->whereIn('id', array_map('intval', $ids))->get()->filter(fn (User $u) => $u->customers()->count() === 1)->values()->all();
+    }
+
+    /** @return list<string> */
+    private function scenarios(): array
+    {
+        $allowed = ['B08', 'B09', 'B10', 'B11'];
+        $raw = (string) $this->option('scenarios');
+        $scenarios = array_values(array_unique(array_filter(array_map(
+            static fn (string $value): string => strtoupper(trim($value)),
+            explode(',', $raw),
+        ))));
+
+        if (array_diff($scenarios, $allowed) !== []) {
+            return [];
+        }
+
+        return $scenarios;
     }
 
     private function assertSha(): void
