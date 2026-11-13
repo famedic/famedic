@@ -164,6 +164,10 @@ final class RunAkubicaUatCommand extends Command
         try {
             $stage = 'registerConsumer';
             $consumer = $registry->register($operator, 'leo', self::CAPABILITIES, $expiresAt);
+            // Reuse the persisted expiry so database timestamp precision cannot
+            // make the channel appear longer-lived than its consumer.
+            $consumer->refresh();
+            $expiresAt = Carbon::parse($consumer->expires_at);
             $stage = 'registerChannel';
             $channel = $registry->channel($operator, $consumer, $expiresAt);
             $stage = 'enableConsumer';
