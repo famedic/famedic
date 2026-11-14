@@ -1765,7 +1765,7 @@
         "method": "GET",
         "header": [{"key": "Accept", "value": "application/json"}],
         "url": "{{base_url}}/catalog/packages",
-        "description": "operationId=catalogPackages; Solo paquetes con clasificación persistida explícita. B02 propuesta pendiente de aceptación contractual."
+        "description": "operationId=catalogPackages; Solo paquetes con clasificación persistida explícita. composition combina estudios (type=study, id de laboratory_tests) y descriptores comerciales (type=commercial_descriptor, id=null). composition_status=incomplete indica que existe un descriptor pending_commercial_validation o rejected; no tratar esos descriptores como productos comprables. B02 propuesta pendiente de aceptación contractual."
       },
       "response": [],
       "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"B02 devuelve 200 o error contractual explícito\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 422, 503]); });"]}}]
@@ -1776,7 +1776,7 @@
         "method": "GET",
         "header": [{"key": "Accept", "value": "application/json"}],
         "url": "{{base_url}}/catalog/packages/{{vault:package_id}}",
-        "description": "operationId=catalogPackage; Detalle y composición del paquete explícito."
+        "description": "operationId=catalogPackage; Detalle y composición del paquete explícito. Los descriptores comerciales son informativos, no study_id ni líneas de carrito; revisar composition_status antes de presentar la composición como validada."
       },
       "response": [],
       "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"B02 detalle contractual\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 404, 503]); });"]}}]

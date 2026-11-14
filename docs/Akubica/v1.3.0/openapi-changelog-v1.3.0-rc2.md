@@ -12,7 +12,7 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 - Se documentan comparación de precios, Plan Básico, altas/retiros idempotentes y separación de carritos.
 - `checkout/prepare` mantiene continuidad preparada, pero `assistant_can_pay=false`; B24 no está activado.
 - Leo no recibe pagos, payment links, cupones, saldo, beneficios legacy ni capacidades R30.
-- No se agregan schemas ni precios de paquetes mientras B02 siga bloqueado.
+- B02 local propone composición híbrida: estudios referenciados por ID y descriptores comerciales con `id=null`; `composition_status=incomplete` impide presentar como validada una composición con descriptores pendientes o rechazados. Los descriptores no son productos ni líneas de carrito. Requiere aceptación contractual de Leo antes de publicar en QA.
 
 ## Referencias de validación
 

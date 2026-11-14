@@ -7651,16 +7651,31 @@
           }
         }
       },
+      "LaboratoryPackageCompositionItem": {
+        "type": "object",
+        "required": ["type", "id", "name", "sort_order", "validation_status"],
+        "additionalProperties": false,
+        "properties": {
+          "type": {"type": "string", "enum": ["study", "commercial_descriptor"]},
+          "id": {"type": ["integer", "null"], "description": "ID de laboratory_tests únicamente para type=study; null para descriptores."},
+          "name": {"type": "string"},
+          "gda_id": {"type": ["string", "null"]},
+          "sort_order": {"type": "integer"},
+          "validation_status": {"type": "string", "enum": ["pending_commercial_validation", "validated", "rejected"]},
+          "validation_reference": {"type": ["string", "null"]}
+        }
+      },
       "LaboratoryPackage": {
         "type": "object",
-        "required": ["id", "name", "package_classification", "composition", "available"],
+        "required": ["id", "name", "package_classification", "composition", "composition_status", "available"],
         "properties": {
           "id": {"type": "integer"},
           "name": {"type": "string"},
           "brand": {"type": ["string", "null"]},
           "category": {"type": ["string", "null"]},
           "package_classification": {"type": "string", "const": "explicit"},
-          "composition": {"type": "array", "items": {"type": "object", "required": ["id", "name", "sort_order"], "properties": {"id": {"type": "integer"}, "name": {"type": "string"}, "gda_id": {"type": ["string", "null"]}, "sort_order": {"type": "integer"}}}},
+          "composition": {"type": "array", "items": {"$ref": "#/components/schemas/LaboratoryPackageCompositionItem"}},
+          "composition_status": {"type": "string", "enum": ["validated", "incomplete"]},
           "pricing": {"$ref": "#/components/schemas/LaboratoryPricing"},
           "available": {"type": "boolean"}
         }
