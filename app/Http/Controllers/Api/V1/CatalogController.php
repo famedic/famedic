@@ -160,7 +160,7 @@ class CatalogController extends Controller
     {
         $validated = $request->validated();
         $paginator = LaboratoryTestPackage::query()
-            ->with(['packageTest.laboratoryTestCategory', 'components'])
+            ->with(['packageTest.laboratoryTestCategory', 'components', 'descriptors'])
             ->whereHas('packageTest', function ($query) use ($validated): void {
                 $query->when($validated['brand'] ?? null, fn ($q, $brand) => $q->where('brand', $brand))
                     ->when($validated['search'] ?? null, fn ($q, $search) => $q->where('name', 'like', "%{$search}%"))
@@ -178,7 +178,7 @@ class CatalogController extends Controller
     public function showPackage(int $packageId): JsonResponse
     {
         $package = LaboratoryTestPackage::query()
-            ->with(['packageTest.laboratoryTestCategory', 'components'])
+            ->with(['packageTest.laboratoryTestCategory', 'components', 'descriptors'])
             ->where('package_test_id', $packageId)
             ->first();
 
