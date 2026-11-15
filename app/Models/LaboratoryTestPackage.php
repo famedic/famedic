@@ -26,7 +26,7 @@ class LaboratoryTestPackage extends Model
             'laboratory_test_package_components',
             'package_id',
             'component_test_id',
-        )->withPivot('sort_order')->orderBy('laboratory_test_package_components.sort_order');
+        )->withPivot('sort_order', 'validation_status', 'validation_reference')->orderBy('laboratory_test_package_components.sort_order');
     }
 
     public function descriptors(): HasMany

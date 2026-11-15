@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Api\V1;
 
 use App\Models\LaboratoryTestPackage;
+use App\Models\LaboratoryTestPackageDescriptor;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,7 +21,11 @@ class LaboratoryPackageResource extends JsonResource
             'name' => $component->name,
             'gda_id' => $component->gda_id,
             'sort_order' => (int) $component->pivot->sort_order,
-            'validation_status' => 'validated',
+            // B02: un estudio vinculado solo es 'validated' cuando la equivalencia
+            // comercial fue aprobada; la mera vinculación no certifica nada.
+            'validation_status' => $component->pivot->validation_status
+                ?? LaboratoryTestPackageDescriptor::STATUS_PENDING,
+            'validation_reference' => $component->pivot->validation_reference,
         ]);
 
         $descriptors = $package->descriptors->map(fn ($descriptor) => [
@@ -34,8 +39,8 @@ class LaboratoryPackageResource extends JsonResource
         ]);
 
         $composition = $studies->concat($descriptors)->sortBy('sort_order')->values();
-        $hasUnconfirmedDescriptor = $package->descriptors->contains(
-            fn ($descriptor) => $descriptor->validation_status !== 'validated',
+        $hasUnconfirmedElement = $composition->contains(
+            fn (array $element) => $element['validation_status'] !== LaboratoryTestPackageDescriptor::STATUS_VALIDATED,
         );
 
         return [
@@ -45,7 +50,7 @@ class LaboratoryPackageResource extends JsonResource
             'category' => $test->laboratoryTestCategory?->name,
             'package_classification' => 'explicit',
             'composition' => $composition->all(),
-            'composition_status' => $hasUnconfirmedDescriptor ? 'incomplete' : 'validated',
+            'composition_status' => $hasUnconfirmedElement ? 'incomplete' : 'validated',
             'pricing' => (new LaboratoryPricingResource($test))->resolve($request),
             'available' => ! $test->trashed(),
         ];
