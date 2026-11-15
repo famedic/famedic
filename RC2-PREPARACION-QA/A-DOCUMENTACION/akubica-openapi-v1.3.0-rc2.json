@@ -1113,6 +1113,152 @@
         }
       }
     },
+    "/catalog/packages": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "operationId": "catalogPackages",
+        "summary": "Listar paquetes de laboratorio",
+        "description": "Público (sin autenticación). Lista solo paquetes con clasificación explícita (tabla laboratory_test_packages), ordenados por id. Filtros sobre el estudio-paquete. Implementación: CatalogController@indexPackages.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/LaboratoryBrand"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista paginada de paquetes",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPackagesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/catalog/packages/{package_id}": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "operationId": "catalogShowPackage",
+        "summary": "Detalle de paquete de laboratorio",
+        "description": "Público (sin autenticación). Implementación: CatalogController@showPackage.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/PackageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paquete con composición, estado comercial y precios",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPackageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "PACKAGE_NOT_FOUND",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PRICING_SOURCE_UNAVAILABLE (retryable)",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/catalog/medications/{medication_id}": {
       "get": {
         "tags": [
@@ -6225,6 +6371,16 @@
           "type": "string",
           "format": "uuid"
         }
+      },
+      "PackageId": {
+        "name": "package_id",
+        "in": "path",
+        "required": true,
+        "description": "ID del estudio-paquete (package_test_id), p. ej. 4965.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "responses": {
@@ -10914,6 +11070,183 @@
             "format": "date-time"
           }
         }
+      },
+      "LaboratoryPackageCompositionElement": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id",
+          "name",
+          "gda_id",
+          "sort_order",
+          "validation_status",
+          "validation_reference"
+        ],
+        "description": "Elemento de la composición de un paquete. `study` = estudio del catálogo vinculado; `commercial_descriptor` = descripción comercial sin estudio de catálogo. Un elemento solo es `validated` cuando FAMEDIC Comercial aprobó la equivalencia (B02); la mera vinculación no lo valida.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "study",
+              "commercial_descriptor"
+            ]
+          },
+          "id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "ID del estudio de catálogo; null para commercial_descriptor."
+          },
+          "name": {
+            "type": "string"
+          },
+          "gda_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "null para commercial_descriptor."
+          },
+          "sort_order": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "validation_status": {
+            "type": "string",
+            "enum": [
+              "pending_commercial_validation",
+              "validated",
+              "rejected"
+            ]
+          },
+          "validation_reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255,
+            "description": "Referencia de la aprobación comercial (o del expediente pendiente)."
+          }
+        }
+      },
+      "LaboratoryPackage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "brand",
+          "category",
+          "package_classification",
+          "composition",
+          "composition_status",
+          "pricing",
+          "available"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "ID del estudio-paquete en el catálogo (package_test_id); es el `package_id` de la ruta de detalle."
+          },
+          "name": {
+            "type": "string"
+          },
+          "brand": {
+            "$ref": "#/components/schemas/LaboratoryBrand"
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "package_classification": {
+            "type": "string",
+            "enum": [
+              "explicit"
+            ],
+            "description": "Solo se publican paquetes clasificados explícitamente; nunca se infieren de feature_list."
+          },
+          "composition": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LaboratoryPackageCompositionElement"
+            },
+            "description": "Ordenada por sort_order."
+          },
+          "composition_status": {
+            "type": "string",
+            "enum": [
+              "validated",
+              "incomplete"
+            ],
+            "description": "`validated` solo si TODOS los elementos (estudios y descriptores) están validated."
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/LaboratoryPricing"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CatalogPackagesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "success",
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "packages",
+                  "pagination"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "packages": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/LaboratoryPackage"
+                    }
+                  },
+                  "pagination": {
+                    "$ref": "#/components/schemas/Pagination"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CatalogPackageResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "success",
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/LaboratoryPackage"
+              }
+            }
+          }
+        ]
       }
     }
   },

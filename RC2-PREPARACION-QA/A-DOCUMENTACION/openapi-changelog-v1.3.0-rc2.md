@@ -17,3 +17,11 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 ## Referencias de validación
 
 La sintaxis JSON del contrato principal y del suplemento R30 se valida en el informe de cierre local. La validación oficial de OpenAPI y las pruebas HTTP de staging permanecen pendientes.
+
+## 2026-11-15 — Documentación de `/catalog/packages` (B02)
+
+- **Nuevo en el contrato (ya implementado en código):** `GET /catalog/packages` (lista paginada; filtros `brand`, `search`, `category_id`, `page`, `per_page`) y `GET /catalog/packages/{package_id}` (detalle por `package_test_id`; `404 PACKAGE_NOT_FOUND`; `503 PRICING_SOURCE_UNAVAILABLE`). Públicos, sin autenticación.
+- Esquemas nuevos: `LaboratoryPackage`, `LaboratoryPackageCompositionElement`, `CatalogPackagesResponse`, `CatalogPackageResponse`; parámetro `PackageId`.
+- `validation_status` de cada elemento refleja la aprobación comercial; `composition_status=validated` solo cuando todos los elementos están `validated`. `validation_reference` aparece también en estudios (requiere el cambio B02 de esta rama).
+- Discrepancias conocidas de la implementación (no documentadas como contrato): la lista acepta `requires_appointment` en validación pero no lo aplica; la lista no captura `PRICING_SOURCE_UNAVAILABLE` (el detalle sí).
+- Validación: `openapi-spec-validator` OK; `redocly lint` sin problemas nuevos (los 8 errores `operation-summary` y 33 avisos son preexistentes, idénticos en la versión base).
