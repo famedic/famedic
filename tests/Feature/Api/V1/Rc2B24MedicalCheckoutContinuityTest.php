@@ -326,3 +326,28 @@ test('B24-C15 leo still cannot obtain a payment link for the medical cart', func
     expect($response->status())->toBeIn([401, 403]);
     expect(AkubicaCheckoutLink::query()->whereNull('metadata->purpose')->count())->toBe(0);
 });
+
+test('B24-C16 rejections of reused, expired or disabled links are logged with reason and never the token', function () {
+    b24EnableContinuity();
+    Log::spy();
+    [$user, $leo] = b24LeoWithMembershipCart();
+    $plain = b24PlainToken($this->getJson('/api/v1/checkout/prepare?service_line=medical_services', b24Headers($leo))->json('data.continuity_url'));
+    $linkId = AkubicaCheckoutLink::query()->sole()->id;
+
+    $this->actingAs($user, 'web')->get('/checkout/continue/'.$plain)->assertRedirect(route('medical-attention.checkout'));
+    $this->get('/checkout/continue/'.$plain)->assertSessionHas('error', 'La liga de checkout ya fue utilizada.');
+
+    $second = b24PlainToken($this->getJson('/api/v1/checkout/prepare?service_line=medical_services', b24Headers($leo))->json('data.continuity_url'));
+    $this->travel(11)->minutes();
+    $this->get('/checkout/continue/'.$second)->assertSessionHas('error', 'La liga de checkout ha expirado.');
+
+    b24EnableContinuity(false);
+    $this->get('/checkout/continue/'.$second)->assertSessionHas('error', 'La liga de checkout no es válida.');
+
+    foreach (['already_used', 'expired', 'disabled'] as $reason) {
+        Log::shouldHaveReceived('warning')->withArgs(fn ($message, $context = []) => $message === 'akubica_medical_continuity_rejected'
+            && ($context['reason'] ?? null) === $reason
+            && ! str_contains(json_encode($context), $plain) && ! str_contains(json_encode($context), $second))->atLeast()->once();
+    }
+    Log::shouldHaveReceived('warning')->withArgs(fn ($message, $context = []) => ($context['reason'] ?? null) === 'already_used' && ($context['link_id'] ?? null) === $linkId)->once();
+});

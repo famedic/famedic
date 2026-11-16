@@ -30,3 +30,4 @@ Cambios aditivos; no se elimina ni se renombra ningún campo existente. Pendient
 - Se retira `x-frozen-sha256` porque el documento deja de ser el congelado de review-package-01.
 - R01/R04/R05: la anotación de allowlist de Leo NO se modifica; queda como propuesta contractual C1.
 - B21 (Leo): `DELETE /cart/items/{cart_item_id}` con permiso membership-only queda fijo a `medical_services`; `brand` o `service_line` de otra línea → 403 `CONSUMER_NOT_AUTHORIZED` sin efectos (no ampliación del perfil Leo).
+- B24 (QA): habilitación acotada a `APP_ENV=staging` + `AKUBICA_B24_MEDICAL_CONTINUITY_ENABLED=true` (por defecto apagado; producción siempre apagado). Rechazos de ligas usadas, vencidas o con flag apagado quedan registrados (`akubica_medical_continuity_rejected`, sólo `link_id` y `reason`). Sin cambio de contrato HTTP.
