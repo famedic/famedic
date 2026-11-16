@@ -179,7 +179,42 @@ class CartController extends Controller
         int $cartItemId,
         DeleteItemFromCartAction $deleteItemFromCartAction,
     ): JsonResponse {
-        $medicalItem = \App\Models\MedicalServiceCartItem::query()->with('cart')->find($cartItemId);
+        // RC2 B21 (D3): medical and laboratory items live in different tables with independent ids.
+        // Resolve the line by ownership (or by an explicit service_line/brand discriminator) so that a
+        // removal never touches, or is blocked by, the other line.
+        $customerId = (int) $request->user()->customer?->id;
+        $serviceLine = $request->query('service_line');
+        $brandFilter = $request->query('brand');
+
+        if (($serviceLine !== null && $serviceLine !== 'medical_services') || ($serviceLine !== null && $brandFilter !== null)) {
+            return $this->serviceLineMismatch();
+        }
+
+        $medicalItem = $brandFilter === null
+            ? \App\Models\MedicalServiceCartItem::query()->with('cart')->find($cartItemId)
+            : null;
+
+        if ($medicalItem && $serviceLine === null) {
+            $ownsMedical = (int) $medicalItem->cart->customer_id === $customerId;
+            $ownsLaboratory = LaboratoryCartItem::query()->whereKey($cartItemId)->where('customer_id', $customerId)->exists();
+
+            if ($ownsMedical && $ownsLaboratory) {
+                return ApiResponse::error(
+                    'CART_SERVICE_LINE_MISMATCH',
+                    'El ítem existe en ambas líneas de servicio; indica service_line o brand.',
+                    409,
+                );
+            }
+
+            if ($ownsLaboratory) {
+                $medicalItem = null;
+            }
+        }
+
+        if ($serviceLine === 'medical_services' && ! $medicalItem) {
+            return ApiResponse::error('CART_ITEM_NOT_FOUND', 'Ítem de carrito no encontrado.', 404);
+        }
+
         if ($medicalItem) {
             if ((int) $medicalItem->cart->customer_id !== (int) $request->user()->customer?->id) {
                 $response = ApiResponse::error('FORBIDDEN', 'No tienes permiso para eliminar este ítem.', 403);
@@ -221,6 +256,10 @@ class CartController extends Controller
         $cartItem = LaboratoryCartItem::query()
             ->with('laboratoryTest')
             ->find($cartItemId);
+
+        if ($cartItem && $brandFilter !== null && $cartItem->laboratoryTest?->brand?->value !== $brandFilter) {
+            $cartItem = null;
+        }
 
         if (! $cartItem) {
             $response = ApiResponse::error(
