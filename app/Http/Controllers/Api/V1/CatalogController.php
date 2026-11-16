@@ -76,7 +76,7 @@ class CatalogController extends Controller
         }
 
         $paginator = LaboratoryTest::query()
-            ->with('laboratoryTestCategory')
+            ->with(['laboratoryTestCategory', 'packageDefinition'])
             ->filter($filters)
             ->orderBy('name')
             ->paginate(

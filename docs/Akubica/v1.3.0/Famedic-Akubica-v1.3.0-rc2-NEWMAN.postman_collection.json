@@ -1,0 +1,2910 @@
+{
+  "info": {
+    "name": "FAMEDIC-Akubica RC2 — Newman ejecutable (A01–A12, B01–B26, R01–R08)",
+    "_postman_id": "8b6f1e1c-rc2-newman-0001",
+    "description": "Colección ejecutable RC2. Sin secretos: credenciales, Bearer, HMAC y OTP se inyectan con --env-var en tiempo de ejecución. Bloquea hosts fuera de allowed_hosts y exige expected_release_sha. Los casos sin precondiciones se omiten (SKIPPED_PRECONDITION) y nunca cuentan como PASS.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// === Guardas de ejecución (colección) ===",
+          "const base = pm.environment.get('base_url') || '';",
+          "const host = base.replace(/^https?:\\/\\//, '').split('/')[0];",
+          "const allowed = (pm.environment.get('allowed_hosts') || '').split(',').map(s => s.trim()).filter(Boolean);",
+          "if (!host || !allowed.includes(host)) { throw new Error('HOST_NO_PERMITIDO: ' + host); }",
+          "if (/(^|\\.)famedic\\.com\\.mx$/i.test(host) || /(^|\\.)famedic\\.mx$/i.test(host)) { throw new Error('HOST_PRODUCCION_BLOQUEADO'); }",
+          "const sha = pm.environment.get('expected_release_sha') || '';",
+          "if (!/^[0-9a-f]{40}$/.test(sha)) { throw new Error('RELEASE_SHA_REQUERIDO (40 hex)'); }",
+          "// Correlation ID nuevo por request",
+          "const cid = 'rc2-' + (pm.environment.get('run_id') || 'run') + '-' + pm.variables.replaceIn('{{$guid}}');",
+          "pm.variables.set('cid', cid);",
+          "pm.request.headers.upsert({ key: 'X-Correlation-ID', value: cid });",
+          "// Precondiciones: \"requires: var1,var2\" en la descripción del request",
+          "const desc = (pm.request.description && pm.request.description.toString()) || '';",
+          "const m = desc.match(/requires:\\s*([A-Za-z0-9_, ]+)/);",
+          "if (m) {",
+          "  const missing = m[1].split(',').map(s => s.trim()).filter(v => v && !pm.variables.get(v));",
+          "  if (missing.length) {",
+          "    console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> ' + missing.join('|'));",
+          "    pm.execution.skipRequest();",
+          "  }",
+          "}",
+          "// Idempotency-Key por request (las pruebas de replay fijan la suya)",
+          "if (!pm.request.headers.has('Idempotency-Key') && ['POST','PUT','DELETE'].includes(pm.request.method)) {",
+          "  pm.request.headers.upsert({ key: 'Idempotency-Key', value: pm.variables.replaceIn('{{$guid}}') });",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// === Aserciones comunes (colección) ===",
+          "const scen = pm.info.requestName.split(' ')[0];",
+          "const sha = pm.environment.get('expected_release_sha');",
+          "let body = null; try { body = pm.response.json(); } catch (e) { body = null; }",
+          "const raw = pm.response.text() || '';",
+          "pm.test(scen + ' [release ' + sha.substring(0, 12) + '] correlation id devuelto', function () {",
+          "  pm.expect(pm.response.headers.get('X-Correlation-ID')).to.eql(pm.variables.get('cid'));",
+          "});",
+          "pm.test(scen + ' sin datos protegidos en la respuesta', function () {",
+          "  pm.expect(raw).to.not.match(/\"(otp|otp_code|code_hash|password|secret|hmac_secret|machine_secret)\"\\s*:/i);",
+          "  pm.expect(raw).to.not.match(/\\+52\\d{10}/);",
+          "  ['atix_hmac_secret', 'machine_credential', 'native_machine_credential', 'otp_code', 'step_up_code'].forEach(function (k) {",
+          "    const v = pm.variables.get(k); if (v && String(v).length > 3) { pm.expect(raw.indexOf(String(v))).to.eql(-1); }",
+          "  });",
+          "});",
+          "if (pm.response.code >= 400 && body) {",
+          "  pm.test(scen + ' error tipado (ApiErrorResponse)', function () {",
+          "    pm.expect(body.success).to.eql(false);",
+          "    pm.expect(body.error.code).to.be.a('string');",
+          "    pm.expect(body.error.message).to.be.a('string');",
+          "    pm.expect(body.error.retryable).to.be.a('boolean');",
+          "    pm.expect(body.error.correlation_id).to.eql(pm.response.headers.get('X-Correlation-ID'));",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Fase A (A01–A12)",
+      "item": [
+        {
+          "name": "A01 ATIX teléfono registrado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/integrations/atix/phone-lookups",
+            "description": "requires: phone_registered",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_registered}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_registered\",\n  \"channel_event_id\": \"evt-{{$guid}}\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Firma HMAC ATIX calculada en tiempo de ejecución desde variables de entorno (sin secretos en el archivo)",
+                  "const CJ = require('crypto-js');",
+                  "const keyId = pm.variables.get('atix_key_id'); const secret = pm.variables.get('atix_hmac_secret');",
+                  "if (!keyId || !secret) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> atix_key_id|atix_hmac_secret'); pm.execution.skipRequest(); }",
+                  "let ts = Math.floor(Date.now() / 1000) + Number(pm.variables.get('hmac_ts_offset') || 0);",
+                  "const fixedNonce = pm.variables.get('hmac_fixed_nonce');",
+                  "const nonce = fixedNonce || ('n' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, ''));",
+                  "const rawBody = pm.variables.replaceIn((pm.request.body && pm.request.body.raw) || '');",
+                  "// El cuerpo firmado debe ser idéntico al enviado: se fija ya resuelto (incluye {{$guid}}).",
+                  "if (pm.request.body) { pm.request.body.update({ mode: 'raw', raw: rawBody, options: { raw: { language: 'json' } } }); }",
+                  "const canonical = [pm.request.method.toUpperCase(), '/api/v1/integrations/atix/phone-lookups', String(ts), nonce, CJ.SHA256(rawBody).toString()].join('\\n');",
+                  "let sig = CJ.HmacSHA256(canonical, secret || 'x').toString();",
+                  "if (pm.variables.get('hmac_tamper') === '1') { sig = sig.substring(0, 63) + (sig.endsWith('0') ? '1' : '0'); }",
+                  "pm.request.headers.upsert({ key: 'X-Integration-Key-Id', value: keyId || '' });",
+                  "pm.request.headers.upsert({ key: 'X-Timestamp', value: String(ts) });",
+                  "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+                  "pm.variables.set('last_nonce', nonce);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A01 HTTP 202', function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+                  "pm.test('A01 recognized_unverified sin Bearer/OTP', function () { const b = pm.response.json(); pm.expect(b.data.recognition_status).to.eql('recognized_unverified'); pm.expect(b.data.assurance_level).to.eql('recognized_unverified'); pm.expect(b.data).to.not.have.property('token'); pm.expect(Object.keys(b.data.personalization)).to.satisfy(k => k.every(x => ['allowed','first_name'].includes(x))); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A02 ATIX teléfono no registrado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/integrations/atix/phone-lookups",
+            "description": "requires: phone_unknown",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_unknown}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_unknown\",\n  \"channel_event_id\": \"evt-{{$guid}}\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Firma HMAC ATIX calculada en tiempo de ejecución desde variables de entorno (sin secretos en el archivo)",
+                  "const CJ = require('crypto-js');",
+                  "const keyId = pm.variables.get('atix_key_id'); const secret = pm.variables.get('atix_hmac_secret');",
+                  "if (!keyId || !secret) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> atix_key_id|atix_hmac_secret'); pm.execution.skipRequest(); }",
+                  "let ts = Math.floor(Date.now() / 1000) + Number(pm.variables.get('hmac_ts_offset') || 0);",
+                  "const fixedNonce = pm.variables.get('hmac_fixed_nonce');",
+                  "const nonce = fixedNonce || ('n' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, ''));",
+                  "const rawBody = pm.variables.replaceIn((pm.request.body && pm.request.body.raw) || '');",
+                  "// El cuerpo firmado debe ser idéntico al enviado: se fija ya resuelto (incluye {{$guid}}).",
+                  "if (pm.request.body) { pm.request.body.update({ mode: 'raw', raw: rawBody, options: { raw: { language: 'json' } } }); }",
+                  "const canonical = [pm.request.method.toUpperCase(), '/api/v1/integrations/atix/phone-lookups', String(ts), nonce, CJ.SHA256(rawBody).toString()].join('\\n');",
+                  "let sig = CJ.HmacSHA256(canonical, secret || 'x').toString();",
+                  "if (pm.variables.get('hmac_tamper') === '1') { sig = sig.substring(0, 63) + (sig.endsWith('0') ? '1' : '0'); }",
+                  "pm.request.headers.upsert({ key: 'X-Integration-Key-Id', value: keyId || '' });",
+                  "pm.request.headers.upsert({ key: 'X-Timestamp', value: String(ts) });",
+                  "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+                  "pm.variables.set('last_nonce', nonce);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A02 HTTP 202', function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+                  "pm.test('A02 unknown sin datos personales', function () { const b = pm.response.json(); pm.expect(b.data.recognition_status).to.eql('unknown'); pm.expect(b.data.assurance_level).to.eql('none'); pm.expect(b.data.personalization).to.eql({allowed:false}); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A03 ATIX firma inválida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/integrations/atix/phone-lookups",
+            "description": "requires: phone_registered",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_registered}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_registered\",\n  \"channel_event_id\": \"evt-{{$guid}}\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('hmac_tamper','1');",
+                  "// Firma HMAC ATIX calculada en tiempo de ejecución desde variables de entorno (sin secretos en el archivo)",
+                  "const CJ = require('crypto-js');",
+                  "const keyId = pm.variables.get('atix_key_id'); const secret = pm.variables.get('atix_hmac_secret');",
+                  "if (!keyId || !secret) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> atix_key_id|atix_hmac_secret'); pm.execution.skipRequest(); }",
+                  "let ts = Math.floor(Date.now() / 1000) + Number(pm.variables.get('hmac_ts_offset') || 0);",
+                  "const fixedNonce = pm.variables.get('hmac_fixed_nonce');",
+                  "const nonce = fixedNonce || ('n' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, ''));",
+                  "const rawBody = pm.variables.replaceIn((pm.request.body && pm.request.body.raw) || '');",
+                  "// El cuerpo firmado debe ser idéntico al enviado: se fija ya resuelto (incluye {{$guid}}).",
+                  "if (pm.request.body) { pm.request.body.update({ mode: 'raw', raw: rawBody, options: { raw: { language: 'json' } } }); }",
+                  "const canonical = [pm.request.method.toUpperCase(), '/api/v1/integrations/atix/phone-lookups', String(ts), nonce, CJ.SHA256(rawBody).toString()].join('\\n');",
+                  "let sig = CJ.HmacSHA256(canonical, secret || 'x').toString();",
+                  "if (pm.variables.get('hmac_tamper') === '1') { sig = sig.substring(0, 63) + (sig.endsWith('0') ? '1' : '0'); }",
+                  "pm.request.headers.upsert({ key: 'X-Integration-Key-Id', value: keyId || '' });",
+                  "pm.request.headers.upsert({ key: 'X-Timestamp', value: String(ts) });",
+                  "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+                  "pm.variables.set('last_nonce', nonce);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.unset('hmac_tamper');",
+                  "pm.test('A03 HTTP 401', function () { pm.expect(pm.response.code).to.be.oneOf([401]); });",
+                  "pm.test('A03 error.code=ATIX_SIGNATURE_INVALID', function () { pm.expect(pm.response.json().error.code).to.eql('ATIX_SIGNATURE_INVALID'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A04 ATIX timestamp fuera de ventana",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/integrations/atix/phone-lookups",
+            "description": "requires: phone_registered",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_registered}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_registered\",\n  \"channel_event_id\": \"evt-{{$guid}}\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('hmac_ts_offset','-1200');",
+                  "// Firma HMAC ATIX calculada en tiempo de ejecución desde variables de entorno (sin secretos en el archivo)",
+                  "const CJ = require('crypto-js');",
+                  "const keyId = pm.variables.get('atix_key_id'); const secret = pm.variables.get('atix_hmac_secret');",
+                  "if (!keyId || !secret) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> atix_key_id|atix_hmac_secret'); pm.execution.skipRequest(); }",
+                  "let ts = Math.floor(Date.now() / 1000) + Number(pm.variables.get('hmac_ts_offset') || 0);",
+                  "const fixedNonce = pm.variables.get('hmac_fixed_nonce');",
+                  "const nonce = fixedNonce || ('n' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, ''));",
+                  "const rawBody = pm.variables.replaceIn((pm.request.body && pm.request.body.raw) || '');",
+                  "// El cuerpo firmado debe ser idéntico al enviado: se fija ya resuelto (incluye {{$guid}}).",
+                  "if (pm.request.body) { pm.request.body.update({ mode: 'raw', raw: rawBody, options: { raw: { language: 'json' } } }); }",
+                  "const canonical = [pm.request.method.toUpperCase(), '/api/v1/integrations/atix/phone-lookups', String(ts), nonce, CJ.SHA256(rawBody).toString()].join('\\n');",
+                  "let sig = CJ.HmacSHA256(canonical, secret || 'x').toString();",
+                  "if (pm.variables.get('hmac_tamper') === '1') { sig = sig.substring(0, 63) + (sig.endsWith('0') ? '1' : '0'); }",
+                  "pm.request.headers.upsert({ key: 'X-Integration-Key-Id', value: keyId || '' });",
+                  "pm.request.headers.upsert({ key: 'X-Timestamp', value: String(ts) });",
+                  "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+                  "pm.variables.set('last_nonce', nonce);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.unset('hmac_ts_offset');",
+                  "pm.test('A04 HTTP 401', function () { pm.expect(pm.response.code).to.be.oneOf([401]); });",
+                  "pm.test('A04 error.code=ATIX_TIMESTAMP_EXPIRED', function () { pm.expect(pm.response.json().error.code).to.eql('ATIX_TIMESTAMP_EXPIRED'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A05a ATIX nonce (primer uso)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/integrations/atix/phone-lookups",
+            "description": "requires: phone_unknown",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_unknown}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_unknown\",\n  \"channel_event_id\": \"evt-{{$guid}}\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Firma HMAC ATIX calculada en tiempo de ejecución desde variables de entorno (sin secretos en el archivo)",
+                  "const CJ = require('crypto-js');",
+                  "const keyId = pm.variables.get('atix_key_id'); const secret = pm.variables.get('atix_hmac_secret');",
+                  "if (!keyId || !secret) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> atix_key_id|atix_hmac_secret'); pm.execution.skipRequest(); }",
+                  "let ts = Math.floor(Date.now() / 1000) + Number(pm.variables.get('hmac_ts_offset') || 0);",
+                  "const fixedNonce = pm.variables.get('hmac_fixed_nonce');",
+                  "const nonce = fixedNonce || ('n' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, ''));",
+                  "const rawBody = pm.variables.replaceIn((pm.request.body && pm.request.body.raw) || '');",
+                  "// El cuerpo firmado debe ser idéntico al enviado: se fija ya resuelto (incluye {{$guid}}).",
+                  "if (pm.request.body) { pm.request.body.update({ mode: 'raw', raw: rawBody, options: { raw: { language: 'json' } } }); }",
+                  "const canonical = [pm.request.method.toUpperCase(), '/api/v1/integrations/atix/phone-lookups', String(ts), nonce, CJ.SHA256(rawBody).toString()].join('\\n');",
+                  "let sig = CJ.HmacSHA256(canonical, secret || 'x').toString();",
+                  "if (pm.variables.get('hmac_tamper') === '1') { sig = sig.substring(0, 63) + (sig.endsWith('0') ? '1' : '0'); }",
+                  "pm.request.headers.upsert({ key: 'X-Integration-Key-Id', value: keyId || '' });",
+                  "pm.request.headers.upsert({ key: 'X-Timestamp', value: String(ts) });",
+                  "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+                  "pm.variables.set('last_nonce', nonce);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('replay_nonce', pm.variables.get('last_nonce'));",
+                  "pm.test('A05a HTTP 202', function () { pm.expect(pm.response.code).to.be.oneOf([202]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A05b ATIX nonce repetido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/integrations/atix/phone-lookups",
+            "description": "requires: phone_unknown,replay_nonce",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_unknown}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_unknown\",\n  \"channel_event_id\": \"evt-{{$guid}}\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('hmac_fixed_nonce', pm.variables.get('replay_nonce'));",
+                  "// Firma HMAC ATIX calculada en tiempo de ejecución desde variables de entorno (sin secretos en el archivo)",
+                  "const CJ = require('crypto-js');",
+                  "const keyId = pm.variables.get('atix_key_id'); const secret = pm.variables.get('atix_hmac_secret');",
+                  "if (!keyId || !secret) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> atix_key_id|atix_hmac_secret'); pm.execution.skipRequest(); }",
+                  "let ts = Math.floor(Date.now() / 1000) + Number(pm.variables.get('hmac_ts_offset') || 0);",
+                  "const fixedNonce = pm.variables.get('hmac_fixed_nonce');",
+                  "const nonce = fixedNonce || ('n' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, ''));",
+                  "const rawBody = pm.variables.replaceIn((pm.request.body && pm.request.body.raw) || '');",
+                  "// El cuerpo firmado debe ser idéntico al enviado: se fija ya resuelto (incluye {{$guid}}).",
+                  "if (pm.request.body) { pm.request.body.update({ mode: 'raw', raw: rawBody, options: { raw: { language: 'json' } } }); }",
+                  "const canonical = [pm.request.method.toUpperCase(), '/api/v1/integrations/atix/phone-lookups', String(ts), nonce, CJ.SHA256(rawBody).toString()].join('\\n');",
+                  "let sig = CJ.HmacSHA256(canonical, secret || 'x').toString();",
+                  "if (pm.variables.get('hmac_tamper') === '1') { sig = sig.substring(0, 63) + (sig.endsWith('0') ? '1' : '0'); }",
+                  "pm.request.headers.upsert({ key: 'X-Integration-Key-Id', value: keyId || '' });",
+                  "pm.request.headers.upsert({ key: 'X-Timestamp', value: String(ts) });",
+                  "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+                  "pm.variables.set('last_nonce', nonce);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.unset('hmac_fixed_nonce');",
+                  "pm.test('A05b HTTP 409', function () { pm.expect(pm.response.code).to.be.oneOf([409]); });",
+                  "pm.test('A05b error.code=ATIX_NONCE_REPLAY', function () { pm.expect(pm.response.json().error.code).to.eql('ATIX_NONCE_REPLAY'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A06a ATIX idempotencia (primera)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "rc2-{{run_id}}-A06"
+              }
+            ],
+            "url": "{{base_url}}/integrations/atix/phone-lookups",
+            "description": "requires: phone_unknown",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_unknown}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_unknown\",\n  \"channel_event_id\": \"evt-{{run_id}}-A06\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Firma HMAC ATIX calculada en tiempo de ejecución desde variables de entorno (sin secretos en el archivo)",
+                  "const CJ = require('crypto-js');",
+                  "const keyId = pm.variables.get('atix_key_id'); const secret = pm.variables.get('atix_hmac_secret');",
+                  "if (!keyId || !secret) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> atix_key_id|atix_hmac_secret'); pm.execution.skipRequest(); }",
+                  "let ts = Math.floor(Date.now() / 1000) + Number(pm.variables.get('hmac_ts_offset') || 0);",
+                  "const fixedNonce = pm.variables.get('hmac_fixed_nonce');",
+                  "const nonce = fixedNonce || ('n' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, ''));",
+                  "const rawBody = pm.variables.replaceIn((pm.request.body && pm.request.body.raw) || '');",
+                  "// El cuerpo firmado debe ser idéntico al enviado: se fija ya resuelto (incluye {{$guid}}).",
+                  "if (pm.request.body) { pm.request.body.update({ mode: 'raw', raw: rawBody, options: { raw: { language: 'json' } } }); }",
+                  "const canonical = [pm.request.method.toUpperCase(), '/api/v1/integrations/atix/phone-lookups', String(ts), nonce, CJ.SHA256(rawBody).toString()].join('\\n');",
+                  "let sig = CJ.HmacSHA256(canonical, secret || 'x').toString();",
+                  "if (pm.variables.get('hmac_tamper') === '1') { sig = sig.substring(0, 63) + (sig.endsWith('0') ? '1' : '0'); }",
+                  "pm.request.headers.upsert({ key: 'X-Integration-Key-Id', value: keyId || '' });",
+                  "pm.request.headers.upsert({ key: 'X-Timestamp', value: String(ts) });",
+                  "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+                  "pm.variables.set('last_nonce', nonce);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A06a HTTP 202', function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+                  "pm.variables.set('a06_body', JSON.stringify(pm.response.json().data));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A06b ATIX idempotencia (repetida, nonce nuevo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "rc2-{{run_id}}-A06"
+              }
+            ],
+            "url": "{{base_url}}/integrations/atix/phone-lookups",
+            "description": "requires: phone_unknown,a06_body",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_unknown}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_unknown\",\n  \"channel_event_id\": \"evt-{{run_id}}-A06\",\n  \"channel\": \"whatsapp\",\n  \"audience\": \"leo\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Firma HMAC ATIX calculada en tiempo de ejecución desde variables de entorno (sin secretos en el archivo)",
+                  "const CJ = require('crypto-js');",
+                  "const keyId = pm.variables.get('atix_key_id'); const secret = pm.variables.get('atix_hmac_secret');",
+                  "if (!keyId || !secret) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> atix_key_id|atix_hmac_secret'); pm.execution.skipRequest(); }",
+                  "let ts = Math.floor(Date.now() / 1000) + Number(pm.variables.get('hmac_ts_offset') || 0);",
+                  "const fixedNonce = pm.variables.get('hmac_fixed_nonce');",
+                  "const nonce = fixedNonce || ('n' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, ''));",
+                  "const rawBody = pm.variables.replaceIn((pm.request.body && pm.request.body.raw) || '');",
+                  "// El cuerpo firmado debe ser idéntico al enviado: se fija ya resuelto (incluye {{$guid}}).",
+                  "if (pm.request.body) { pm.request.body.update({ mode: 'raw', raw: rawBody, options: { raw: { language: 'json' } } }); }",
+                  "const canonical = [pm.request.method.toUpperCase(), '/api/v1/integrations/atix/phone-lookups', String(ts), nonce, CJ.SHA256(rawBody).toString()].join('\\n');",
+                  "let sig = CJ.HmacSHA256(canonical, secret || 'x').toString();",
+                  "if (pm.variables.get('hmac_tamper') === '1') { sig = sig.substring(0, 63) + (sig.endsWith('0') ? '1' : '0'); }",
+                  "pm.request.headers.upsert({ key: 'X-Integration-Key-Id', value: keyId || '' });",
+                  "pm.request.headers.upsert({ key: 'X-Timestamp', value: String(ts) });",
+                  "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+                  "pm.variables.set('last_nonce', nonce);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A06b HTTP 202', function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+                  "pm.test('A06b mismo resultado contractual', function () { const b = pm.response.json(); pm.expect(JSON.stringify(b.data)).to.eql(pm.variables.get('a06_body')); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A07 ATIX canal/audiencia no permitidos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/integrations/atix/phone-lookups",
+            "description": "requires: phone_registered",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_registered}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_registered\",\n  \"channel_event_id\": \"evt-{{$guid}}\",\n  \"channel\": \"sms\",\n  \"audience\": \"otro\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Firma HMAC ATIX calculada en tiempo de ejecución desde variables de entorno (sin secretos en el archivo)",
+                  "const CJ = require('crypto-js');",
+                  "const keyId = pm.variables.get('atix_key_id'); const secret = pm.variables.get('atix_hmac_secret');",
+                  "if (!keyId || !secret) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> atix_key_id|atix_hmac_secret'); pm.execution.skipRequest(); }",
+                  "let ts = Math.floor(Date.now() / 1000) + Number(pm.variables.get('hmac_ts_offset') || 0);",
+                  "const fixedNonce = pm.variables.get('hmac_fixed_nonce');",
+                  "const nonce = fixedNonce || ('n' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, ''));",
+                  "const rawBody = pm.variables.replaceIn((pm.request.body && pm.request.body.raw) || '');",
+                  "// El cuerpo firmado debe ser idéntico al enviado: se fija ya resuelto (incluye {{$guid}}).",
+                  "if (pm.request.body) { pm.request.body.update({ mode: 'raw', raw: rawBody, options: { raw: { language: 'json' } } }); }",
+                  "const canonical = [pm.request.method.toUpperCase(), '/api/v1/integrations/atix/phone-lookups', String(ts), nonce, CJ.SHA256(rawBody).toString()].join('\\n');",
+                  "let sig = CJ.HmacSHA256(canonical, secret || 'x').toString();",
+                  "if (pm.variables.get('hmac_tamper') === '1') { sig = sig.substring(0, 63) + (sig.endsWith('0') ? '1' : '0'); }",
+                  "pm.request.headers.upsert({ key: 'X-Integration-Key-Id', value: keyId || '' });",
+                  "pm.request.headers.upsert({ key: 'X-Timestamp', value: String(ts) });",
+                  "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+                  "pm.variables.set('last_nonce', nonce);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A07 HTTP 422', function () { pm.expect(pm.response.code).to.be.oneOf([422]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A08 OTP request-code registrado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/request-code",
+            "description": "Requiere autorización de SMS (sms_authorized=1). Una sola ejecución; sin reintentos. requires: sms_authorized,phone_registered,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_registered}}\",\n  \"phone_country\": \"MX\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A08 HTTP 202', function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+                  "pm.test('A08 challenge_id UUID y expires_at', function () { const b = pm.response.json(); pm.expect(b.data.challenge_id).to.match(/^[0-9a-f-]{36}$/); pm.expect(b.data).to.have.property('expires_at'); pm.variables.set('challenge_id', b.data.challenge_id); pm.variables.set('a08_keys', JSON.stringify(Object.keys(b.data).sort())); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A09 OTP request-code no registrado (respuesta uniforme)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/request-code",
+            "description": "requires: sms_authorized,phone_unknown,machine_credential,a08_keys",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone_unknown}}\",\n  \"phone_country\": \"MX\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A09 HTTP 202', function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+                  "pm.test('A09 misma forma que A08 (no enumeración)', function () { const b = pm.response.json(); pm.expect(JSON.stringify(Object.keys(b.data).sort())).to.eql(pm.variables.get('a08_keys')); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A11a OTP código incorrecto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/verify-code",
+            "description": "Consume un intento del challenge; ejecutar solo si Seguridad lo autoriza junto con el SMS. requires: challenge_id,machine_credential,otp_wrong_code_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{challenge_id}}\",\n  \"code\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A11a HTTP 422', function () { pm.expect(pm.response.code).to.be.oneOf([422]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A10 OTP verify-code válido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/verify-code",
+            "description": "otp_code se inyecta en tiempo de ejecución (read -s); nunca se guarda. requires: challenge_id,otp_code,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{challenge_id}}\",\n  \"code\": \"{{otp_code}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A10 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('A10 Bearer + otp_verified + assurance_level', function () { const b = pm.response.json(); pm.expect(b.data.token).to.be.a('string'); pm.expect(b.data.token_type).to.eql('Bearer'); pm.expect(b.data.otp_verified).to.eql(true); pm.expect(b.data.assurance_level).to.eql('otp_verified'); pm.variables.set('a10_bearer', b.data.token); });",
+                  "pm.environment.unset('otp_code'); pm.variables.unset('otp_code');"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A10r Readback: Bearer emitido autoriza memberships/status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{a10_bearer}}"
+              }
+            ],
+            "url": "{{base_url}}/memberships/status",
+            "description": "requires: a10_bearer,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A10r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('A10r status presente', function () { const b = pm.response.json(); pm.expect(['none','active','expired']).to.include(b.data.status); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A11b OTP código reutilizado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/verify-code",
+            "description": "requires: challenge_id,a10_bearer,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{challenge_id}}\",\n  \"code\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A11b HTTP 401/409/422', function () { pm.expect(pm.response.code).to.be.oneOf([401, 409, 422]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A11c OTP challenge expirado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              }
+            ],
+            "url": "{{base_url}}/auth/login/verify-code",
+            "description": "expired_challenge_id: challenge previo ya expirado (fixture QA). requires: expired_challenge_id,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{expired_challenge_id}}\",\n  \"code\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A11c HTTP 401/422', function () { pm.expect(pm.response.code).to.be.oneOf([401, 422]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "A12 Bearer revocado o vencido rechazado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_revoked}}"
+              }
+            ],
+            "url": "{{base_url}}/memberships/status",
+            "description": "bearer_revoked: token de identidad sintética revocado o vencido por el operador FAMEDIC antes de la corrida (DELETE /auth/token es solo native). requires: bearer_revoked,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('A12 HTTP 401', function () { pm.expect(pm.response.code).to.be.oneOf([401]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Fase B (B01–B26)",
+      "item": [
+        {
+          "name": "B01 Catálogo estudio con ahorro",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-tests/{{test_id_available}}",
+            "description": "requires: test_id_available"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B01 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B01 item_type=study y ahorro consistente', function () { const b = pm.response.json(); pm.expect(b.data.item_type).to.eql('study'); const p=b.data.pricing; pm.expect(p.comparison_status).to.eql('available'); pm.expect(p.savings_cents).to.eql(p.public_price_cents - p.famedic_price_cents); pm.expect(p.savings_cents).to.be.above(0); pm.variables.set('b01_price', p.famedic_price_cents); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B01r Readback listado contiene el estudio con mismo precio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-tests?search={{test_search_available}}",
+            "description": "requires: test_id_available,test_search_available,b01_price"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B01r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B01r mismo precio en listado', function () { const b = pm.response.json(); const it=(b.data.laboratory_tests||[]).find(x=>String(x.id)===String(pm.variables.get('test_id_available'))); pm.expect(it, 'presente').to.exist; pm.expect(it.item_type).to.eql('study'); pm.expect(it.pricing.famedic_price_cents).to.eql(Number(pm.variables.get('b01_price'))); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B02 Paquete (4965) item_type=package y composición certificada",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/packages/{{package_id}}",
+            "description": "Falla legítimamente mientras composition_status != validated (aprobación comercial pendiente). requires: package_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B02 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B02 item_type=package', function () { const b = pm.response.json(); pm.expect(b.data.item_type).to.eql('package'); });",
+                  "pm.test('B02 composition_status=validated', function () { const b = pm.response.json(); pm.expect(b.data.composition_status).to.eql('validated'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B03 Catálogo public_price_unavailable",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-tests/{{test_id_no_public}}",
+            "description": "requires: test_id_no_public"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B03 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B03 comparison_status=public_price_unavailable', function () { const b = pm.response.json(); const p=b.data.pricing; pm.expect(p.comparison_status).to.eql('public_price_unavailable'); pm.expect([null, 0]).to.include(p.public_price_cents); pm.expect(p.savings_cents).to.be.null; });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B04 Catálogo no_savings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-tests/{{test_id_no_savings}}",
+            "description": "requires: test_id_no_savings"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B04 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B04 comparison_status=no_savings', function () { const b = pm.response.json(); const p=b.data.pricing; pm.expect(p.comparison_status).to.eql('no_savings'); pm.expect(p.savings_cents).to.eql(0); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B05 Catálogo data_inconsistent",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-tests/{{test_id_inconsistent}}",
+            "description": "requires: test_id_inconsistent"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B05 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B05 comparison_status=data_inconsistent', function () { const b = pm.response.json(); const p=b.data.pricing; pm.expect(p.comparison_status).to.eql('data_inconsistent'); pm.expect(p.savings_cents).to.be.null; });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B06a Precio actual (antes de agregar)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-tests/{{test_id_mutable}}",
+            "description": "requires: test_id_mutable"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B06a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.variables.set('b06_price', pm.response.json().data.pricing.famedic_price_cents);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B06b Agregar estudio mutable (perfil nativo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: test_id_mutable,native_bearer_token,lab_brand",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"laboratory_test_id\": \"{{test_id_mutable}}\",\n  \"brand\": \"{{lab_brand}}\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B06b HTTP 201', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B06r Readback carrito usa precio vigente del servidor",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?brand={{lab_brand}}",
+            "description": "requires: native_bearer_token,b06_price"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B06r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B06r precio = catálogo vigente', function () { const b = pm.response.json(); const it=(b.data.items||[]).find(x=>String(x.laboratory_test_id||x.laboratory_test&&x.laboratory_test.id)===String(pm.variables.get('test_id_mutable'))); pm.expect(it,'item').to.exist; const price = it.price_cents ?? it.unit_price_cents ?? it.famedic_price_cents; pm.expect(price).to.eql(Number(pm.variables.get('b06_price'))); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B07 Planes: solo basic_annual adquirible",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/memberships/plans",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B07 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B07 basic_annual', function () { const b = pm.response.json(); const plans=b.data.plans||b.data; pm.expect(plans.map(p=>p.code||p.plan_code)).to.include('basic_annual'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B08 Estado de membresía (bearer_none)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/memberships/status",
+            "description": "requires: bearer_none,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B08 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B08 estado esperado', function () { const b = pm.response.json(); pm.expect(b.data.status).to.eql('none'); pm.expect(b.data.purchase_eligible).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B09 Estado de membresía (bearer_active)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_active}}"
+              }
+            ],
+            "url": "{{base_url}}/memberships/status",
+            "description": "requires: bearer_active,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B09 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B09 estado esperado', function () { const b = pm.response.json(); pm.expect(b.data.status).to.eql('active'); pm.expect(b.data.source).to.eql('individual'); pm.expect(b.data.ineligibility_reason).to.eql('membership_already_active'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B10 Estado de membresía (bearer_sponsored)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_sponsored}}"
+              }
+            ],
+            "url": "{{base_url}}/memberships/status",
+            "description": "requires: bearer_sponsored,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B10 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B10 estado esperado', function () { const b = pm.response.json(); pm.expect(b.data.status).to.eql('active'); pm.expect(b.data.source).to.eql('sponsored'); pm.expect(b.data.ineligibility_reason).to.eql('sponsored_membership_active'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B11 Estado de membresía (bearer_expired)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_expired}}"
+              }
+            ],
+            "url": "{{base_url}}/memberships/status",
+            "description": "requires: bearer_expired,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B11 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B11 estado esperado', function () { const b = pm.response.json(); pm.expect(b.data.status).to.eql('expired'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B12 Alta de Plan Básico en carrito médico (Leo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "rc2-{{run_id}}-B12"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: bearer_none,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"medical_services\",\n  \"item_type\": \"membership\",\n  \"membership_plan_code\": \"basic_annual\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B12 HTTP 201', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B12r Readback carrito médico",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?service_line=medical_services",
+            "description": "requires: bearer_none,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B12r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B12r un item basic_annual', function () { const b = pm.response.json(); pm.expect(b.data.totals.item_count).to.eql(1); pm.variables.set('medical_item_id', b.data.items[0].id); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B17 Replay misma Idempotency-Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "rc2-{{run_id}}-B12"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: bearer_none,machine_credential,medical_item_id",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"medical_services\",\n  \"item_type\": \"membership\",\n  \"membership_plan_code\": \"basic_annual\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B17 HTTP 201', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+                  "pm.test('B17 respuesta repetida', function(){ pm.expect(pm.response.headers.get('Idempotency-Replayed')).to.eql('true'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B13 Duplicado con otra llave",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: bearer_none,machine_credential,medical_item_id",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"medical_services\",\n  \"item_type\": \"membership\",\n  \"membership_plan_code\": \"basic_annual\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B13 HTTP 409', function () { pm.expect(pm.response.code).to.be.oneOf([409]); });",
+                  "pm.test('B13 error.code=MEMBERSHIP_ALREADY_IN_CART', function () { pm.expect(pm.response.json().error.code).to.eql('MEMBERSHIP_ALREADY_IN_CART'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B13r Readback sigue un solo item",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?service_line=medical_services",
+            "description": "requires: bearer_none,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B13r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B13r item_count=1', function () { const b = pm.response.json(); pm.expect(b.data.totals.item_count).to.eql(1); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B23 checkout/prepare médico sin pago por asistente",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/checkout/prepare?service_line=medical_services",
+            "description": "requires: bearer_none,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B23 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B23 assistant_can_pay=false', function () { const b = pm.response.json(); pm.expect(b.data.assistant_can_pay).to.eql(false); pm.expect(b.data).to.not.have.property('payment_url'); });",
+                  "pm.test('B23 B24 apagado: sin continuity_url salvo bandera', function () { const b = pm.response.json(); if (pm.variables.get('b24_enabled') !== '1') { pm.expect(b.data).to.not.have.property('continuity_url'); } else { pm.variables.set('continuity_url', b.data.continuity_url); } });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B24a continuidad emitida (solo con B24 habilitado)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/checkout/prepare?service_line=medical_services",
+            "description": "B24 permanece APAGADO; ejecutar solo tras autorización de Seguridad (Eulalio) y despliegue. requires: bearer_none,machine_credential,b24_enabled"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B24a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B24a liga https de continuidad, no de pago', function () { const b = pm.response.json(); pm.expect(b.data.continuity_url).to.match(/^https:\\/\\/[^/]+\\/checkout\\/continue\\/[A-Za-z0-9]+$/); pm.expect(b.data.continuity_url).to.not.match(/pay|efevoo|stripe/i); pm.expect(b.data.continuity_expires_at).to.be.a('string'); pm.variables.set('continuity_url', b.data.continuity_url); });",
+                  "pm.test('B24a no-store', function(){ pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B24b continuidad sin sesión → login (sin auto-login)",
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
+            "url": "{{continuity_url}}",
+            "description": "requires: continuity_url,b24_enabled"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B24b HTTP 302', function () { pm.expect(pm.response.code).to.be.oneOf([302]); });",
+                  "pm.test('B24b redirige a login, no a checkout', function(){ pm.expect(pm.response.headers.get('Location')).to.match(/login/); });",
+                  "pm.test('B24b no emite cookie de sesión autenticada', function(){ pm.expect(pm.response.headers.get('Location')).to.not.match(/medical-attention\\/checkout/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B25 Leo no puede generar liga de pago",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/checkout/payment-link",
+            "description": "requires: bearer_none,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"medical_services\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B25 HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });",
+                  "pm.test('B25 sin URL de pago', function () { const b = pm.response.json(); pm.expect(JSON.stringify(b)).to.not.match(/https?:\\/\\//); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B26 Sin pago no se activa la membresía",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/memberships/status",
+            "description": "requires: bearer_none,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B26 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B26 status=none tras flujo sin pago', function () { const b = pm.response.json(); pm.expect(b.data.status).to.eql('none'); pm.expect(b.data.expires_at).to.be.null; });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B16 Retiro del Plan Básico",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items/{{medical_item_id}}?service_line=medical_services",
+            "description": "requires: bearer_none,machine_credential,medical_item_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B16 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B16r Readback carrito médico vacío",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?service_line=medical_services",
+            "description": "requires: bearer_none,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B16r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B16r item_count=0', function () { const b = pm.response.json(); pm.expect(b.data.totals.item_count).to.eql(0); });",
+                  "pm.variables.unset('medical_item_id');"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B14 Rechazo con membresía individual activa",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_active}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: bearer_active,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"medical_services\",\n  \"item_type\": \"membership\",\n  \"membership_plan_code\": \"basic_annual\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B14 HTTP 409', function () { pm.expect(pm.response.code).to.be.oneOf([409]); });",
+                  "pm.test('B14 error.code=MEMBERSHIP_ALREADY_ACTIVE', function () { pm.expect(pm.response.json().error.code).to.eql('MEMBERSHIP_ALREADY_ACTIVE'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B15 Rechazo con membresía patrocinada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_sponsored}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: bearer_sponsored,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"medical_services\",\n  \"item_type\": \"membership\",\n  \"membership_plan_code\": \"basic_annual\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B15 HTTP 409', function () { pm.expect(pm.response.code).to.be.oneOf([409]); });",
+                  "pm.test('B15 error.code=SPONSORED_MEMBERSHIP_ACTIVE', function () { pm.expect(pm.response.json().error.code).to.eql('SPONSORED_MEMBERSHIP_ACTIVE'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B18 Concurrencia (fuera de Newman)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/memberships/plans",
+            "description": "NO_EJECUTABLE_EN_NEWMAN: Newman ejecuta en serie. B18 se certifica con el runner v5b (dos altas simultáneas) y readback. requires: b18_never_set"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B19 Nativo: alta de membresía",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: native_bearer_token,native_machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"medical_services\",\n  \"item_type\": \"membership\",\n  \"membership_plan_code\": \"basic_annual\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B19 HTTP 201/409', function () { pm.expect(pm.response.code).to.be.oneOf([201, 409]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B20 Nativo: alta de estudio de laboratorio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: native_bearer_token,native_machine_credential,test_id_available,lab_brand",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"laboratory_test_id\": \"{{test_id_available}}\",\n  \"brand\": \"{{lab_brand}}\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B20 HTTP 201/409', function () { pm.expect(pm.response.code).to.be.oneOf([201, 409]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B19r/B20r Readback carritos separados",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?brand={{lab_brand}}",
+            "description": "requires: native_bearer_token,lab_brand"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B20r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B20r carrito lab no contiene membresía', function () { const b = pm.response.json(); pm.expect(JSON.stringify(b.data.items)).to.not.include('basic_annual'); const it=(b.data.items||[]).find(x=>String(x.laboratory_test_id||(x.laboratory_test&&x.laboratory_test.id))===String(pm.variables.get('test_id_available'))); pm.expect(it).to.exist; pm.variables.set('lab_item_id', it.id); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B21 Nativo: retiro del estudio con discriminador",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items/{{lab_item_id}}?brand={{lab_brand}}",
+            "description": "requires: native_bearer_token,lab_item_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B21 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B21r Readback carrito médico intacto",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?service_line=medical_services",
+            "description": "requires: native_bearer_token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B21r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B21r membresía sigue en carrito médico', function () { const b = pm.response.json(); pm.expect(b.data.totals.item_count).to.eql(1); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B21x Leo no se amplía a laboratorio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: bearer_none,machine_credential,test_id_available,lab_brand",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"laboratory_test_id\": \"{{test_id_available}}\",\n  \"brand\": \"{{lab_brand}}\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B21x HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B22 Farmacia suspendida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: bearer_none,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"pharmacy\",\n  \"item_type\": \"medication\",\n  \"medication_id\": 1,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B22 HTTP 503', function () { pm.expect(pm.response.code).to.be.oneOf([503]); });",
+                  "pm.test('B22 error.code=PHARMACY_SUSPENDED', function () { pm.expect(pm.response.json().error.code).to.eql('PHARMACY_SUSPENDED'); });",
+                  "pm.test('B22 retryable=false', function () { const b = pm.response.json(); pm.expect(b.error.retryable).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Regresión (R01–R08)",
+      "item": [
+        {
+          "name": "R01 Pedidos propios (Leo)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders",
+            "description": "requires: bearer_token,foreign_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R01 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('R01 no incluye pedido ajeno', function () { const b = pm.response.json(); pm.expect((b.data||[]).map(o=>String(o.id))).to.not.include(String(pm.variables.get('foreign_order_id'))); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R01b Estado de pedido ajeno",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{foreign_order_id}}/status",
+            "description": "requires: native_bearer_token,foreign_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R01b HTTP 403/404', function () { pm.expect(pm.response.code).to.be.oneOf([403, 404]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R02a Leo no lee resultados",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/results",
+            "description": "requires: bearer_token,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R02a HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R02b Nativo: metadatos de resultados",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/results",
+            "description": "requires: native_bearer_token,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R02b HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R02c Descarga sin step-up rechazada",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/results/download",
+            "description": "requires: native_bearer_token,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R02c HTTP 403/409', function () { pm.expect(pm.response.code).to.be.oneOf([403, 409]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R03a Leo no lee facturas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/invoices",
+            "description": "requires: bearer_token,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R03a HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R03b Nativo: facturas propias",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{native_machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{native_bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/invoices",
+            "description": "requires: native_bearer_token,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R03b HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R04 Familiares",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/user/family",
+            "description": "requires: bearer_token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R04 HTTP 200/403', function () { pm.expect(pm.response.code).to.be.oneOf([200, 403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R05 Checkout con sesión FAMEDIC (evidencia first-party)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{web_base_url}}/",
+            "description": "NO_EJECUTABLE_EN_NEWMAN: R05 se evidencia en navegador con sesión FAMEDIC. requires: r05_never_set"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R06 Observabilidad: correlation id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-brands",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R06 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R07a Error de validación tipado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "requires: bearer_token",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"medical_services\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R07a HTTP 422', function () { pm.expect(pm.response.code).to.be.oneOf([422]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R07b Sin Bearer → 401 tipado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              }
+            ],
+            "url": "{{base_url}}/memberships/status",
+            "description": "requires: machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R07b HTTP 401', function () { pm.expect(pm.response.code).to.be.oneOf([401]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "R08 UAT conversacional (fuera de Newman)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/memberships/plans",
+            "description": "NO_EJECUTABLE_EN_NEWMAN: R08 es UAT conversacional con Leo. requires: r08_never_set"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}

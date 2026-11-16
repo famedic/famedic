@@ -45,6 +45,8 @@ class LaboratoryPackageResource extends JsonResource
 
         return [
             'id' => $test->id,
+            // RC2 B02 (D8): additive discriminator shared with the laboratory-tests catalog.
+            'item_type' => 'package',
             'name' => $test->name,
             'brand' => $test->brand->value,
             'category' => $test->laboratoryTestCategory?->name,

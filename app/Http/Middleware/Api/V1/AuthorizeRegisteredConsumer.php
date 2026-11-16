@@ -47,6 +47,10 @@ final class AuthorizeRegisteredConsumer
         if (! $user->customer) {
             return ApiResponse::error('FORBIDDEN', 'El usuario no tiene perfil de cliente asociado.', 403);
         }
+        // RC2 B22 (D4): pharmacy purchases are suspended; typed rejection before any capability or cart effect.
+        if ($request->route()?->getName() === 'api.v1.cart.items.store' && \App\Support\Api\V1\PharmacySuspension::requested($request)) {
+            return \App\Support\Api\V1\PharmacySuspension::response();
+        }
         $identity = $this->identities->resolve($request, $user, $user->currentAccessToken());
         $operation = self::ROUTES[$request->route()?->getName()] ?? null;
         // Generic native cart writes require their own literal grant; medical-only grants stay narrow.
@@ -68,10 +72,17 @@ final class AuthorizeRegisteredConsumer
             }
         }
         if ($operation === 'cart:membership:write' && $request->isMethod('DELETE')) {
+            // RC2 B21 (D3): the membership-only grant is pinned to medical_services; a laboratory
+            // discriminator (or any other line) never widens it, even when ids collide across tables.
+            $line = $request->query('service_line');
+            if ($request->query('brand') !== null || ($line !== null && $line !== 'medical_services')) {
+                return ApiResponse::error('CONSUMER_NOT_AUTHORIZED', 'Operación no autorizada.', 403);
+            }
             $item = \App\Models\MedicalServiceCartItem::query()->with('cart')->find($request->route('cart_item_id'));
             if (! $item || (int) $item->cart->customer_id !== (int) $user->customer?->id) {
                 return ApiResponse::error('CONSUMER_NOT_AUTHORIZED', 'Operación no autorizada.', 403);
             }
+            $request->query->set('service_line', 'medical_services');
         }
         \App\Services\Api\V1\Auth\ConsumerRequestScope::bind($request, $identity->context);
         $previous = $request->getUserResolver();

@@ -60,7 +60,9 @@ final class SyntheticConsumerRegistryFixture
             'api:operation:api:v1:laboratory-appointments:requirements',
             'api:operation:api:v1:laboratory-appointments:index',
         ];
-        if($defaultCaps && $kind==='native')$caps=array_merge($caps,['cart:write','payments:draft']);
+        if($defaultCaps && $kind==='native')$caps=array_merge($caps,['cart:write','payments:draft',
+            // RC2: native-only literal route capabilities (OpenAPI x-consumer-allowlist [native]); never granted to leo by this fixture.
+            'api:operation:api:v1:orders:products','api:operation:api:v1:orders:status','api:operation:api:v1:orders:cancel']);
         $issuer = User::factory()->create();
         $administrator = Administrator::create(['user_id' => $issuer->id]);
         $administrator->givePermissionTo(Permission::firstOrCreate(['name' => 'api-consumers.manage', 'guard_name' => 'web']));

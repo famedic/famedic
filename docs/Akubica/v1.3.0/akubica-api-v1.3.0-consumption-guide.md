@@ -53,6 +53,8 @@ Esta operación solo devuelve carrito, requisitos, warnings y `can_continue_to_p
 
 El reconocimiento de contacto inicia el flujo OTP, pero no entrega un Bearer ni un `account_context_token` al consumidor. El contexto queda ligado internamente a `conversation_id`, `channel_event_id`, `channel`, `audience` y el challenge OTP. La elevación post-OTP ocurre mediante `POST /auth/login/verify-code`; el cliente recibe únicamente la respuesta contractual de autenticación. No reutilizar un contexto como token ni incluirlo en logs.
 
+**review-package-02 (A10):** la respuesta `200` de `POST /auth/login/verify-code` incluye siempre `otp_verified=true` y `assurance_level=otp_verified`, también en el login OTP normal sin contexto ATIX. Los campos son aditivos; el Bearer y el resto de la respuesta no cambian.
+
 ## ATIX phone lookup
 
 `POST /integrations/atix/phone-lookups` requiere estos headers:

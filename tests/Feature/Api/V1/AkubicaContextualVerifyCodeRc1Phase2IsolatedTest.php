@@ -212,7 +212,7 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
     }
 
     #[Test]
-    public function normal_login_without_context_still_issues_bearer(): void
+    public function normal_login_without_context_issues_bearer_with_assurance_markers(): void
     {
         $user = User::factory()->withRegularCustomer()->create([
             'phone' => '553'.str_pad((string) random_int(1000000, 9999999), 7, '0', STR_PAD_LEFT),
@@ -229,8 +229,10 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
             'code' => '123456',
         ])->assertOk()
             ->assertJsonPath('data.token_type', 'Bearer')
-            ->assertJsonMissingPath('data.otp_verified')
-            ->assertJsonMissingPath('data.assurance_level');
+            // RC2 A10 (D1): same assurance markers as the contextual branch; no ATIX personalization.
+            ->assertJsonPath('data.otp_verified', true)
+            ->assertJsonPath('data.assurance_level', 'otp_verified')
+            ->assertJsonMissingPath('data.personalization');
     }
 
     #[Test]

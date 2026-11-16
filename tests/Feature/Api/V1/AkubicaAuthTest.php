@@ -167,7 +167,11 @@ test('login verify-code returns Bearer token for valid code', function () {
         ])
         ->assertJsonPath('data.token_type', 'Bearer')
         ->assertJsonPath('data.user.id', $user->id)
-        ->assertJsonPath('data.user.email', 'paciente@ejemplo.com');
+        ->assertJsonPath('data.user.email', 'paciente@ejemplo.com')
+        // RC2 A10 (D1): legacy OTP login carries the same assurance markers.
+        ->assertJsonPath('data.otp_verified', true)
+        ->assertJsonPath('data.assurance_level', 'otp_verified')
+        ->assertJsonMissingPath('data.personalization');
 
     expect($response->json('data.token'))->not->toBeEmpty();
 });

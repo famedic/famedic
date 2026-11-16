@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Famedic API — Integración Akubica",
-    "version": "1.3.0-rc2-review-package-01",
-    "description": "Paquete RC2 local de revisión técnica, no habilitado ni aprobado para staging. Conserva 74 operationId principales; R30 first-party permanece en suplemento separado. El transporte no está aprobado, las capacidades financieras de Leo permanecen denegadas y no existe autorización de distribución o activación. La línea base OpenAPI 1.2.3 permanece intacta.",
+    "version": "1.3.0-rc2-review-package-02",
+    "description": "Paquete RC2 local de revisión técnica, no habilitado ni aprobado para staging. Conserva 74 operationId principales; R30 first-party permanece en suplemento separado. El transporte no está aprobado, las capacidades financieras de Leo permanecen denegadas y no existe autorización de distribución o activación. La línea base OpenAPI 1.2.3 permanece intacta. Revisión 02 (2026-11-16, rama local rc2/cierre-anexos): A10 marcadores OTP sin contexto, B24 continuidad médica (apagada), B22 PHARMACY_SUSPENDED, B21 retiro aislado, item_type en catálogo.",
     "contact": {
       "name": "Famedic — Equipo de desarrollo"
     },
@@ -841,43 +841,6 @@
         }
       }
     },
-    "/catalog/packages": {
-      "get": {
-        "tags": ["Catalog"],
-        "operationId": "catalogPackages",
-        "summary": "Listar paquetes clasificados explícitamente",
-        "description": "Solo incluye registros con clasificación persistida de paquete; feature_list por sí sola no clasifica un registro.",
-        "parameters": [
-          {"$ref": "#/components/parameters/XCorrelationId"},
-          {"name": "brand", "in": "query", "required": false, "schema": {"$ref": "#/components/schemas/LaboratoryBrand"}},
-          {"name": "search", "in": "query", "required": false, "schema": {"type": "string", "maxLength": 255}},
-          {"name": "category_id", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1}},
-          {"name": "page", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1}},
-          {"name": "per_page", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}}
-        ],
-        "responses": {
-          "200": {"description": "Lista paginada de paquetes", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogPackagesResponse"}}}},
-          "422": {"$ref": "#/components/responses/ValidationError"},
-          "503": {"description": "PRICING_SOURCE_UNAVAILABLE"}
-        }
-      }
-    },
-    "/catalog/packages/{package_id}": {
-      "get": {
-        "tags": ["Catalog"],
-        "operationId": "catalogPackage",
-        "summary": "Detalle de paquete",
-        "parameters": [
-          {"$ref": "#/components/parameters/XCorrelationId"},
-          {"name": "package_id", "in": "path", "required": true, "schema": {"type": "integer", "minimum": 1}}
-        ],
-        "responses": {
-          "200": {"description": "Paquete clasificado explícitamente", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogPackageResponse"}}}},
-          "404": {"description": "PACKAGE_NOT_FOUND"},
-          "503": {"description": "PRICING_SOURCE_UNAVAILABLE"}
-        }
-      }
-    },
     "/catalog/laboratory-tests": {
       "get": {
         "tags": [
@@ -1134,6 +1097,152 @@
           },
           "503": {
             "description": "PRICING_SOURCE_UNAVAILABLE",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/packages": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "operationId": "catalogPackages",
+        "summary": "Listar paquetes de laboratorio",
+        "description": "Público (sin autenticación). Lista solo paquetes con clasificación explícita (tabla laboratory_test_packages), ordenados por id. Filtros sobre el estudio-paquete. Implementación: CatalogController@indexPackages.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/LaboratoryBrand"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista paginada de paquetes",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPackagesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/catalog/packages/{package_id}": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "operationId": "catalogShowPackage",
+        "summary": "Detalle de paquete de laboratorio",
+        "description": "Público (sin autenticación). Implementación: CatalogController@showPackage.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/PackageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paquete con composición, estado comercial y precios",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPackageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "PACKAGE_NOT_FOUND",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PRICING_SOURCE_UNAVAILABLE (retryable)",
             "headers": {
               "X-Correlation-ID": {
                 "$ref": "#/components/headers/X-Correlation-ID"
@@ -1587,10 +1696,26 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "PHARMACY_SUSPENDED (retryable=false): intento de compra de farmacia (service_line=pharmacy|online_pharmacy, item_type=medication|pharmacy o medication_id). Sin carrito, sin ítem y sin efectos.",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "x-required-capability": "cart:membership:write",
-        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas."
+        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
+        "description": "B22: la compra de farmacia está suspendida; la ruta documentada para el negativo es este POST y responde 503 PHARMACY_SUSPENDED sin efectos."
       }
     },
     "/cart/items/{cart_item_id}": {
@@ -1615,6 +1740,27 @@
           },
           {
             "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "service_line",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "medical_services"
+              ]
+            },
+            "description": "Opcional. Fuerza la línea médica."
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/LaboratoryBrand"
+            },
+            "description": "Opcional. Fuerza la línea de laboratorio de esa marca."
           }
         ],
         "responses": {
@@ -1647,7 +1793,7 @@
             "$ref": "#/components/responses/Forbidden"
           },
           "404": {
-            "description": "CART_ITEM_NOT_FOUND",
+            "description": "CART_ITEM_NOT_FOUND (incluye discriminador que no coincide)",
             "headers": {
               "X-Correlation-ID": {
                 "$ref": "#/components/headers/X-Correlation-ID"
@@ -1662,7 +1808,7 @@
             }
           },
           "409": {
-            "description": "IDEMPOTENCY_REPLAY_CONFLICT / CART_SERVICE_LINE_MISMATCH",
+            "description": "IDEMPOTENCY_REPLAY_CONFLICT / CART_SERVICE_LINE_MISMATCH (discriminador inválido o id ambiguo entre líneas)",
             "headers": {
               "X-Correlation-ID": {
                 "$ref": "#/components/headers/X-Correlation-ID"
@@ -1678,7 +1824,8 @@
           }
         },
         "x-required-capability": "cart:membership:write",
-        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas."
+        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
+        "description": "B21: sin discriminador, el ítem se resuelve por propiedad (un ítem propio de una línea nunca queda bloqueado ni borra la otra). Si el mismo id existe en ambas líneas del titular, responde 409 CART_SERVICE_LINE_MISMATCH y exige service_line o brand. Perfil Leo (cart:membership:write): fijo a medical_services; brand o service_line distinto de medical_services responde 403 CONSUMER_NOT_AUTHORIZED sin efectos, y ante colisión de id el borrado se resuelve solo en medical_services."
       }
     },
     "/cart/medical-benefit": {
@@ -2133,9 +2280,24 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "CONTINUITY_UNAVAILABLE: continuidad habilitada pero host no permitido o mal configurado (falla cerrado; sin liga).",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/X-Correlation-ID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
-        "x-continuity-state": "IMPLEMENTADO_LOCAL: continuidad opaca probada, sin pagos Leo. Activación pendiente de contrato/transporte/certificación.",
+        "x-continuity-state": "IMPLEMENTADO_LOCAL_APAGADO: continuidad médica Leo→FAMEDIC (B24) implementada y probada en LOCAL; flag akubica_connectors.continuity.medical_services apagado. Activación sujeta a autorización de Seguridad, deploy y certificación first-party.",
         "x-required-capability": "checkout:prepare",
         "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas."
       }
@@ -6262,6 +6424,16 @@
           "type": "string",
           "format": "uuid"
         }
+      },
+      "PackageId": {
+        "name": "package_id",
+        "in": "path",
+        "required": true,
+        "description": "ID del estudio-paquete (package_test_id), p. ej. 4965.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "responses": {
@@ -7366,9 +7538,26 @@
             "const": false,
             "deprecated": true,
             "description": "Campo legacy preservado, false en carrito medico. No equivale a can_continue_on_platform ni a assistant_can_pay."
+          },
+          "continuity_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "B24: liga https de un solo uso (TTL ≤ 10 min) al checkout de membresía de FAMEDIC (/checkout/continue/{token} → /medical-attention/checkout). Ligada al usuario y al carrito médico; requiere sesión web del titular; no es payment link, no cobra y no activa membresías. Solo para consumidor Leo con carrito no vacío y solo con la continuidad habilitada (hoy apagada)."
+          },
+          "continuity_expires_at": {
+            "type": "string",
+            "format": "date-time"
           }
         },
-        "description": " Los flags no autorizan pagos. Leo tiene denegación efectiva de payment links; el DTO legacy es únicamente de consumidores nativos autorizados."
+        "description": " Los flags no autorizan pagos. Leo tiene denegación efectiva de payment links; el DTO legacy es únicamente de consumidores nativos autorizados.",
+        "dependentRequired": {
+          "continuity_url": [
+            "continuity_expires_at"
+          ],
+          "continuity_expires_at": [
+            "continuity_url"
+          ]
+        }
       },
       "MedicalServiceCheckoutPrepareResponse": {
         "type": "object",
@@ -7601,6 +7790,7 @@
         "type": "object",
         "required": [
           "id",
+          "item_type",
           "name",
           "brand",
           "price_cents",
@@ -7615,6 +7805,14 @@
         "properties": {
           "id": {
             "type": "integer"
+          },
+          "item_type": {
+            "type": "string",
+            "enum": [
+              "study",
+              "package"
+            ],
+            "description": "B01/B02: 'package' solo para paquetes clasificados explícitamente; el resto 'study'. Campo aditivo."
           },
           "name": {
             "type": "string"
@@ -7650,47 +7848,6 @@
             "$ref": "#/components/schemas/LaboratoryPricing"
           }
         }
-      },
-      "LaboratoryPackageCompositionItem": {
-        "type": "object",
-        "required": ["type", "id", "name", "sort_order", "validation_status"],
-        "additionalProperties": false,
-        "properties": {
-          "type": {"type": "string", "enum": ["study", "commercial_descriptor"]},
-          "id": {"type": ["integer", "null"], "description": "ID de laboratory_tests únicamente para type=study; null para descriptores."},
-          "name": {"type": "string"},
-          "gda_id": {"type": ["string", "null"]},
-          "sort_order": {"type": "integer"},
-          "validation_status": {"type": "string", "enum": ["pending_commercial_validation", "validated", "rejected"]},
-          "validation_reference": {"type": ["string", "null"]}
-        }
-      },
-      "LaboratoryPackage": {
-        "type": "object",
-        "required": ["id", "name", "package_classification", "composition", "composition_status", "available"],
-        "properties": {
-          "id": {"type": "integer"},
-          "name": {"type": "string"},
-          "brand": {"type": ["string", "null"]},
-          "category": {"type": ["string", "null"]},
-          "package_classification": {"type": "string", "const": "explicit"},
-          "composition": {"type": "array", "items": {"$ref": "#/components/schemas/LaboratoryPackageCompositionItem"}},
-          "composition_status": {"type": "string", "enum": ["validated", "incomplete"]},
-          "pricing": {"$ref": "#/components/schemas/LaboratoryPricing"},
-          "available": {"type": "boolean"}
-        }
-      },
-      "CatalogPackagesResponse": {
-        "allOf": [
-          {"$ref": "#/components/schemas/ApiSuccessResponse"},
-          {"type": "object", "required": ["success", "data"], "properties": {"data": {"type": "object", "required": ["packages", "pagination"], "properties": {"packages": {"type": "array", "items": {"$ref": "#/components/schemas/LaboratoryPackage"}}, "pagination": {"$ref": "#/components/schemas/Pagination"}}}}}
-        ]
-      },
-      "CatalogPackageResponse": {
-        "allOf": [
-          {"$ref": "#/components/schemas/ApiSuccessResponse"},
-          {"type": "object", "required": ["success", "data"], "properties": {"data": {"$ref": "#/components/schemas/LaboratoryPackage"}}}
-        ]
       },
       "CatalogLaboratoryTestsResponse": {
         "allOf": [
@@ -8101,6 +8258,7 @@
         "type": "object",
         "required": [
           "id",
+          "item_type",
           "name",
           "description",
           "brand",
@@ -8116,6 +8274,14 @@
         "properties": {
           "id": {
             "type": "integer"
+          },
+          "item_type": {
+            "type": "string",
+            "enum": [
+              "study",
+              "package"
+            ],
+            "description": "B01/B02: 'package' solo para paquetes clasificados explícitamente; el resto 'study'. Campo aditivo."
           },
           "name": {
             "type": "string"
@@ -8633,7 +8799,9 @@
           "token",
           "token_type",
           "expires_in",
-          "expires_at"
+          "expires_at",
+          "otp_verified",
+          "assurance_level"
         ],
         "properties": {
           "token": {
@@ -8654,10 +8822,19 @@
           },
           "user": {
             "$ref": "#/components/schemas/TokenUserProfile"
+          },
+          "otp_verified": {
+            "type": "boolean",
+            "const": true,
+            "description": "A10: el Bearer se emitió tras verificar un OTP."
+          },
+          "assurance_level": {
+            "type": "string",
+            "const": "otp_verified"
           }
         },
         "additionalProperties": false,
-        "description": "Respuesta de login sin contexto. Conserva los campos heredados del Bearer; no admite marcadores contextuales."
+        "description": "Respuesta de login sin contexto ATIX. Conserva los campos heredados del Bearer y agrega otp_verified=true y assurance_level=otp_verified (A10). Sin personalization (solo existe con contexto ATIX)."
       },
       "ContextualPersonalization": {
         "type": "object",
@@ -8742,7 +8919,9 @@
               "expires_at": "2026-11-05T18:00:00Z",
               "user": {
                 "id": 1
-              }
+              },
+              "otp_verified": true,
+              "assurance_level": "otp_verified"
             }
           },
           {
@@ -10992,13 +11171,194 @@
             "format": "date-time"
           }
         }
+      },
+      "LaboratoryPackageCompositionElement": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id",
+          "name",
+          "gda_id",
+          "sort_order",
+          "validation_status",
+          "validation_reference"
+        ],
+        "description": "Elemento de la composición de un paquete. `study` = estudio del catálogo vinculado; `commercial_descriptor` = descripción comercial sin estudio de catálogo. Un elemento solo es `validated` cuando FAMEDIC Comercial aprobó la equivalencia (B02); la mera vinculación no lo valida.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "study",
+              "commercial_descriptor"
+            ]
+          },
+          "id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "ID del estudio de catálogo; null para commercial_descriptor."
+          },
+          "name": {
+            "type": "string"
+          },
+          "gda_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "null para commercial_descriptor."
+          },
+          "sort_order": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "validation_status": {
+            "type": "string",
+            "enum": [
+              "pending_commercial_validation",
+              "validated",
+              "rejected"
+            ]
+          },
+          "validation_reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255,
+            "description": "Referencia de la aprobación comercial (o del expediente pendiente)."
+          }
+        }
+      },
+      "LaboratoryPackage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "item_type",
+          "name",
+          "brand",
+          "category",
+          "package_classification",
+          "composition",
+          "composition_status",
+          "pricing",
+          "available"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "ID del estudio-paquete en el catálogo (package_test_id); es el `package_id` de la ruta de detalle."
+          },
+          "item_type": {
+            "type": "string",
+            "const": "package"
+          },
+          "name": {
+            "type": "string"
+          },
+          "brand": {
+            "$ref": "#/components/schemas/LaboratoryBrand"
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "package_classification": {
+            "type": "string",
+            "enum": [
+              "explicit"
+            ],
+            "description": "Solo se publican paquetes clasificados explícitamente; nunca se infieren de feature_list."
+          },
+          "composition": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LaboratoryPackageCompositionElement"
+            },
+            "description": "Ordenada por sort_order."
+          },
+          "composition_status": {
+            "type": "string",
+            "enum": [
+              "validated",
+              "incomplete"
+            ],
+            "description": "`validated` solo si TODOS los elementos (estudios y descriptores) están validated."
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/LaboratoryPricing"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CatalogPackagesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "success",
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "packages",
+                  "pagination"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "packages": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/LaboratoryPackage"
+                    }
+                  },
+                  "pagination": {
+                    "$ref": "#/components/schemas/Pagination"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CatalogPackageResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "success",
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/LaboratoryPackage"
+              }
+            }
+          }
+        ]
       }
     }
   },
   "x-release-status": "local-candidate-not-approved",
   "x-approval-status": "PROPOSAL_NOT_APPROVED_NOT_RELEASE_CONTRACT",
   "x-proposal-state": "PROPUESTO_PARA_APROBACIÓN",
-  "x-frozen-sha256": "523a566bab22fffb4c0ad8fbb29d79cc4823e99769494b1fd135f6639094f9a4",
   "x-runtime-limitations": [
     "Transporte, enrolamiento, consentimiento y finanzas operativos deshabilitados por defecto.",
     "Certificación TLS/proxy y migración de todos los clientes nativos pendientes.",

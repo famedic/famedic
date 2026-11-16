@@ -176,7 +176,8 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('HTTP esperado — OTP-VERIFY-BINDING', function () { pm.expect(pm.response.code).to.eql(200); });"
+              "pm.test('HTTP esperado — OTP-VERIFY-BINDING', function () { pm.expect(pm.response.code).to.eql(200); });",
+              "pm.test('A10 marcadores de aseguramiento (review-package-02)', function () { const d = pm.response.json().data; pm.expect(d.otp_verified).to.eql(true); pm.expect(d.assurance_level).to.eql('otp_verified'); });"
             ]
           }
         }
@@ -718,7 +719,8 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('HTTP esperado — CHECKOUT-LEO-CONTINUITY', function () { pm.expect(pm.response.code).to.eql(200); });"
+              "pm.test('HTTP esperado — CHECKOUT-LEO-CONTINUITY', function () { pm.expect(pm.response.code).to.eql(200); });",
+              "pm.test('B24 apagado: sin continuity_url', function () { pm.expect(pm.response.json().data).to.not.have.property('continuity_url'); });"
             ]
           }
         }
@@ -1839,7 +1841,8 @@
             "type": "text/javascript",
             "exec": [
               "pm.test(\"Código positivo declarado\", function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
-              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico."
+              "// Este control de código no acredita schema, efectos ni aceptación UAT. Validar criterio específico.",
+              "pm.test('B01/B02 item_type aditivo (study|package)', function () { (pm.response.json().data.laboratory_tests || []).forEach(function (t) { pm.expect(['study','package']).to.include(t.item_type); }); });"
             ]
           }
         }

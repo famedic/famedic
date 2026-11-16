@@ -17,6 +17,8 @@ return [
         'certified' => false,
         'ttl_minutes' => 10,
         'allowed_host' => env('AKUBICA_CONTINUITY_ALLOWED_HOST', null),
+        // RC2 B24 (D2): Leo -> FAMEDIC membership checkout continuity. Off until Security authorizes enablement.
+        'medical_services' => ['enabled' => false, 'certified' => false],
     ],
     'financial' => ['enabled' => false, 'certified' => false, 'legacy_writers_coordinated' => false],
 ];
