@@ -1,0 +1,205 @@
+{
+  "id": "rc2-newman-env-template",
+  "name": "FAMEDIC RC2 Newman — PLANTILLA (sin secretos)",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "https://famedic-otp.on-forge.com/api/v1",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "web_base_url",
+      "value": "https://famedic-otp.on-forge.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "allowed_hosts",
+      "value": "famedic-otp.on-forge.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "expected_release_sha",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "run_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "machine_credential",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "native_machine_credential",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "bearer_token",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "native_bearer_token",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "bearer_none",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "bearer_active",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "bearer_sponsored",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "bearer_expired",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "bearer_revoked",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "atix_key_id",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "atix_hmac_secret",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "otp_code",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "phone_registered",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "phone_unknown",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "sms_authorized",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "otp_wrong_code_authorized",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "expired_challenge_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "b24_enabled",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "lab_brand",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_id_available",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_search_available",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "package_id",
+      "value": "4965",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_id_no_public",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_id_no_savings",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_id_inconsistent",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_id_mutable",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "own_order_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "foreign_order_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}
