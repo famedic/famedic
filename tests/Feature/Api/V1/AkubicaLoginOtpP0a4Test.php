@@ -339,7 +339,11 @@ test('p0a4 verify issues sanctum token for existing user and customer without cr
     ])->assertOk()
         ->assertJsonPath('data.token_type', 'Bearer')
         ->assertJsonPath('data.user.email', 'verify@ejemplo.com')
-        ->assertJsonPath('data.user.id', $user->id);
+        ->assertJsonPath('data.user.id', $user->id)
+        // RC2 A10 (D1): non-contextual OTP login exposes assurance markers, never personalization.
+        ->assertJsonPath('data.otp_verified', true)
+        ->assertJsonPath('data.assurance_level', 'otp_verified')
+        ->assertJsonMissingPath('data.personalization');
 
     $token = $verify->json('data.token');
     $expiresIn = $verify->json('data.expires_in');

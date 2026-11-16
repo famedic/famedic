@@ -279,9 +279,12 @@ class LoginController extends Controller
 
         $tokenData = ($this->issueAkubicaTokenAction)($user);
 
+        // RC2 A10 (D1): legacy OTP login shares LoginTokenData; same additive assurance markers.
         return ApiResponse::success([
             ...$tokenData,
             'user' => $this->formatUser($user),
+            'otp_verified' => true,
+            'assurance_level' => 'otp_verified',
         ]);
     }
 
@@ -390,9 +393,20 @@ class LoginController extends Controller
             authenticatedUser: $user,
             challengePublicId: $challengePublicId,
             markTerminal: true,
+            metadata: [
+                'session_issued' => true,
+                'contact_context_bound' => false,
+                'assurance_level' => 'otp_verified',
+            ],
         );
 
-        return ApiResponse::success($payload);
+        // RC2 A10 (D1): the non-contextual P0-A login also verified an OTP, so it carries the same
+        // assurance markers as the ATIX-contextual branch. No personalization here (no ATIX context).
+        return ApiResponse::success([
+            ...$payload,
+            'otp_verified' => true,
+            'assurance_level' => 'otp_verified',
+        ]);
     }
 
     private function formatUser(User $user): array
