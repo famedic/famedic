@@ -50,8 +50,20 @@
           "const sha = pm.environment.get('expected_release_sha');",
           "let body = null; try { body = pm.response.json(); } catch (e) { body = null; }",
           "const raw = pm.response.text() || '';",
+          "// Contrato (OpenAPI components.parameters.IdempotencyKey): un replay exitoso devuelve el cuerpo/estado original,",
+          "// Idempotency-Replayed: true y el X-Correlation-ID ORIGINAL; cualquier otra respuesta hace eco del correlation id enviado.",
+          "const idemKey = pm.request.headers.get('Idempotency-Key');",
+          "const replayed = pm.response.headers.get('Idempotency-Replayed') === 'true';",
+          "if (idemKey && !replayed && pm.response.code < 300) { pm.collectionVariables.set('cid_by_key_' + idemKey, pm.variables.get('cid')); }",
           "pm.test(scen + ' [release ' + sha.substring(0, 12) + '] correlation id devuelto', function () {",
-          "  pm.expect(pm.response.headers.get('X-Correlation-ID')).to.eql(pm.variables.get('cid'));",
+          "  const got = pm.response.headers.get('X-Correlation-ID');",
+          "  if (replayed) {",
+          "    const original = pm.collectionVariables.get('cid_by_key_' + idemKey);",
+          "    pm.expect(original, 'correlation id original registrado para la Idempotency-Key').to.be.a('string');",
+          "    pm.expect(got).to.eql(original);",
+          "  } else {",
+          "    pm.expect(got).to.eql(pm.variables.get('cid'));",
+          "  }",
           "});",
           "pm.test(scen + ' sin datos protegidos en la respuesta', function () {",
           "  pm.expect(raw).to.not.match(/\"(otp|otp_code|code_hash|password|secret|hmac_secret|machine_secret)\"\\s*:/i);",
@@ -1781,7 +1793,15 @@
                 "exec": [
                   "pm.test('B23 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
                   "pm.test('B23 assistant_can_pay=false', function () { const b = pm.response.json(); pm.expect(b.data.assistant_can_pay).to.eql(false); pm.expect(b.data).to.not.have.property('payment_url'); });",
-                  "pm.test('B23 B24 apagado: sin continuity_url salvo bandera', function () { const b = pm.response.json(); if (pm.variables.get('b24_enabled') !== '1') { pm.expect(b.data).to.not.have.property('continuity_url'); } else { pm.variables.set('continuity_url', b.data.continuity_url); } });"
+                  "pm.test('B23 continuidad según bandera B24 (apagada: ausente; habilitada: liga first-party de continuidad, nunca de pago)', function () {",
+                  "  const b = pm.response.json();",
+                  "  if (pm.variables.get('b24_enabled') !== '1') { pm.expect(b.data).to.not.have.property('continuity_url'); return; }",
+                  "  pm.expect(b.data.continuity_url).to.match(/^https:\\/\\/[^/]+\\/checkout\\/continue\\/[A-Za-z0-9]+$/);",
+                  "  pm.expect(b.data.continuity_url).to.not.match(/pay|efevoo|stripe|payment-link/i);",
+                  "  pm.expect(b.data.continuity_expires_at).to.be.a('string');",
+                  "  pm.expect(b.data.assistant_can_pay).to.eql(false);",
+                  "  pm.collectionVariables.set('continuity_url', b.data.continuity_url);",
+                  "});"
                 ]
               }
             }
@@ -1820,7 +1840,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('B24a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
-                  "pm.test('B24a liga https de continuidad, no de pago', function () { const b = pm.response.json(); pm.expect(b.data.continuity_url).to.match(/^https:\\/\\/[^/]+\\/checkout\\/continue\\/[A-Za-z0-9]+$/); pm.expect(b.data.continuity_url).to.not.match(/pay|efevoo|stripe/i); pm.expect(b.data.continuity_expires_at).to.be.a('string'); pm.variables.set('continuity_url', b.data.continuity_url); });",
+                  "pm.test('B24a liga https de continuidad, no de pago', function () { const b = pm.response.json(); pm.expect(b.data.continuity_url).to.match(/^https:\\/\\/[^/]+\\/checkout\\/continue\\/[A-Za-z0-9]+$/); pm.expect(b.data.continuity_url).to.not.match(/pay|efevoo|stripe/i); pm.expect(b.data.continuity_expires_at).to.be.a('string'); pm.collectionVariables.set('continuity_url', b.data.continuity_url); });",
                   "pm.test('B24a no-store', function(){ pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'); });"
                 ]
               }
