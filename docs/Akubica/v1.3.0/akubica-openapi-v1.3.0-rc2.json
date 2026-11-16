@@ -1825,7 +1825,7 @@
         },
         "x-required-capability": "cart:membership:write",
         "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
-        "description": "B21: sin discriminador, el ítem se resuelve por propiedad (un ítem propio de una línea nunca queda bloqueado ni borra la otra). Si el mismo id existe en ambas líneas del titular, responde 409 CART_SERVICE_LINE_MISMATCH y exige service_line o brand."
+        "description": "B21: sin discriminador, el ítem se resuelve por propiedad (un ítem propio de una línea nunca queda bloqueado ni borra la otra). Si el mismo id existe en ambas líneas del titular, responde 409 CART_SERVICE_LINE_MISMATCH y exige service_line o brand. Perfil Leo (cart:membership:write): fijo a medical_services; brand o service_line distinto de medical_services responde 403 CONSUMER_NOT_AUTHORIZED sin efectos, y ante colisión de id el borrado se resuelve solo en medical_services."
       }
     },
     "/cart/medical-benefit": {

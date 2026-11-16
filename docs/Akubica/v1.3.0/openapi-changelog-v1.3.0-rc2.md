@@ -29,3 +29,4 @@ Cambios aditivos; no se elimina ni se renombra ningún campo existente. Pendient
 - **B01/B02**: `item_type` (`study|package`) aditivo en `LaboratoryTestListItem`, `LaboratoryTest` y `LaboratoryPackage`.
 - Se retira `x-frozen-sha256` porque el documento deja de ser el congelado de review-package-01.
 - R01/R04/R05: la anotación de allowlist de Leo NO se modifica; queda como propuesta contractual C1.
+- B21 (Leo): `DELETE /cart/items/{cart_item_id}` con permiso membership-only queda fijo a `medical_services`; `brand` o `service_line` de otra línea → 403 `CONSUMER_NOT_AUTHORIZED` sin efectos (no ampliación del perfil Leo).
