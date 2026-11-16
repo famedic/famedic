@@ -15,6 +15,8 @@ use App\Http\Responses\ApiResponse;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Services\Api\V1\Audit\AuditOutcome;
 use App\Services\Api\V1\Audit\CartCheckoutAuditRecorder;
+use App\Services\Api\V1\Continuity\MedicalCheckoutContinuity;
+use App\Services\Api\V1\Continuity\MedicalContinuityUnavailable;
 use App\Services\Api\V1\MedicalServiceCartService;
 use App\Support\Api\V1\CartCouponSupport;
 use App\Support\Api\V1\CheckoutPreparation;
@@ -47,7 +49,23 @@ class CheckoutController extends Controller
             $cart = app(MedicalServiceCartService::class)->activeCart($request->user()->customer);
             $cartPayload = (new MedicalServiceCartResource($cart->load('items')))->resolve($request);
 
-            return ApiResponse::success([
+            // RC2 B24 (D2): single-use continuity link to the FAMEDIC membership checkout (Leo only, flag off by default).
+            $continuity = [];
+            if (MedicalCheckoutContinuity::enabled()
+                && \App\Services\Api\V1\Benefits\OpaqueCartContinuity::leo($request)
+                && $cartPayload['totals']['item_count'] > 0) {
+                try {
+                    $continuity = app(MedicalCheckoutContinuity::class)->issue($request, $cart);
+                } catch (MedicalContinuityUnavailable $e) {
+                    return ApiResponse::error(
+                        $e->errorCode,
+                        'La continuidad al checkout de FAMEDIC no está disponible.',
+                        503,
+                    );
+                }
+            }
+
+            $response = ApiResponse::success([
                 'service_line' => 'medical_services',
                 'cart' => $cartPayload,
                 'requirements' => [
@@ -61,7 +79,10 @@ class CheckoutController extends Controller
                 'assistant_can_pay' => false,
                 'can_continue_on_platform' => true,
                 'can_continue_to_payment_platform' => false,
+                ...$continuity,
             ]);
+
+            return $continuity === [] ? $response : $response->withHeaders(['Cache-Control' => 'private, no-store']);
         }
 
         $brand = LaboratoryBrand::from($request->validated('brand'));
