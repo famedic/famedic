@@ -17,3 +17,15 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 ## Referencias de validación
 
 La sintaxis JSON del contrato principal y del suplemento R30 se valida en el informe de cierre local. La validación oficial de OpenAPI y las pruebas HTTP de staging permanecen pendientes.
+
+## 1.3.0-rc2-review-package-02 (LOCAL, rama rc2/cierre-anexos, 2026-11-16)
+
+Cambios aditivos; no se elimina ni se renombra ningún campo existente. Pendiente de aceptación contractual antes de publicarse en QA.
+
+- **A10**: `LoginTokenData` incluye `otp_verified=true` y `assurance_level=otp_verified` en el login OTP normal (sin contexto ATIX). Respuestas con contexto ATIX y Bearer existentes no cambian.
+- **B24**: `MedicalServiceCheckoutPrepareData` admite `continuity_url` y `continuity_expires_at` (dependientes entre sí). Solo se emiten con la bandera `continuity.medical_services` habilitada y certificada (apagada por defecto). Liga de un solo uso hacia el checkout FAMEDIC con sesión FAMEDIC; no es liga de pago. Nuevo error `503 CONTINUITY_UNAVAILABLE`. `x-continuity-state=IMPLEMENTADO_LOCAL_APAGADO`.
+- **B22**: `POST /cart/items` documenta `503 PHARMACY_SUSPENDED` (`retryable=false`) para intención de farmacia.
+- **B19–B21**: `DELETE /cart/items/{id}` documenta los parámetros opcionales `service_line=medical_services` y `brand`, y los errores `404 CART_ITEM_NOT_FOUND` y `409 CART_SERVICE_LINE_MISMATCH`.
+- **B01/B02**: `item_type` (`study|package`) aditivo en `LaboratoryTestListItem`, `LaboratoryTest` y `LaboratoryPackage`.
+- Se retira `x-frozen-sha256` porque el documento deja de ser el congelado de review-package-01.
+- R01/R04/R05: la anotación de allowlist de Leo NO se modifica; queda como propuesta contractual C1.
