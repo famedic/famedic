@@ -241,6 +241,12 @@ final class OtpMovementRecorder
             return [OtpMovementStage::DeliverySuppressed, OtpMovementStatus::Failed];
         }
 
+        if ($logEvent === 'otp_delivery_duplicate_suppressed_without_operation'
+            || $logEvent === 'otp_delivery_operation_persist_failed'
+        ) {
+            return [OtpMovementStage::DeliveryFailed, OtpMovementStatus::Failed];
+        }
+
         if ($logEvent === 'otp_delivery_fallback') {
             $accepted = $resultClass === OtpDeliveryResultClass::FallbackAccepted->value;
 
@@ -267,6 +273,8 @@ final class OtpMovementRecorder
         return match ($logEvent) {
             'otp_delivery_duplicate_suppressed' => 'Entrega duplicada suprimida por reserva de operación.',
             'otp_delivery_suppressed' => 'Entrega suprimida: challenge obsoleto o no pendiente.',
+            'otp_delivery_duplicate_suppressed_without_operation' => 'Duplicado suprimido sin operación de entrega aceptada; el proveedor no fue llamado.',
+            'otp_delivery_operation_persist_failed' => 'No se pudo registrar la operación de entrega; el proveedor no fue llamado.',
             'otp_delivery_fallback' => $resultClass === OtpDeliveryResultClass::FallbackAccepted->value
                 ? 'Fallback a email aceptado por el canal mail.'
                 : 'Fallback a email fallido.',

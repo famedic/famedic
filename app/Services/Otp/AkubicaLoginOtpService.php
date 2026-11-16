@@ -527,15 +527,22 @@ class AkubicaLoginOtpService
      */
     private function dispatchDelivery(OtpChallenge $challenge, string $plainCode, string $phoneE164): void
     {
+        $correlationId = \App\Support\Api\V1\AkubicaCorrelationId::currentOrGenerate();
         $outcome = $this->deliveryOrchestrator->deliverLoginSafely(
             $challenge,
             $plainCode,
             $phoneE164,
-            \App\Support\Api\V1\AkubicaCorrelationId::currentOrGenerate(),
+            $correlationId,
         );
 
-        if ($outcome === OtpDeliveryOutcome::Succeeded
-            || $outcome === OtpDeliveryOutcome::DuplicateSuppressed
+        if ($outcome === OtpDeliveryOutcome::Succeeded) {
+            return;
+        }
+
+        // DuplicateSuppressed is only a success when a delivery for this very
+        // challenge was actually accepted; otherwise fail closed (no SMS sent).
+        if ($outcome === OtpDeliveryOutcome::DuplicateSuppressed
+            && $this->deliveryOrchestrator->confirmDuplicateSuppression($challenge, $correlationId)
         ) {
             return;
         }

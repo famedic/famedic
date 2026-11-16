@@ -11,7 +11,9 @@ use App\Services\Otp\Diagnostics\OtpDiagnosticContext;
 use App\Services\Otp\OtpAbuseKeyHasher;
 use App\Services\Otp\Registration\AkubicaRegistrationPolicy;
 use App\Services\Otp\Registration\RegistrationIdentity;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Validator;
 
@@ -124,6 +126,13 @@ final class AkubicaSecureOtpDeliveryOrchestrator
                 'otp_challenge_public_id' => (string) $challenge->public_id,
             ]);
 
+            if (! $this->operationExists($operationKey)) {
+                // A reservation without a persisted operation is not proof of a
+                // prior delivery. Surface it so callers (login/step-up) can fail
+                // closed instead of leaving a challenge without SMS.
+                $this->emitDuplicateWithoutOperation($challenge, $correlationId, 'reservation_without_operation');
+            }
+
             return OtpDeliveryOutcome::DuplicateSuppressed;
         }
         $this->otpDiagnostics->markReservationCreated();
@@ -138,11 +147,25 @@ final class AkubicaSecureOtpDeliveryOrchestrator
                 'correlation_id' => $correlationId,
             ]);
             $this->otpDiagnostics->markDeliveryOperationCreated();
-        } catch (UniqueConstraintViolationException|\Illuminate\Database\QueryException) {
+        } catch (UniqueConstraintViolationException $e) {
             $this->reservations->release($operationKey);
-            $this->otpDiagnostics->markProviderNotCalled('replay');
 
-            return OtpDeliveryOutcome::DuplicateSuppressed;
+            if ($this->operationExists($operationKey)) {
+                $this->otpDiagnostics->markProviderNotCalled('replay');
+
+                return OtpDeliveryOutcome::DuplicateSuppressed;
+            }
+
+            $this->reportOperationPersistFailure($challenge, $correlationId, $e, 'unique_violation_without_operation');
+            $this->otpDiagnostics->markProviderNotCalled();
+
+            return OtpDeliveryOutcome::Failed;
+        } catch (QueryException $e) {
+            $this->reservations->release($operationKey);
+            $this->reportOperationPersistFailure($challenge, $correlationId, $e, 'operation_insert_failed');
+            $this->otpDiagnostics->markProviderNotCalled();
+
+            return OtpDeliveryOutcome::Failed;
         }
 
         $current = OtpChallenge::query()->find($challenge->id);
@@ -359,6 +382,87 @@ final class AkubicaSecureOtpDeliveryOrchestrator
 
             return false;
         }
+    }
+
+    /**
+     * Confirms that a DuplicateSuppressed outcome corresponds to a delivery that
+     * was actually accepted for this challenge. Login and step-up must fail
+     * closed when this returns false (no SMS was ever accepted).
+     */
+    public function confirmDuplicateSuppression(OtpChallenge $challenge, string $correlationId): bool
+    {
+        $accepted = OtpDeliveryOperation::query()
+            ->where('otp_challenge_id', $challenge->id)
+            ->where(function ($query): void {
+                $query->whereIn('status', ['sms_accepted', 'email_accepted'])
+                    ->orWhereIn('result_class', [
+                        OtpDeliveryResultClass::Accepted->value,
+                        OtpDeliveryResultClass::FallbackAccepted->value,
+                    ]);
+            })
+            ->exists();
+
+        if (! $accepted) {
+            $this->emitDuplicateWithoutOperation($challenge, $correlationId, 'no_accepted_operation');
+        }
+
+        return $accepted;
+    }
+
+    private function operationExists(string $operationKey): bool
+    {
+        return OtpDeliveryOperation::query()->where('operation_key', $operationKey)->exists();
+    }
+
+    private function emitDuplicateWithoutOperation(OtpChallenge $challenge, string $correlationId, string $reason): void
+    {
+        Log::warning('otp_delivery_duplicate_suppressed_without_operation', [
+            'challenge_public_id' => (string) $challenge->public_id,
+            'purpose' => $challenge->purpose,
+            'correlation_id' => $correlationId,
+            'reason' => $reason,
+        ]);
+
+        $this->observability->emit('otp_delivery_duplicate_suppressed_without_operation', [
+            'purpose' => $challenge->purpose,
+            'channel' => 'sms',
+            'provider_alias' => $this->provider->alias(),
+            'result_class' => OtpDeliveryResultClass::DuplicateSuppressed->value,
+            'correlation_id' => $correlationId,
+            'otp_challenge_public_id' => (string) $challenge->public_id,
+        ]);
+    }
+
+    /**
+     * Logs a delivery-operation persistence failure without PII
+     * (no phone, code or email): only identifiers, class and SQLSTATE.
+     */
+    private function reportOperationPersistFailure(
+        OtpChallenge $challenge,
+        string $correlationId,
+        QueryException $e,
+        string $reason,
+    ): void {
+        $sqlState = is_array($e->errorInfo ?? null) && isset($e->errorInfo[0]) && is_string($e->errorInfo[0])
+            ? $e->errorInfo[0]
+            : (string) $e->getCode();
+
+        Log::warning('otp_delivery_operation_persist_failed', [
+            'challenge_public_id' => (string) $challenge->public_id,
+            'purpose' => $challenge->purpose,
+            'correlation_id' => $correlationId,
+            'exception_class' => $e::class,
+            'sqlstate' => $sqlState,
+            'reason' => $reason,
+        ]);
+
+        $this->observability->emit('otp_delivery_operation_persist_failed', [
+            'purpose' => $challenge->purpose,
+            'channel' => 'sms',
+            'provider_alias' => $this->provider->alias(),
+            'correlation_id' => $correlationId,
+            'otp_challenge_public_id' => (string) $challenge->public_id,
+        ]);
     }
 
     private function isValidEmail(string $email): bool
