@@ -97,15 +97,22 @@ class AkubicaCheckoutLinkController extends Controller
      */
     private function continueToMedicalCheckout(Request $request, AkubicaCheckoutLink $link, string $token): RedirectResponse
     {
+        // Rejections are logged with the link id and reason only (never the token, URL or personal data).
         if (! MedicalCheckoutContinuity::enabled()) {
+            Log::warning('akubica_medical_continuity_rejected', ['link_id' => $link->id, 'reason' => 'disabled']);
+
             return redirect()->route('login')->with('error', 'La liga de checkout no es válida.');
         }
 
         if ($link->used_at !== null) {
+            Log::warning('akubica_medical_continuity_rejected', ['link_id' => $link->id, 'reason' => 'already_used']);
+
             return redirect()->route('login')->with('error', 'La liga de checkout ya fue utilizada.');
         }
 
         if ($link->isExpired()) {
+            Log::warning('akubica_medical_continuity_rejected', ['link_id' => $link->id, 'reason' => 'expired']);
+
             return redirect()->route('login')->with('error', 'La liga de checkout ha expirado.');
         }
 
@@ -132,6 +139,8 @@ class AkubicaCheckoutLinkController extends Controller
         }
 
         if (! $link->claim()) {
+            Log::warning('akubica_medical_continuity_rejected', ['link_id' => $link->id, 'reason' => 'claim_race']);
+
             return redirect()->route('login')->with('error', 'La liga de checkout ya fue utilizada.');
         }
 
