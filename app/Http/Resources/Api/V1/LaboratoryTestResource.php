@@ -10,10 +10,12 @@ class LaboratoryTestResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $this->resource->loadMissing('laboratoryTestCategory');
+        $this->resource->loadMissing(['laboratoryTestCategory', 'packageDefinition']);
 
         return [
             'id' => $this->id,
+            // RC2 B01/B02 (D8): additive discriminator; 'package' only for explicitly classified packages.
+            'item_type' => $this->packageDefinition ? 'package' : 'study',
             'name' => $this->name,
             'description' => $this->description,
             'brand' => $this->brand->value,
