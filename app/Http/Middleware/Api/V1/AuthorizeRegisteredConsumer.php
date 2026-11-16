@@ -47,6 +47,10 @@ final class AuthorizeRegisteredConsumer
         if (! $user->customer) {
             return ApiResponse::error('FORBIDDEN', 'El usuario no tiene perfil de cliente asociado.', 403);
         }
+        // RC2 B22 (D4): pharmacy purchases are suspended; typed rejection before any capability or cart effect.
+        if ($request->route()?->getName() === 'api.v1.cart.items.store' && \App\Support\Api\V1\PharmacySuspension::requested($request)) {
+            return \App\Support\Api\V1\PharmacySuspension::response();
+        }
         $identity = $this->identities->resolve($request, $user, $user->currentAccessToken());
         $operation = self::ROUTES[$request->route()?->getName()] ?? null;
         // Generic native cart writes require their own literal grant; medical-only grants stay narrow.
