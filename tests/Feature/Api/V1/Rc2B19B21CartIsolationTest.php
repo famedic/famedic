@@ -139,10 +139,14 @@ test('B19-B21 leo profile is not widened: no laboratory cart read or write, medi
     $user = User::factory()->withRegularCustomer()->create();
     $leo = SyntheticConsumerRegistryFixture::issue($user, 'leo', ['memberships:read', 'cart:read', 'checkout:prepare', 'cart:membership:write']);
     $test = createOlabTest(['requires_appointment' => false]);
-    addOlabCartItem($user, $test);
-    $labItemId = LaboratoryCartItem::query()->sole()->id;
+    $medicalItemId = $this->postJson('/api/v1/cart/items', b19Membership(), b19Headers($leo))->assertStatus(201)->json('data.items.0.id');
+    // Deterministic, non-colliding laboratory id (ids are independent per table).
+    $labItemId = $medicalItemId + 1000;
+    DB::table('laboratory_cart_items')->insert([
+        'id' => $labItemId, 'customer_id' => $user->customer->id, 'laboratory_test_id' => $test->id,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
 
-    $this->postJson('/api/v1/cart/items', b19Membership(), b19Headers($leo))->assertStatus(201);
     $this->getJson('/api/v1/cart?brand=olab', b19Headers($leo, false))->assertStatus(403)->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
     $this->postJson('/api/v1/cart/items', ['brand' => 'olab', 'laboratory_test_id' => createOlabTest()->id, 'quantity' => 1], b19Headers($leo))
         ->assertStatus(403)->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
@@ -150,4 +154,26 @@ test('B19-B21 leo profile is not widened: no laboratory cart read or write, medi
 
     expect(LaboratoryCartItem::query()->count())->toBe(1)
         ->and(MedicalServiceCart::query()->where('customer_id', $user->customer->id)->first()->items()->count())->toBe(1);
+});
+
+test('B21 leo id collision: a laboratory discriminator never widens leo and the plain delete stays on medical_services', function () {
+    $user = User::factory()->withRegularCustomer()->create();
+    $leo = SyntheticConsumerRegistryFixture::issue($user, 'leo', ['memberships:read', 'cart:read', 'checkout:prepare', 'cart:membership:write']);
+    $medicalItemId = $this->postJson('/api/v1/cart/items', b19Membership(), b19Headers($leo))->assertStatus(201)->json('data.items.0.id');
+    $test = createOlabTest(['requires_appointment' => false]);
+    DB::table('laboratory_cart_items')->insert([
+        'id' => $medicalItemId, 'customer_id' => $user->customer->id, 'laboratory_test_id' => $test->id,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $this->deleteJson("/api/v1/cart/items/{$medicalItemId}?brand=olab", [], b19Headers($leo))
+        ->assertStatus(403)->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
+    $this->deleteJson("/api/v1/cart/items/{$medicalItemId}?service_line=laboratory", [], b19Headers($leo))
+        ->assertStatus(403)->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
+    expect(LaboratoryCartItem::query()->whereKey($medicalItemId)->exists())->toBeTrue()
+        ->and(MedicalServiceCartItem::query()->whereKey($medicalItemId)->exists())->toBeTrue();
+
+    $this->deleteJson("/api/v1/cart/items/{$medicalItemId}", [], b19Headers($leo))->assertOk();
+    expect(LaboratoryCartItem::query()->whereKey($medicalItemId)->exists())->toBeTrue()
+        ->and(MedicalServiceCartItem::query()->whereKey($medicalItemId)->exists())->toBeFalse();
 });
