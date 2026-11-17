@@ -30,8 +30,14 @@ final class AuthenticateOtpBackend
                 if (! is_string($id)) {
                     return ApiResponse::error('VALIDATION_ERROR', 'Solicitud no válida.', 422);
                 }
-                if (! DB::table('otp_backend_challenges')->where('challenge_hash', hash('sha256', $id))->where('consumer_id', $client->consumerId)->where('channel_id', $client->channelId)->where('expires_at', '>', now())->exists()) {
+                $bound = DB::table('otp_backend_challenges')->where('challenge_hash', hash('sha256', $id))->where('consumer_id', $client->consumerId)->where('channel_id', $client->channelId)->first(['expires_at']);
+                if (! $bound) {
                     return ApiResponse::error('OTP_BACKEND_CONTEXT_INVALID', 'Confirmación no disponible.', 403);
+                }
+                if (! \Illuminate\Support\Carbon::parse($bound->expires_at)->isFuture()) {
+                    // RC2 A11 (anexo): challenge propio del mismo consumidor/canal ya vencido -> 422 CODE_EXPIRED, sin Bearer.
+                    // Un challenge de otro consumidor/canal o inexistente sigue en 403 (sin revelar su existencia).
+                    return ApiResponse::error('CODE_EXPIRED', 'El codigo expiro. Solicita uno nuevo.', 422);
                 }
             }
             $request->attributes->set(self::ATTRIBUTE, $client);
