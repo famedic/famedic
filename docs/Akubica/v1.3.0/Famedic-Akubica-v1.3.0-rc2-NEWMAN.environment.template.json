@@ -165,6 +165,18 @@
       "enabled": true
     },
     {
+      "key": "package_brand",
+      "value": "swisslab",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "package_search",
+      "value": "PERFIL DIABETICO",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "test_id_no_public",
       "value": "",
       "type": "default",

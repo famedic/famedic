@@ -1103,7 +1103,44 @@
           "response": []
         },
         {
-          "name": "B02 Paquete (4965) item_type=package y composición certificada",
+          "name": "B02 Paquete (4965) listado: item_type=package, marca, precios y ahorro",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/packages?brand={{package_brand}}&search={{package_search}}",
+            "description": "Anexo 02 fila B02: item_type=package; marca, precios y ahorro. composition_status es informativo (validated|incomplete); no se exige validated (nota técnica B02 v5). requires: package_id,package_brand,package_search"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B02 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "const b02it = (function () { try { return ((pm.response.json().data || {}).packages || []).find(x => String(x.id) === String(pm.variables.get('package_id'))); } catch (e) { return undefined; } })();",
+                  "pm.test('B02 listado contiene el paquete con item_type=package', function () { pm.expect(b02it, 'paquete ' + pm.variables.get('package_id') + ' presente en el listado').to.exist; pm.expect(b02it.item_type).to.eql('package'); });",
+                  "pm.test('B02 marca del paquete', function () { pm.expect(b02it, 'presente').to.exist; pm.expect(b02it.brand).to.be.a('string').and.not.empty; pm.expect(b02it.brand).to.eql(pm.variables.get('package_brand')); });",
+                  "pm.test('B02 precios y ahorro (comparación disponible, MXN)', function () { pm.expect(b02it, 'presente').to.exist; const p = b02it.pricing; pm.expect(p.currency).to.eql('MXN'); pm.expect(p.comparison_status).to.eql('available'); pm.expect(p.public_price_cents).to.be.a('number').and.above(0); pm.expect(p.famedic_price_cents).to.be.a('number').and.above(0); pm.expect(p.savings_cents).to.eql(p.public_price_cents - p.famedic_price_cents); pm.expect(p.savings_cents).to.be.above(0); pm.expect(p.savings_percentage).to.be.closeTo(Math.round(p.savings_cents * 10000 / p.public_price_cents) / 100, 0.011); });",
+                  "pm.test('B02 el elemento indica nombre, impuestos y vigencia (anexo 01 §5.3)', function () { pm.expect(b02it, 'presente').to.exist; pm.expect(b02it.name).to.be.a('string').and.not.empty; ['tax_included', 'effective_at', 'valid_until'].forEach(function (k) { pm.expect(b02it.pricing, k).to.have.property(k); }); });",
+                  "pm.test('B02 composition_status dentro del esquema (informativo; el anexo no exige validated)', function () { pm.expect(b02it, 'presente').to.exist; pm.expect(['validated','incomplete']).to.include(b02it.composition_status); });",
+                  "if (b02it) { pm.variables.set('b02_brand', b02it.brand); pm.variables.set('b02_name', b02it.name); pm.variables.set('b02_pricing', JSON.stringify(b02it.pricing)); }"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B02r Readback detalle del mismo paquete: marca, precios y ahorro",
           "request": {
             "method": "GET",
             "header": [
@@ -1117,7 +1154,7 @@
               }
             ],
             "url": "{{base_url}}/catalog/packages/{{package_id}}",
-            "description": "Falla legítimamente mientras composition_status != validated (aprobación comercial pendiente). requires: package_id"
+            "description": "Anexo 02 fila B02, lectura posterior: detalle del mismo paquete. requires: package_id,b02_brand,b02_name,b02_pricing"
           },
           "event": [
             {
@@ -1125,9 +1162,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('B02 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
-                  "pm.test('B02 item_type=package', function () { const b = pm.response.json(); pm.expect(b.data.item_type).to.eql('package'); });",
-                  "pm.test('B02 composition_status=validated', function () { const b = pm.response.json(); pm.expect(b.data.composition_status).to.eql('validated'); });"
+                  "pm.test('B02r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B02r detalle del mismo paquete: item_type, nombre, marca, precios, moneda, impuestos, vigencia y ahorro iguales al listado', function () { const d = pm.response.json().data; const l = JSON.parse(pm.variables.get('b02_pricing')); pm.expect(String(d.id)).to.eql(String(pm.variables.get('package_id'))); pm.expect(d.item_type).to.eql('package'); pm.expect(d.brand).to.eql(pm.variables.get('b02_brand')); pm.expect(d.name).to.eql(pm.variables.get('b02_name')); const p = d.pricing; ['public_price_cents', 'famedic_price_cents', 'savings_cents', 'savings_percentage', 'currency', 'tax_included', 'effective_at', 'valid_until', 'comparison_status'].forEach(function (k) { pm.expect(p[k], k).to.eql(l[k]); }); pm.expect(p.savings_cents).to.eql(p.public_price_cents - p.famedic_price_cents); });",
+                  "pm.test('B02r composition_status dentro del esquema (informativo; el anexo no exige validated)', function () { pm.expect(['validated','incomplete']).to.include(pm.response.json().data.composition_status); });"
                 ]
               }
             }
