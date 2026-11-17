@@ -156,10 +156,10 @@ final class AkubicaContextualVerifyCodeRc1Phase2IsolatedTest extends TestCase
             'challenge_id' => $challengeId,
             'code' => '123456',
         ]);
-        $response->assertStatus(config('akubica_connectors.otp_enrollment.enabled') === true ? 403 : 422);
-        if (config('akubica_connectors.otp_enrollment.enabled') === true) {
-            $response->assertJsonPath('error.code', 'OTP_BACKEND_CONTEXT_INVALID');
-        }
+        // RC2 A11 (anexo): OTP vencido -> 422 sin Bearer, con o sin vinculo de backend.
+        $response->assertStatus(422);
+        $response->assertJsonPath('error.code', 'CODE_EXPIRED');
+        $this->getJson('/api/v1/memberships/status')->assertUnauthorized();
     }
 
     #[Test]
