@@ -1158,7 +1158,39 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('B03 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
-                  "pm.test('B03 comparison_status=public_price_unavailable', function () { const b = pm.response.json(); const p=b.data.pricing; pm.expect(p.comparison_status).to.eql('public_price_unavailable'); pm.expect([null, 0]).to.include(p.public_price_cents); pm.expect(p.savings_cents).to.be.null; });"
+                  "pm.test('B03 comparison_status=public_price_unavailable', function () { const b = pm.response.json(); const p=b.data.pricing; pm.expect(p.comparison_status).to.eql('public_price_unavailable'); pm.expect([null, 0]).to.include(p.public_price_cents); pm.expect(p.savings_cents).to.be.null; });",
+                  "if (pm.response.code === 200) { pm.variables.set('b03_famedic_price', pm.response.json().data.pricing.famedic_price_cents); }"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B03r Readback listado: mismo estudio con public_price_unavailable",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/catalog/laboratory-tests?search={{test_search_no_public}}",
+            "description": "requires: test_id_no_public, test_search_no_public"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('B03r HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('B03r lista y detalle consistentes', function () { const b = pm.response.json(); const it=(b.data.laboratory_tests||[]).find(x=>String(x.id)===String(pm.variables.get('test_id_no_public'))); pm.expect(it, 'presente').to.exist; const p=it.pricing; pm.expect(p.comparison_status).to.eql('public_price_unavailable'); pm.expect([null, 0]).to.include(p.public_price_cents); pm.expect(p.savings_cents).to.be.null; pm.expect(p.savings_percentage).to.be.null; pm.expect(p.famedic_price_cents).to.eql(Number(pm.variables.get('b03_famedic_price'))); });"
                 ]
               }
             }

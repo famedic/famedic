@@ -199,6 +199,11 @@
       "value": "",
       "type": "default",
       "enabled": true
+    },
+    {
+      "key": "test_search_no_public",
+      "value": "RC2 B03 sin precio",
+      "enabled": true
     }
   ],
   "_postman_variable_scope": "environment"
