@@ -50,10 +50,10 @@
           "const sha = pm.environment.get('expected_release_sha');",
           "let body = null; try { body = pm.response.json(); } catch (e) { body = null; }",
           "const raw = pm.response.text() || '';",
-          "// Contrato (OpenAPI components.parameters.IdempotencyKey): un replay exitoso devuelve el cuerpo/estado original,",
+          "// Contrato (OpenAPI components.parameters.IdempotencyKey, rutas api.idempotency): un replay exitoso devuelve el cuerpo/estado original,",
           "// Idempotency-Replayed: true y el X-Correlation-ID ORIGINAL; cualquier otra respuesta hace eco del correlation id enviado.",
           "const idemKey = pm.request.headers.get('Idempotency-Key');",
-          "const replayed = pm.response.headers.get('Idempotency-Replayed') === 'true';",
+          "// ATIX phone-lookups usa AtixIdempotencyKey + AtixCorrelationId requerido (sin regla de CID original): hace eco del CID enviado.\nconst atixRoute = pm.request.url.getPath().indexOf('/integrations/atix/') !== -1;\nconst replayed = !atixRoute && pm.response.headers.get('Idempotency-Replayed') === 'true';",
           "if (idemKey && !replayed && pm.response.code < 300) { pm.collectionVariables.set('cid_by_key_' + idemKey, pm.variables.get('cid')); }",
           "pm.test(scen + ' [release ' + sha.substring(0, 12) + '] correlation id devuelto', function () {",
           "  const got = pm.response.headers.get('X-Correlation-ID');",
@@ -2502,7 +2502,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('R01 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
-                  "pm.test('R01 no incluye pedido ajeno', function () { const b = pm.response.json(); pm.expect((b.data||[]).map(o=>String(o.id))).to.not.include(String(pm.variables.get('foreign_order_id'))); });"
+                  "pm.test('R01 no incluye pedido ajeno', function () { const b = pm.response.json(); const orders = (b.data && b.data.orders); pm.expect(orders, 'data.orders (OpenAPI GET /orders)').to.be.an('array'); pm.expect(orders.map(o=>String(o.id))).to.not.include(String(pm.variables.get('foreign_order_id'))); });"
                 ]
               }
             }

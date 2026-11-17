@@ -22,15 +22,15 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', WelcomeController::class)->name('welcome');
 
 Route::get('/akubica/checkout/{token}', AkubicaCheckoutLinkController::class)
-    ->middleware('throttle:30,1')
+    ->middleware(['throttle:30,1', 'api.correlation'])
     ->name('akubica.checkout.link');
 
 Route::get('/checkout/continue/{token}', AkubicaCheckoutLinkController::class)
-    ->middleware('throttle:30,1')
+    ->middleware(['throttle:30,1', 'api.correlation'])
     ->name('akubica.checkout.continue');
 
 Route::get('/checkout/continue', AkubicaCheckoutLinkController::class)
-    ->middleware('throttle:30,1')
+    ->middleware(['throttle:30,1', 'api.correlation'])
     ->name('akubica.checkout.continue.resume');
 
 #Route::get('/terms-of-service', TermsOfServiceController::class)->name('terms-of-service');

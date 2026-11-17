@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Binds an opaque X-Correlation-ID for every /api/v1 request (P1-A6).
+ * Binds an opaque X-Correlation-ID for every /api/v1 request (P1-A6) and for the
+ * RC2 continuity web routes akubica.checkout.* (B24/R06).
  *
  * - Accepts a valid client header or generates a UUID.
  * - Shares correlation_id with the logging context (sanitized allowlist only).
@@ -20,7 +21,9 @@ class AssignAkubicaCorrelationId
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->is('api/v1', 'api/v1/*')) {
+        // RC2 B24/R06: the first-party continuity hop (web) is part of the Leo -> FAMEDIC flow and must stay traceable.
+        if (! $request->is('api/v1', 'api/v1/*')
+            && ! $request->routeIs('akubica.checkout.link', 'akubica.checkout.continue', 'akubica.checkout.continue.resume')) {
             return $next($request);
         }
 
