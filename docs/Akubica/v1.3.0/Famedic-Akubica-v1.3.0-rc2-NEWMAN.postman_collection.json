@@ -2550,7 +2550,7 @@
       "name": "Regresión (R01–R08)",
       "item": [
         {
-          "name": "R01 Pedidos propios (Leo)",
+          "name": "R01 Pedidos propios (Leo, contrato B1-T7): datos mínimos sin pedido ajeno",
           "request": {
             "method": "GET",
             "header": [
@@ -2572,7 +2572,7 @@
               }
             ],
             "url": "{{base_url}}/orders",
-            "description": "requires: bearer_token,foreign_order_id"
+            "description": "Contrato L07 congelado en Batch 1 · T7; el build actual responde 403 a Leo. Corre sólo con leo_batch2_contract=1 sobre el build de Batch 2. requires: leo_batch2_contract,bearer_token,foreign_order_id"
           },
           "event": [
             {
@@ -2581,7 +2581,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('R01 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
-                  "pm.test('R01 no incluye pedido ajeno', function () { const b = pm.response.json(); const orders = (b.data && b.data.orders); pm.expect(orders, 'data.orders (OpenAPI GET /orders)').to.be.an('array'); pm.expect(orders.map(o=>String(o.id))).to.not.include(String(pm.variables.get('foreign_order_id'))); });"
+                  "pm.test('R01 no incluye pedido ajeno', function () { const b = pm.response.json(); const orders = (b.data && b.data.orders); pm.expect(orders, 'data.orders').to.be.an('array'); pm.expect(orders.map(o=>String(o.id))).to.not.include(String(pm.variables.get('foreign_order_id'))); });",
+                  "pm.test('R01 pedidos con datos mínimos (LeoOrderSummary)', function () { const allowed = ['id','status','status_label','brand','study_name','total_cents','currency','is_cancelled','created_at','updated_at']; (pm.response.json().data.orders || []).forEach(function (o) { Object.keys(o).forEach(function (k) { pm.expect(allowed, 'campo ' + k).to.include(k); }); }); pm.expect(pm.response.json().data).to.have.property('pagination'); });"
                 ]
               }
             }
@@ -2627,7 +2628,7 @@
           "response": []
         },
         {
-          "name": "R02a Leo no lee resultados",
+          "name": "R02a Leo: metadatos de resultado propio sin descarga (contrato B1-T7)",
           "request": {
             "method": "GET",
             "header": [
@@ -2649,7 +2650,7 @@
               }
             ],
             "url": "{{base_url}}/orders/{{own_order_id}}/results",
-            "description": "requires: bearer_token,own_order_id"
+            "description": "Contrato L09 (LeoOrderResultsResponse), Batch 1 · T7. Antes: \"Leo no lee resultados\" (403, D5); se sustituye por la matriz. Sin contenido ni URL: el PDF sólo va por liga segura tras step-up. requires: leo_batch2_contract,bearer_token,own_order_id"
           },
           "event": [
             {
@@ -2657,7 +2658,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('R02a HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                  "pm.test('R02a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('R02a metadatos mínimos (LeoResultMetadata)', function () { const d = pm.response.json().data; const allowed = ['order_id','study_name','brand','status','results_available','available_at','has_pdf']; Object.keys(d).forEach(function (k) { pm.expect(allowed, 'campo ' + k).to.include(k); }); pm.expect(String(d.order_id)).to.eql(String(pm.variables.get('own_order_id'))); });",
+                  "pm.test('R02a sin descarga, URL ni contenido', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(download_url|download|url|xml|xml_url|pdf_base64|content)\"\\s*:/); });"
                 ]
               }
             }
@@ -2741,7 +2744,7 @@
           "response": []
         },
         {
-          "name": "R03a Leo no lee facturas",
+          "name": "R03a Leo: metadatos de factura propia sin descarga (contrato B1-T7)",
           "request": {
             "method": "GET",
             "header": [
@@ -2763,7 +2766,7 @@
               }
             ],
             "url": "{{base_url}}/orders/{{own_order_id}}/invoices",
-            "description": "requires: bearer_token,own_order_id"
+            "description": "Contrato L12 (LeoOrderInvoicesResponse), Batch 1 · T7. Antes: \"Leo no lee facturas\" (403, D5); se sustituye por la matriz. Excluye download_url/download; el XML queda fuera de la API de Leo. requires: leo_batch2_contract,bearer_token,own_order_id"
           },
           "event": [
             {
@@ -2771,7 +2774,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('R03a HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                  "pm.test('R03a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('R03a metadatos mínimos (LeoInvoiceMetadata)', function () { const d = pm.response.json().data; pm.expect(String(d.order_id)).to.eql(String(pm.variables.get('own_order_id'))); const allowed = ['id','order_id','uuid','status','issued_at','total_cents']; (d.invoices || []).forEach(function (i) { Object.keys(i).forEach(function (k) { pm.expect(allowed, 'campo ' + k).to.include(k); }); }); });",
+                  "pm.test('R03a sin descarga, URL ni XML', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(download_url|download|url|xml|xml_url|pdf_base64|content)\"\\s*:/); });"
                 ]
               }
             }
@@ -2817,7 +2822,7 @@
           "response": []
         },
         {
-          "name": "R04 Familiares",
+          "name": "R04 Familiares propios (Leo, contrato B1-T7): id opaco, nombre, parentesco y principal",
           "request": {
             "method": "GET",
             "header": [
@@ -2839,7 +2844,7 @@
               }
             ],
             "url": "{{base_url}}/user/family",
-            "description": "requires: bearer_token"
+            "description": "Contrato L08 (LeoFamilyResponse), Batch 1 · T7. Antes aceptaba 200/403 (ambiguo); ahora 200 con datos mínimos, sin fecha de nacimiento ni género. requires: leo_batch2_contract,bearer_token"
           },
           "event": [
             {
@@ -2847,7 +2852,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('R04 HTTP 200/403', function () { pm.expect(pm.response.code).to.be.oneOf([200, 403]); });"
+                  "pm.test('R04 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('R04 familiares con datos mínimos (LeoFamilyMember)', function () { const f = pm.response.json().data.family; pm.expect(f).to.be.an('array'); f.forEach(function (m) { pm.expect(Object.keys(m).sort()).to.eql(['display_name','id','is_main_profile','relationship']); pm.expect(m.id).to.be.a('string'); }); });",
+                  "pm.test('R04 sin fecha de nacimiento ni género', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(birth_date|gender|full_name)\"\\s*:/); });"
                 ]
               }
             }

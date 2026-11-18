@@ -65,6 +65,24 @@ La prohibición de pago del asistente no impide que el usuario continúe en FAME
 - El DTO legacy `LaboratoryCheckoutPrepareResponse` es sólo para consumidores nativos. Ahí `can_continue_to_payment_platform` conserva su significado legacy (true si hay ítems).
 - `POST /checkout/payment-link` para Leo responde siempre 403, sin liga ni cobro. En Postman/Newman se conserva sólo como **prueba negativa de seguridad** (B25/S14, Batch 1 · T5): se ejecuta únicamente para comprobar HTTP 403 y la ausencia de liga o cobro (sin URL ni ids de liga o intento de pago en la respuesta; en Batch 2 hay readback de sólo lectura sin intento de pago creado).
 
+## Pedidos, resultados, facturas y familiares (Leo · contrato B1-T7, implementación Batch 2)
+
+El contrato queda congelado en el OpenAPI con esquemas explícitos (`additionalProperties=false`), según `RC2-MATRIZ-PERMISOS-LEO.md`. El build QA actual todavía responde 403 a Leo en estas operaciones; Batch 2 las implementa y certifica (S09–S11).
+
+| Operación | Fila | Esquema de Leo | Datos excluidos |
+|---|---|---|---|
+| `GET /orders`, `/orders/{id}/status`, `/orders/{id}/products` | L07 | `LeoOrdersIndexResponse`, `LeoOrderStatusResponse`, `LeoOrderProductsResponse` | Cancelación (`PUT /orders/{id}/cancel` es 403) |
+| `GET /user/family` | L08 | `LeoFamilyResponse` (id opaco, nombre visible, parentesco, principal) | Fecha de nacimiento y género |
+| `GET /orders/results`, `/orders/{id}/results` | L09 | `LeoResultsIndexResponse`, `LeoOrderResultsResponse` | Contenido, URL y descarga |
+| Step-up y `secure-link` de resultados | L10 | `OtpGrant`, `SecureLink` | Abrir o interpretar el PDF |
+| `GET /orders/invoices`, `/orders/{id}/invoices` | L12 | `LeoInvoicesIndexResponse`, `LeoOrderInvoicesResponse` | `download_url`, `download` y XML |
+| `GET`/`POST /orders/{id}/invoice-request` | L13 | `LeoInvoiceRequestStatusResponse` | `download_url` |
+| `GET /user/tax-profiles` | L13b (D-1) | `LeoTaxProfilesResponse` (RFC enmascarado, últimos 3) | RFC completo, domicilio, CP, correo y CSF; las escrituras son 403 |
+| Step-up y `secure-link` de factura | L14 | `OtpGrant`, `SecureLink` | XML (se canaliza a Atención a usuarios) |
+| Descargas directas de resultado y factura | L11, L15 | — | **Siempre 403 para Leo** |
+
+En Newman, R01, R02a, R03a y R04 verifican este contrato y sólo corren con `leo_batch2_contract=1` sobre el build de Batch 2; si no, quedan en `SKIPPED_PRECONDITION`, que nunca cuenta como PASS. El carrito de laboratorio (`cart:laboratory:read`/`write`, L06) queda anotado en `x-leo-capabilities` de `cart*` y `checkoutPrepare`.
+
 ## Reconocimiento pre-OTP y elevación
 
 El reconocimiento de contacto inicia el flujo OTP, pero no entrega un Bearer ni un `account_context_token` al consumidor. El contexto queda ligado internamente a `conversation_id`, `channel_event_id`, `channel`, `audience` y el challenge OTP. La elevación post-OTP ocurre mediante `POST /auth/login/verify-code`; el cliente recibe únicamente la respuesta contractual de autenticación. No reutilizar un contexto como token ni incluirlo en logs.

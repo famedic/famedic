@@ -141,6 +141,12 @@
       "enabled": true
     },
     {
+      "key": "leo_batch2_contract",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "lab_brand",
       "value": "",
       "type": "default",

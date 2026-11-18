@@ -1463,7 +1463,12 @@
         },
         "x-continuity-state": "IMPLEMENTADO_LOCAL: continuidad opaca probada, sin pagos Leo. Activación pendiente de contrato/transporte/certificación.",
         "x-required-capability": "cart:read",
-        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas."
+        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
+        "x-leo-capabilities": {
+          "medical_services": "EXISTE (membresía)",
+          "laboratory": "cart:laboratory:read por línea y marca (L06/C1)",
+          "implementation_status": "BATCH_2"
+        }
       },
       "delete": {
         "tags": [
@@ -1587,7 +1592,12 @@
           }
         },
         "x-required-capability": "cart:read",
-        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas."
+        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
+        "x-leo-capabilities": {
+          "medical_services": "EXISTE (membresía)",
+          "laboratory": "cart:laboratory:read por línea y marca (L06/C1)",
+          "implementation_status": "BATCH_2"
+        }
       }
     },
     "/cart/items": {
@@ -1715,7 +1725,12 @@
         },
         "x-required-capability": "cart:membership:write",
         "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
-        "description": "B22: la compra de farmacia está suspendida; la ruta documentada para el negativo es este POST y responde 503 PHARMACY_SUSPENDED sin efectos."
+        "description": "B22: la compra de farmacia está suspendida; la ruta documentada para el negativo es este POST y responde 503 PHARMACY_SUSPENDED sin efectos.",
+        "x-leo-capabilities": {
+          "medical_services": "EXISTE (membresía)",
+          "laboratory": "cart:laboratory:write por línea y marca (L06/C1)",
+          "implementation_status": "BATCH_2"
+        }
       }
     },
     "/cart/items/{cart_item_id}": {
@@ -1825,7 +1840,12 @@
         },
         "x-required-capability": "cart:membership:write",
         "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
-        "description": "B21: sin discriminador, el ítem se resuelve por propiedad (un ítem propio de una línea nunca queda bloqueado ni borra la otra). Si el mismo id existe en ambas líneas del titular, responde 409 CART_SERVICE_LINE_MISMATCH y exige service_line o brand. Perfil Leo (cart:membership:write): fijo a medical_services; brand o service_line distinto de medical_services responde 403 CONSUMER_NOT_AUTHORIZED sin efectos, y ante colisión de id el borrado se resuelve solo en medical_services."
+        "description": "B21: sin discriminador, el ítem se resuelve por propiedad (un ítem propio de una línea nunca queda bloqueado ni borra la otra). Si el mismo id existe en ambas líneas del titular, responde 409 CART_SERVICE_LINE_MISMATCH y exige service_line o brand. Perfil Leo (cart:membership:write): fijo a medical_services; brand o service_line distinto de medical_services responde 403 CONSUMER_NOT_AUTHORIZED sin efectos, y ante colisión de id el borrado se resuelve solo en medical_services.",
+        "x-leo-capabilities": {
+          "medical_services": "EXISTE (membresía)",
+          "laboratory": "cart:laboratory:write por línea y marca (L06/C1)",
+          "implementation_status": "BATCH_2"
+        }
       }
     },
     "/cart/medical-benefit": {
@@ -2310,6 +2330,11 @@
           "can_continue_to_payment_platform": "false en respuestas a Leo: no se entrega una pasarela directa al asistente (el DTO legacy nativo de laboratorio conserva true si hay ítems)",
           "continuity_url": "liga first-party temporal de un uso al checkout; nunca es un payment link; ausente si la continuidad de la línea no está habilitada",
           "payment_link": "POST /checkout/payment-link para Leo: siempre 403, sin liga ni cobro (prueba negativa B25/S14)"
+        },
+        "x-leo-capabilities": {
+          "medical_services": "EXISTE (membresía)",
+          "laboratory": "checkout:prepare (D-2: también laboratorio) por línea y marca (L06/C1)",
+          "implementation_status": "BATCH_2"
         }
       }
     },
@@ -2809,30 +2834,38 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "allOf": [
+                  "anyOf": [
                     {
-                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                      "$ref": "#/components/schemas/LeoOrdersIndexResponse"
                     },
                     {
-                      "type": "object",
-                      "properties": {
-                        "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/ApiSuccessResponse"
+                        },
+                        {
                           "type": "object",
                           "properties": {
-                            "orders": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/components/schemas/Order"
+                            "data": {
+                              "type": "object",
+                              "properties": {
+                                "orders": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/components/schemas/Order"
+                                  }
+                                },
+                                "pagination": {
+                                  "$ref": "#/components/schemas/Pagination"
+                                }
                               }
-                            },
-                            "pagination": {
-                              "$ref": "#/components/schemas/Pagination"
                             }
                           }
                         }
-                      }
+                      ]
                     }
-                  ]
+                  ],
+                  "description": "Leo recibe exactamente `LeoOrdersIndexResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -2846,9 +2879,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:index",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L07",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L07, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/results": {
@@ -2880,7 +2917,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LeoResultsIndexResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                    }
+                  ],
+                  "description": "Leo recibe exactamente `LeoResultsIndexResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -2894,9 +2939,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:results:index",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L09",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L09, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/invoices": {
@@ -2928,7 +2977,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LeoInvoicesIndexResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                    }
+                  ],
+                  "description": "Leo recibe exactamente `LeoInvoicesIndexResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -2942,9 +2999,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:invoices:index",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L12",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L12, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/{order_id}/products": {
@@ -2979,7 +3040,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LeoOrderProductsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                    }
+                  ],
+                  "description": "Leo recibe exactamente `LeoOrderProductsResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -2996,9 +3065,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:products",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L07",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L07, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/{order_id}/status": {
@@ -3033,7 +3106,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LeoOrderStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                    }
+                  ],
+                  "description": "Leo recibe exactamente `LeoOrderStatusResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -3050,9 +3131,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:status",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L07",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L07, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/{order_id}/cancel": {
@@ -3062,7 +3147,7 @@
         ],
         "operationId": "ordersCancel",
         "summary": "Cancelar pedido (deshabilitado)",
-        "description": "Responde `503 FEATURE_DISABLED`.",
+        "description": "Responde `503 FEATURE_DISABLED`.\n\n**Leo (L07):** siempre 403 (native only).",
         "security": [
           {
             "bearerAuth": [],
@@ -3105,7 +3190,8 @@
         "x-consumer-allowlist": [
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L07"
       }
     },
     "/orders/{order_id}/results": {
@@ -3115,7 +3201,7 @@
         ],
         "operationId": "ordersResults",
         "summary": "Metadata de resultados del pedido",
-        "description": "Incluye metadata de descarga Bearer. Con flags ON puede exponer\n`requires_step_up` / `secure_link_supported`. Ownership 404 soft-deny.\n",
+        "description": "Incluye metadata de descarga Bearer. Con flags ON puede exponer\n`requires_step_up` / `secure_link_supported`. Ownership 404 soft-deny.\n\n\n**Leo (L09, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo).",
         "security": [
           {
             "bearerAuth": [],
@@ -3141,19 +3227,27 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "allOf": [
+                  "anyOf": [
                     {
-                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                      "$ref": "#/components/schemas/LeoOrderResultsResponse"
                     },
                     {
-                      "type": "object",
-                      "properties": {
-                        "data": {
-                          "$ref": "#/components/schemas/Result"
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/ApiSuccessResponse"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "data": {
+                              "$ref": "#/components/schemas/Result"
+                            }
+                          }
                         }
-                      }
+                      ]
                     }
-                  ]
+                  ],
+                  "description": "Leo recibe exactamente `LeoOrderResultsResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -3170,9 +3264,12 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:results",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L09",
+        "x-leo-implementation-status": "BATCH_2"
       }
     },
     "/orders/{order_id}/results/download": {
@@ -3182,7 +3279,7 @@
         ],
         "operationId": "ordersResultsDownload",
         "summary": "Descargar PDF resultados (Bearer)",
-        "description": "PDF binario. Ownership 404. `409 RESULT_NOT_READY`.\nCon enforcement ON exige `X-Step-Up-Grant` válido para purpose `step_up_results`.\nOFF → descarga solo con Bearer + ownership.\n",
+        "description": "PDF binario. Ownership 404. `409 RESULT_NOT_READY`.\nCon enforcement ON exige `X-Step-Up-Grant` válido para purpose `step_up_results`.\nOFF → descarga solo con Bearer + ownership.\n\n\n**Leo (L11):** siempre 403 (native only).",
         "security": [
           {
             "bearerAuth": [],
@@ -3246,7 +3343,8 @@
         "x-consumer-allowlist": [
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L11"
       }
     },
     "/orders/{order_id}/results/step-up/request": {
@@ -3256,7 +3354,7 @@
         ],
         "operationId": "ordersResultsStepUpRequest",
         "summary": "Solicitar OTP step-up resultados",
-        "description": "Body vacío. Teléfono del usuario autenticado. `202` + OtpChallenge.",
+        "description": "Body vacío. Teléfono del usuario autenticado. `202` + OtpChallenge.\n\n**Leo (L10, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo).",
         "security": [
           {
             "bearerAuth": [],
@@ -3337,9 +3435,12 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:results:step-up:request",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L10",
+        "x-leo-implementation-status": "BATCH_2"
       }
     },
     "/orders/{order_id}/results/step-up/verify": {
@@ -3422,9 +3523,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:results:step-up:verify",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L10",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L10, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/{order_id}/results/secure-link": {
@@ -3434,7 +3539,7 @@
         ],
         "operationId": "ordersResultsSecureLink",
         "summary": "Emitir secure link de resultados",
-        "description": "Requiere `grant_id` válido. Respuesta `201` SecureLink.\nLa `url` es secreto temporal — no loguear ni persistir.\n",
+        "description": "Requiere `grant_id` válido. Respuesta `201` SecureLink.\nLa `url` es secreto temporal — no loguear ni persistir.\n\n\n**Leo (L10, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo).",
         "security": [
           {
             "bearerAuth": [],
@@ -3541,9 +3646,12 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:results:secure-link",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L10",
+        "x-leo-implementation-status": "BATCH_2"
       }
     },
     "/orders/{order_id}/invoices": {
@@ -3578,27 +3686,35 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "allOf": [
+                  "anyOf": [
                     {
-                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                      "$ref": "#/components/schemas/LeoOrderInvoicesResponse"
                     },
                     {
-                      "type": "object",
-                      "properties": {
-                        "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/ApiSuccessResponse"
+                        },
+                        {
                           "type": "object",
                           "properties": {
-                            "invoices": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/components/schemas/Invoice"
+                            "data": {
+                              "type": "object",
+                              "properties": {
+                                "invoices": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/components/schemas/Invoice"
+                                  }
+                                }
                               }
                             }
                           }
                         }
-                      }
+                      ]
                     }
-                  ]
+                  ],
+                  "description": "Leo recibe exactamente `LeoOrderInvoicesResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -3615,9 +3731,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:invoices",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L12",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L12, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/{order_id}/invoices/{invoice_id}/download": {
@@ -3627,7 +3747,7 @@
         ],
         "operationId": "ordersInvoiceDownload",
         "summary": "Descargar PDF factura (Bearer)",
-        "description": "Con enforcement ON exige `X-Step-Up-Grant` para purpose `step_up_invoices`.\n`409 INVOICE_NOT_READY`. Soft-deny 404.\n",
+        "description": "Con enforcement ON exige `X-Step-Up-Grant` para purpose `step_up_invoices`.\n`409 INVOICE_NOT_READY`. Soft-deny 404.\n\n\n**Leo (L15):** siempre 403 (native only).",
         "security": [
           {
             "bearerAuth": [],
@@ -3706,7 +3826,8 @@
         "x-consumer-allowlist": [
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L15"
       }
     },
     "/orders/{order_id}/invoices/{invoice_id}/step-up/request": {
@@ -3811,9 +3932,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:invoices:step-up:request",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L14",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L14, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/{order_id}/invoices/{invoice_id}/step-up/verify": {
@@ -3911,9 +4036,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:invoices:step-up:verify",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L14",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L14, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/{order_id}/invoices/{invoice_id}/secure-link": {
@@ -3923,7 +4052,7 @@
         ],
         "operationId": "ordersInvoiceSecureLink",
         "summary": "Emitir secure link de factura",
-        "description": "Requiere `grant_id` v?lido. Las ligas nuevas se emiten con TTL contractual\nde 60 minutos y m?ximo 3 consumos autorizados. La `url` es secreto temporal.\n",
+        "description": "Requiere `grant_id` v?lido. Las ligas nuevas se emiten con TTL contractual\nde 60 minutos y m?ximo 3 consumos autorizados. La `url` es secreto temporal.\n\n\n**Leo (L14, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo).",
         "security": [
           {
             "bearerAuth": [],
@@ -4045,9 +4174,12 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:invoices:secure-link",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L14",
+        "x-leo-implementation-status": "BATCH_2"
       }
     },
     "/orders/{order_id}/invoice-request/status": {
@@ -4082,7 +4214,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LeoInvoiceRequestStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                    }
+                  ],
+                  "description": "Leo recibe exactamente `LeoInvoiceRequestStatusResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -4099,9 +4239,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:invoice-request:status",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L13",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L13, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/orders/{order_id}/invoice-request": {
@@ -4170,7 +4314,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LeoInvoiceRequestStatusResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                    }
+                  ],
+                  "description": "Leo recibe exactamente `LeoInvoiceRequestStatusResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -4202,9 +4354,13 @@
         },
         "x-required-capability": "api:operation:api:v1:orders:invoice-request:store",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L13",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L13, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/user/family": {
@@ -4236,7 +4392,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LeoFamilyResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                    }
+                  ],
+                  "description": "Leo recibe exactamente `LeoFamilyResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -4250,9 +4414,13 @@
         },
         "x-required-capability": "api:operation:api:v1:user:family",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L08",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L08, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       }
     },
     "/user/payment-methods": {
@@ -4332,7 +4500,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LeoTaxProfilesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessResponse"
+                    }
+                  ],
+                  "description": "Leo recibe exactamente `LeoTaxProfilesResponse` (additionalProperties=false). Los consumidores nativos conservan la respuesta completa."
                 }
               }
             }
@@ -4346,9 +4522,13 @@
         },
         "x-required-capability": "api:operation:api:v1:user:tax-profiles",
         "x-consumer-allowlist": [
+          "leo",
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L13b",
+        "x-leo-implementation-status": "BATCH_2",
+        "description": "**Leo (L13b, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
       },
       "post": {
         "tags": [
@@ -4407,7 +4587,9 @@
         "x-consumer-allowlist": [
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L13b",
+        "description": "**Leo (L13b):** siempre 403 (native only)."
       }
     },
     "/user/tax-profiles/{tax_profile_id}": {
@@ -4491,7 +4673,9 @@
         "x-consumer-allowlist": [
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L13b",
+        "description": "**Leo (L13b):** siempre 403 (native only)."
       },
       "delete": {
         "tags": [
@@ -4560,7 +4744,9 @@
         "x-consumer-allowlist": [
           "native"
         ],
-        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad."
+        "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
+        "x-leo-matrix-row": "L13b",
+        "description": "**Leo (L13b):** siempre 403 (native only)."
       }
     },
     "/user/addresses": {
@@ -11522,6 +11708,959 @@
               "assistant_can_pay": false,
               "can_continue_on_platform": true,
               "can_continue_to_payment_platform": false
+            }
+          }
+        ]
+      },
+      "LeoPagination": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "current_page",
+          "last_page",
+          "per_page",
+          "total"
+        ],
+        "properties": {
+          "current_page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "last_page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "per_page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "examples": [
+          {
+            "current_page": 1,
+            "last_page": 1,
+            "per_page": 15,
+            "total": 1
+          }
+        ]
+      },
+      "LeoOrderSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "status_label",
+          "brand",
+          "study_name",
+          "total_cents",
+          "currency",
+          "is_cancelled",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "status_label": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          },
+          "study_name": {
+            "type": "string"
+          },
+          "total_cents": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "const": "MXN"
+          },
+          "is_cancelled": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Pedido propio con datos mínimos (L07).",
+        "examples": [
+          {
+            "id": 1201,
+            "status": "completed",
+            "status_label": "Completado",
+            "brand": "swisslab",
+            "study_name": "Química sanguínea",
+            "total_cents": 45000,
+            "currency": "MXN",
+            "is_cancelled": false,
+            "created_at": "2026-11-10T10:00:00-06:00",
+            "updated_at": "2026-11-10T12:00:00-06:00"
+          }
+        ]
+      },
+      "LeoOrdersIndexResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "orders",
+              "pagination"
+            ],
+            "properties": {
+              "orders": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LeoOrderSummary"
+                }
+              },
+              "pagination": {
+                "$ref": "#/components/schemas/LeoPagination"
+              }
+            }
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "orders": [
+                {
+                  "id": 1201,
+                  "status": "completed",
+                  "status_label": "Completado",
+                  "brand": "swisslab",
+                  "study_name": "Química sanguínea",
+                  "total_cents": 45000,
+                  "currency": "MXN",
+                  "is_cancelled": false,
+                  "created_at": "2026-11-10T10:00:00-06:00",
+                  "updated_at": "2026-11-10T12:00:00-06:00"
+                }
+              ],
+              "pagination": {
+                "current_page": 1,
+                "last_page": 1,
+                "per_page": 15,
+                "total": 1
+              }
+            }
+          }
+        ]
+      },
+      "LeoOrderStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "order_id",
+          "status",
+          "status_label",
+          "pipeline",
+          "is_cancelled",
+          "results_available",
+          "updated_at"
+        ],
+        "properties": {
+          "order_id": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "status_label": {
+            "type": "string"
+          },
+          "pipeline": {
+            "type": "null"
+          },
+          "is_cancelled": {
+            "type": "boolean"
+          },
+          "results_available": {
+            "type": "boolean"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "examples": [
+          {
+            "order_id": 1201,
+            "status": "completed",
+            "status_label": "Completado",
+            "pipeline": null,
+            "is_cancelled": false,
+            "results_available": true,
+            "updated_at": "2026-11-10T12:00:00-06:00"
+          }
+        ]
+      },
+      "LeoOrderStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/LeoOrderStatus"
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "order_id": 1201,
+              "status": "completed",
+              "status_label": "Completado",
+              "pipeline": null,
+              "is_cancelled": false,
+              "results_available": true,
+              "updated_at": "2026-11-10T12:00:00-06:00"
+            }
+          }
+        ]
+      },
+      "LeoOrderProduct": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "laboratory_test_id",
+          "name",
+          "brand",
+          "price_cents",
+          "currency",
+          "quantity",
+          "requires_appointment"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "laboratory_test_id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          },
+          "price_cents": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "const": "MXN"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "requires_appointment": {
+            "type": "boolean"
+          }
+        },
+        "examples": [
+          {
+            "id": 1,
+            "laboratory_test_id": 4965,
+            "name": "Química sanguínea",
+            "brand": "swisslab",
+            "price_cents": 45000,
+            "currency": "MXN",
+            "quantity": 1,
+            "requires_appointment": false
+          }
+        ]
+      },
+      "LeoOrderProductsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "order_id",
+              "products"
+            ],
+            "properties": {
+              "order_id": {
+                "type": "integer"
+              },
+              "products": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LeoOrderProduct"
+                }
+              }
+            }
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "order_id": 1201,
+              "products": [
+                {
+                  "id": 1,
+                  "laboratory_test_id": 4965,
+                  "name": "Química sanguínea",
+                  "brand": "swisslab",
+                  "price_cents": 45000,
+                  "currency": "MXN",
+                  "quantity": 1,
+                  "requires_appointment": false
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "LeoResultMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "order_id",
+          "study_name",
+          "brand",
+          "status",
+          "results_available",
+          "available_at",
+          "has_pdf"
+        ],
+        "properties": {
+          "order_id": {
+            "type": "integer"
+          },
+          "study_name": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "results_available": {
+            "type": "boolean"
+          },
+          "available_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "has_pdf": {
+            "type": "boolean"
+          }
+        },
+        "description": "Metadatos mínimos de resultado propio (L09). Sin contenido, URL ni descarga: el PDF sólo se entrega por liga segura tras step-up (L10).",
+        "examples": [
+          {
+            "order_id": 1201,
+            "study_name": "Química sanguínea",
+            "brand": "swisslab",
+            "status": "completed",
+            "results_available": true,
+            "available_at": "2026-11-11T09:00:00-06:00",
+            "has_pdf": true
+          }
+        ]
+      },
+      "LeoResultsIndexResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "results",
+              "pagination"
+            ],
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LeoResultMetadata"
+                }
+              },
+              "pagination": {
+                "$ref": "#/components/schemas/LeoPagination"
+              }
+            }
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "results": [
+                {
+                  "order_id": 1201,
+                  "study_name": "Química sanguínea",
+                  "brand": "swisslab",
+                  "status": "completed",
+                  "results_available": true,
+                  "available_at": "2026-11-11T09:00:00-06:00",
+                  "has_pdf": true
+                }
+              ],
+              "pagination": {
+                "current_page": 1,
+                "last_page": 1,
+                "per_page": 15,
+                "total": 1
+              }
+            }
+          }
+        ]
+      },
+      "LeoOrderResultsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/LeoResultMetadata"
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "order_id": 1201,
+              "study_name": "Química sanguínea",
+              "brand": "swisslab",
+              "status": "completed",
+              "results_available": true,
+              "available_at": "2026-11-11T09:00:00-06:00",
+              "has_pdf": true
+            }
+          }
+        ]
+      },
+      "LeoInvoiceMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "order_id",
+          "uuid",
+          "status",
+          "issued_at",
+          "total_cents"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "order_id": {
+            "type": "integer"
+          },
+          "uuid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "issued",
+              "pending"
+            ]
+          },
+          "issued_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "total_cents": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "description": "Metadatos mínimos de factura propia (L12). Excluye `download_url` y `download`; PDF sólo por liga segura tras step-up (L14); XML fuera de la API de Leo.",
+        "examples": [
+          {
+            "id": 77,
+            "order_id": 1201,
+            "uuid": null,
+            "status": "issued",
+            "issued_at": "2026-11-12T10:00:00-06:00",
+            "total_cents": 45000
+          }
+        ]
+      },
+      "LeoInvoicesIndexResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "invoices",
+              "pagination"
+            ],
+            "properties": {
+              "invoices": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LeoInvoiceMetadata"
+                }
+              },
+              "pagination": {
+                "$ref": "#/components/schemas/LeoPagination"
+              }
+            }
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "invoices": [
+                {
+                  "id": 77,
+                  "order_id": 1201,
+                  "uuid": null,
+                  "status": "issued",
+                  "issued_at": "2026-11-12T10:00:00-06:00",
+                  "total_cents": 45000
+                }
+              ],
+              "pagination": {
+                "current_page": 1,
+                "last_page": 1,
+                "per_page": 15,
+                "total": 1
+              }
+            }
+          }
+        ]
+      },
+      "LeoOrderInvoicesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "order_id",
+              "invoices"
+            ],
+            "properties": {
+              "order_id": {
+                "type": "integer"
+              },
+              "invoices": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LeoInvoiceMetadata"
+                }
+              }
+            }
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "order_id": 1201,
+              "invoices": [
+                {
+                  "id": 77,
+                  "order_id": 1201,
+                  "uuid": null,
+                  "status": "issued",
+                  "issued_at": "2026-11-12T10:00:00-06:00",
+                  "total_cents": 45000
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "LeoInvoiceRequestStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "order_id",
+          "invoice_status",
+          "invoice_request",
+          "invoice"
+        ],
+        "properties": {
+          "order_id": {
+            "type": "integer"
+          },
+          "invoice_status": {
+            "type": "string"
+          },
+          "invoice_request": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "requested_at"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "requested_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            ]
+          },
+          "invoice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "status",
+                  "issued_at"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "issued",
+                      "pending"
+                    ]
+                  },
+                  "issued_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "description": "Estado de solicitud de factura (L13), sin `download_url`.",
+        "examples": [
+          {
+            "order_id": 1201,
+            "invoice_status": "requested",
+            "invoice_request": {
+              "id": 5,
+              "requested_at": "2026-11-12T09:00:00-06:00"
+            },
+            "invoice": null
+          }
+        ]
+      },
+      "LeoInvoiceRequestStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/LeoInvoiceRequestStatus"
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "order_id": 1201,
+              "invoice_status": "requested",
+              "invoice_request": {
+                "id": 5,
+                "requested_at": "2026-11-12T09:00:00-06:00"
+              },
+              "invoice": null
+            }
+          }
+        ]
+      },
+      "LeoFamilyMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "display_name",
+          "relationship",
+          "is_main_profile"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Id opaco (no secuencial)."
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "relationship": {
+            "type": "string"
+          },
+          "is_main_profile": {
+            "type": "boolean"
+          }
+        },
+        "description": "Familiar propio con datos mínimos (L08, plan v1.0 tabla 6). Sin fecha de nacimiento ni género, salvo que un flujo futuro lo exija y se decida aparte.",
+        "examples": [
+          {
+            "id": "fm_7Kq2xQ",
+            "display_name": "Ana",
+            "relationship": "hija",
+            "is_main_profile": false
+          }
+        ]
+      },
+      "LeoFamilyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "family"
+            ],
+            "properties": {
+              "family": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LeoFamilyMember"
+                }
+              }
+            }
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "family": [
+                {
+                  "id": "fm_7Kq2xQ",
+                  "display_name": "Ana",
+                  "relationship": "hija",
+                  "is_main_profile": false
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "LeoTaxProfileSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "business_name",
+          "rfc_masked",
+          "tax_regime",
+          "cfdi_use"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Id opaco."
+          },
+          "business_name": {
+            "type": "string"
+          },
+          "rfc_masked": {
+            "type": "string",
+            "pattern": "^\\*{9,10}[A-Z0-9]{3}$",
+            "description": "RFC enmascarado; sólo los últimos 3 caracteres visibles."
+          },
+          "tax_regime": {
+            "type": "string"
+          },
+          "cfdi_use": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          }
+        },
+        "description": "Perfil fiscal propio, lectura mínima (D-1, L13b). Excluye RFC completo, domicilio fiscal, código postal, correo y Constancia de Situación Fiscal.",
+        "examples": [
+          {
+            "id": "tp_3Lm9aZ",
+            "business_name": "Ana Pérez",
+            "rfc_masked": "*********Q12",
+            "tax_regime": "605",
+            "cfdi_use": "D01",
+            "is_default": true
+          }
+        ]
+      },
+      "LeoTaxProfilesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tax_profiles"
+            ],
+            "properties": {
+              "tax_profiles": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LeoTaxProfileSummary"
+                }
+              }
+            }
+          }
+        },
+        "description": "Respuesta explícita para Leo (Batch 1 · T7; implementación y certificación en Batch 2). Sin campos de descarga.",
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "tax_profiles": [
+                {
+                  "id": "tp_3Lm9aZ",
+                  "business_name": "Ana Pérez",
+                  "rfc_masked": "*********Q12",
+                  "tax_regime": "605",
+                  "cfdi_use": "D01",
+                  "is_default": true
+                }
+              ]
             }
           }
         ]
