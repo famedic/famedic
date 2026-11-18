@@ -3,7 +3,7 @@
 Archivos: `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` y `Famedic-Akubica-v1.3.0-rc2-NEWMAN.environment.template.json` (plantilla **sin secretos**).
 
 ## Guardas
-- Bloquea cualquier host fuera de `allowed_hosts` y cualquier dominio de producción (`famedic.com.mx`, `famedic.mx`).
+- Bloquea cualquier host fuera de `allowed_hosts` y cualquier dominio de producción (`*.famedic.com.mx`, `*.famedic.mx`), salvo el host QA oficial exacto `staging.famedic.com.mx` (alias QA equivalente: `famedic-otp.on-forge.com`). Ante cualquier fallo de guarda el request se omite (`pm.execution.skipRequest()`, no sale tráfico) y queda una aserción fallida `GUARDA …` visible en el reporte.
 - Exige `expected_release_sha` (40 hex); cada aserción lleva el prefijo del SHA → evidencia ligada al release.
 - Casos sin precondiciones se **omiten** (`SKIPPED_PRECONDITION`) y nunca cuentan como PASS.
 - B18 (concurrencia), R05 (sesión FAMEDIC en navegador) y R08 (UAT conversacional) no son ejecutables en Newman; quedan marcados.

@@ -4,19 +4,19 @@
   "values": [
     {
       "key": "base_url",
-      "value": "https://famedic-otp.on-forge.com/api/v1",
+      "value": "https://staging.famedic.com.mx/api/v1",
       "type": "default",
       "enabled": true
     },
     {
       "key": "web_base_url",
-      "value": "https://famedic-otp.on-forge.com",
+      "value": "https://staging.famedic.com.mx",
       "type": "default",
       "enabled": true
     },
     {
       "key": "allowed_hosts",
-      "value": "famedic-otp.on-forge.com",
+      "value": "staging.famedic.com.mx,famedic-otp.on-forge.com",
       "type": "default",
       "enabled": true
     },
