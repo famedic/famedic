@@ -147,6 +147,12 @@
       "enabled": true
     },
     {
+      "key": "leo_negative_writes_authorized",
+      "value": "0",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "lab_brand",
       "value": "",
       "type": "default",

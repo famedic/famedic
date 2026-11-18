@@ -45,6 +45,10 @@ Revisión documental local (IT-0026), sin QA y sin red. Cada solicitud de las do
 
 No se cambió ninguna aserción, credencial ni código HTTP esperado. **DISCREPANCIA_PENDIENTE final: 0.**
 
+## Nota rev6 (IT-0027)
+
+B25 (`rc2-NEWMAN`) exige ahora `leo_negative_writes_authorized` con valor exactamente `"1"`, igual que LF-L17a. Su cuerpo, su clasificación (CONFORME) y su justificación no cambian; sólo la columna de efectos del pre-request agrega `omite si f !== '1'`. Los totales siguen iguales a los de rev5. En esta revisión no se repitió la revisión general: se regeneró el inventario completo desde las colecciones y sólo cambió esa celda.
+
 ## Inventario completo (una fila por solicitud)
 
 El CSV `RC2-INVENTARIO-CUERPOS.csv` trae además los errores de esquema completos y los efectos del pre-request sin abreviar.
@@ -92,7 +96,7 @@ El CSV `RC2-INVENTARIO-CUERPOS.csv` trae además los errores de esquema completo
 | NEWMAN | B23 | GET | `/checkout/prepare` | — | — | — | **N/A** | Sin cuerpo de solicitud (GET). Esperado: 200. |
 | NEWMAN | B24a | GET | `/checkout/prepare` | — | — | — | **N/A** | Sin cuerpo de solicitud (GET). Esperado: 200. |
 | NEWMAN | B24b | GET | `{{continuity_url}}` | — | — | — | **N/A** | Sin cuerpo de solicitud (GET). Esperado: 302. |
-| NEWMAN | B25 | POST | `/checkout/payment-link` | inline (checkoutPaymentLink) | `{"brand": "olab"}` | omite si b && ['olab', 'swisslab', 'jenner', 'liacsa', 'azteca'].indexOf(b) === -1 | **CONFORME** | Válido contra inline (checkoutPaymentLink) (JSON Schema 2020-12, con formatos). Negativa: el rechazo esperado (403) es de autorización, no de esquema. Esperado: 403. |
+| NEWMAN | B25 | POST | `/checkout/payment-link` | inline (checkoutPaymentLink) | `{"brand": "olab"}` | omite si f !== '1'; omite si b && ['olab', 'swisslab', 'jenner', 'liacsa', 'azteca'].indexOf(b) === -1 | **CONFORME** | Válido contra inline (checkoutPaymentLink) (JSON Schema 2020-12, con formatos). Negativa: el rechazo esperado (403) es de autorización, no de esquema. Esperado: 403. |
 | NEWMAN | B26 | GET | `/memberships/status` | — | — | — | **N/A** | Sin cuerpo de solicitud (GET). Esperado: 200. |
 | NEWMAN | B16 | DELETE | `/cart/items/{cart_item_id}` | — | — | — | **N/A** | Sin cuerpo de solicitud (DELETE). Esperado: 200. |
 | NEWMAN | B16r | GET | `/cart` | — | — | — | **N/A** | Sin cuerpo de solicitud (GET). Esperado: 200. |
