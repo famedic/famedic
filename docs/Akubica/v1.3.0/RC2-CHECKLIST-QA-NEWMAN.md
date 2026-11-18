@@ -12,7 +12,7 @@
 
 ## Fase A
 
-1. Importar `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json` y `Famedic-Akubica-v1.3.0-rc2-synthetic.environment.json`.
+1. Usar la colección **funcional** `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` con `Famedic-Akubica-v1.3.0-rc2-NEWMAN.environment.template.json`, bajo sus guardas (`allowed_hosts`, bloqueo de producción, `expected_release_sha`; ver `RC2-NEWMAN-LEEME.md`). La rc2-90 es un antecedente offline y omite todas sus peticiones.
 2. Sustituir solo valores autorizados en el gestor de secretos; no guardar tokens en archivos.
 3. Ejecutar ATIX 202/401/409/422, OTP 202/200/422 y ciclo de vida Bearer.
 4. Guardar JSON y JUnit del mismo build; sanitizar antes de compartir.

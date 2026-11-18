@@ -11,7 +11,8 @@
 
 - `akubica-openapi-v1.3.0-rc2.json`: contrato principal, 76 operaciones (64 paths).
 - `r30-first-party-v1.3.0.json`: suplemento first party, 4 operaciones, fuera de Leo.
-- `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes, 76 operaciones principales y 4 R30 suplementarias (el sufijo `-90` del nombre es histórico).
+- `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` y `…-rc2-NEWMAN.environment.template.json`: **colección funcional** de 69 solicitudes, con guardas de ejecución (ver `RC2-NEWMAN-LEEME.md`).
+- `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: **antecedente offline**. Tiene 92 solicitudes (76 operaciones principales y 4 R30) y su guard las omite siempre; el sufijo `-90` del nombre es histórico.
 - `Famedic-Akubica-v1.3.0-rc2-synthetic.environment.json`: solo URLs reservadas, sin secretos.
 - `RC2-MATRIZ-PERMISOS-LEO.md`: matriz de permisos de Leo (Batch 1 · T3; conflictos C1, C2, C3 y C6 resueltos).
 - `RC2-MATRIZ-TRAZABILIDAD-46.csv` (en el repo, en `RC2-PREPARACION-QA/A-DOCUMENTACION/`, no en este directorio): escenarios A01–A12, B01–B26 y R01–R08 (histórico).

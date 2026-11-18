@@ -2,7 +2,7 @@
 
 ## Fuente y alcance
 
-RC2 continúa desde `prep/akubica-technical-integration-rc11` en `9c060c81e6eda7871e2c902563e3c9e0daac74dc`. La línea base OpenAPI 1.2.3 no se modifica. El paquete de Leo usado como referencia contiene 74 operaciones principales, cuatro operaciones R30 first party y 90 solicitudes Postman. Nota de Batch 1 (2026-11-18): esas cifras son las del paquete de referencia histórico; el conteo directo sobre los artefactos vigentes es 76 operaciones principales, 4 R30 y 92 solicitudes.
+RC2 continúa desde `prep/akubica-technical-integration-rc11` en `9c060c81e6eda7871e2c902563e3c9e0daac74dc`. La línea base OpenAPI 1.2.3 no se modifica. [Histórico] El paquete de Leo usado como referencia contiene 74 operaciones principales, cuatro operaciones R30 first party y 90 solicitudes Postman. Nota de Batch 1 (2026-11-18): esas cifras son las del paquete de referencia histórico; el conteo directo sobre los artefactos vigentes es 76 operaciones principales, 4 R30 y 92 solicitudes.
 
 ## Ajustes cerrados localmente
 

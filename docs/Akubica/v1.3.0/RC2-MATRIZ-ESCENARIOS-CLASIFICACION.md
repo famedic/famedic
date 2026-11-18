@@ -6,7 +6,7 @@ Fuente: plan de cierre por batches v1.0 (tabla 8, S01–S16). Cada uno de los 46
 - `historico_inmutable`: el estado original del paquete, que no se modifica.
 - La certificación final se hace en Batch 2, sobre el build final, por escenario S01–S16. Hoy hay 0 certificados (NO_INICIADA). R08 (UAT conversacional) corresponde a Batch 3.
 
-Resultado: 45 OBLIGATORIO_LANZAMIENTO, 1 NO_APLICABLE (B26) y 1 DIFERIDO adicional (X01, aplicación directa de cupones o créditos por Leo, C6/L16). Las 16 filas S01–S16 de la tabla 8 tienen al menos un escenario asignado.
+Resultado (rev2): 46 OBLIGATORIO_LANZAMIENTO y 1 DIFERIDO adicional (X01, aplicación directa de cupones o créditos por Leo, C6/L16). B26 (ausencia de activación antes del pago) se traza a S06/S12; en T8 figuraba por error como NO_APLICABLE. Las 16 filas S01–S16 de la tabla 8 tienen al menos un escenario asignado.
 
 | ID | Funcionalidad | Histórico QA | Clasificación | Plan | Batch | Nota |
 |---|---|---|---|---|---|---|
@@ -47,7 +47,7 @@ Resultado: 45 OBLIGATORIO_LANZAMIENTO, 1 NO_APLICABLE (B26) y 1 DIFERIDO adicion
 | B23 | Preparación de checkout | FAIL | OBLIGATORIO_LANZAMIENTO | S12 | B2 | Semántica T4 |
 | B24 | Continuidad a FAMEDIC | FAIL | OBLIGATORIO_LANZAMIENTO | S12 | B2 | Sólo staging; nunca producción |
 | B25 | Pago prohibido para Leo | PASS | OBLIGATORIO_LANZAMIENTO | S14 | B2 | Sólo prueba negativa (B1-T5) |
-| B26 | Activación posterior al pago | PASS | NO_APLICABLE | — | — | Activación posterior al pago es first-party (FAMEDIC); Leo no paga ni activa. Se conserva como regresión FAMEDIC, sin certificación de la API de Leo |
+| B26 | Activación posterior al pago | PASS | OBLIGATORIO_LANZAMIENTO | S06/S12 | B2 | Ausencia de activación antes del pago (Newman B26: status=none y expires_at=null tras B12/B23 con bearer_none). Trazado a S06 y S12. Rev2: corrige el NO_APLICABLE de T8 |
 | R01 | Pedidos | BLOCKED | OBLIGATORIO_LANZAMIENTO | S09 | B2 | Contrato B1-T7 |
 | R02 | Resultados | BLOCKED | OBLIGATORIO_LANZAMIENTO | S10 | B2 | Step-up y liga segura; descarga directa 403 |
 | R03 | Facturas | BLOCKED | OBLIGATORIO_LANZAMIENTO | S11 | B2 | Liga PDF; XML a Atención a usuarios |

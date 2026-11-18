@@ -1,4 +1,6 @@
-# Colección y entorno offline RC2
+# Colección y entorno offline RC2 (antecedente, no funcional)
+
+> **Batch 1 · rev2:** esta colección de 92 solicitudes es un antecedente offline. Su guard omite **todas** las peticiones siempre. La colección funcional, con guardas de ejecución, es `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` (ver `RC2-NEWMAN-LEEME.md`).
 
 Importar la colección y el entorno de ejemplo. Los únicos valores de entorno son URLs del dominio reservado rc11.invalid; no hay secretos, cookies ni respuestas guardadas. Los valores `{{vault:...}}` son referencias vacías que deberá aprovisionar un operador autorizado en almacenamiento local después de certificación; no son credenciales de ejemplo reutilizables.
 
@@ -6,6 +8,6 @@ La colección (92 solicitudes) cubre las 76 operaciones principales y las cuatro
 
 El guard de colección siempre cambia el destino a rc11.invalid/blocked y omite la petición; sin API skipRequest lanza un error. No existe variable approval/enable para desbloquear. No editarlo para simular autorización: la edición ejecutable debe emitirse tras las aprobaciones y revisión de transporte/UAT.
 
-Ejecutar `node preflight.cjs` desde este directorio. Comprueba estructura, cobertura por operationId/método/ruta, parámetros requeridos, schemas declarados, referencias vacías, scripts y guard en tres modos sin realizar red. No equivale a validación oficial de Postman ni a pruebas HTTP/UAT; el resultado oficial se informa por separado en MANIFIESTO.
+[Histórico: `preflight.cjs` no está en este directorio ni en el repo.] Ejecutar `node preflight.cjs` desde este directorio. Comprueba estructura, cobertura por operationId/método/ruta, parámetros requeridos, schemas declarados, referencias vacías, scripts y guard en tres modos sin realizar red. No equivale a validación oficial de Postman ni a pruebas HTTP/UAT; el resultado oficial se informa por separado en MANIFIESTO.
 
 Las plantillas con Vault no son ejemplos JSON ya resueltos: obtener sus valores dinámicos de la operación anterior. Los ejemplos positivos tipados están en OPENAPI; los negativos verificados están en MANIFIESTO/ESQUEMAS.json. Un código HTTP genérico, 404 o un test de estructura no acredita éxito funcional.

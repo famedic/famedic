@@ -3,7 +3,7 @@
   "info": {
     "title": "Famedic API — Integración Akubica",
     "version": "1.3.0-rc2-review-package-02",
-    "description": "Paquete RC2 local de revisión técnica, no habilitado ni aprobado para staging. Conserva 74 operationId principales; R30 first-party permanece en suplemento separado. El transporte no está aprobado, las capacidades financieras de Leo permanecen denegadas y no existe autorización de distribución o activación. La línea base OpenAPI 1.2.3 permanece intacta. Revisión 02 (2026-11-16, rama local rc2/cierre-anexos): A10 marcadores OTP sin contexto, B24 continuidad médica (apagada), B22 PHARMACY_SUSPENDED, B21 retiro aislado, item_type en catálogo.",
+    "description": "Contrato RC2 de la integración Akúbica/Leo, candidato de Batch 1 (plan de cierre v1.0) en estado ENTREGADO_PARA_ACEPTACION: no está aprobado ni certificado en staging (la certificación es de Batch 2). 76 operaciones principales en 64 paths (recuento verificado en Batch 1 · T1); R30 first-party queda en un suplemento separado de 4 operaciones. Capacidades de Leo según `RC2-MATRIZ-PERMISOS-LEO.md`: las marcadas `x-leo-implementation-status=BATCH_2` están aprobadas en el plan e implementa Batch 2; pagos y payment link siempre 403. La línea base OpenAPI 1.2.3 permanece intacta.\n\n[Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos] Texto previo: \"Paquete RC2 local de revisión técnica, no habilitado ni aprobado para staging. Conserva 74 operationId principales; R30 first-party permanece en suplemento separado. El transporte no está aprobado, las capacidades financieras de Leo permanecen denegadas y no existe autorización de distribución o activación. La línea base OpenAPI 1.2.3 permanece intacta. Revisión 02 (2026-11-16, rama local rc2/cierre-anexos): A10 marcadores OTP sin contexto, B24 continuidad médica (apagada), B22 PHARMACY_SUSPENDED, B21 retiro aislado, item_type en catálogo.\". El \"74 operationId principales\" es el conteo de ese paquete y lo sustituye el recuento 76.",
     "contact": {
       "name": "Famedic — Equipo de desarrollo"
     },
@@ -1461,7 +1461,7 @@
             }
           }
         },
-        "x-continuity-state": "IMPLEMENTADO_LOCAL: continuidad opaca probada, sin pagos Leo. Activación pendiente de contrato/transporte/certificación.",
+        "x-continuity-state": "Vigente: ver checkoutPrepare (medical_services implementado sólo en staging; laboratory aprobado D-2, implementación Batch 2). [Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos] IMPLEMENTADO_LOCAL: continuidad opaca probada, sin pagos Leo. Activación pendiente de contrato/transporte/certificación.",
         "x-required-capability": "cart:read",
         "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
         "x-leo-capabilities": {
@@ -5504,9 +5504,11 @@
             "ProposedMachineCredential": []
           }
         ],
-        "x-status": "IMPLEMENTADO_LOCAL",
+        "x-status": "IMPLEMENTADO_LOCAL [Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos]",
         "description": "Implementación local cerrada por aprobaciones. Preview y selección/retiro no consumen definitivamente saldo. Un beneficio por carrito; importe sólo calculado por servidor. La aprobación del contrato no activa la ruta.",
-        "x-activation-blocked": true
+        "x-activation-blocked": true,
+        "x-leo-matrix-row": "L16",
+        "x-leo-implementation-status": "DIFERIDO (aplicación directa de beneficios por Leo; el usuario los aplica en el checkout FAMEDIC)"
       }
     },
     "/cart/benefits/applications": {
@@ -5656,9 +5658,11 @@
             "ProposedMachineCredential": []
           }
         ],
-        "x-status": "IMPLEMENTADO_LOCAL",
+        "x-status": "IMPLEMENTADO_LOCAL [Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos]",
         "description": "Implementación local cerrada por aprobaciones. Preview y selección/retiro no consumen definitivamente saldo. Un beneficio por carrito; importe sólo calculado por servidor. La aprobación del contrato no activa la ruta.",
-        "x-activation-blocked": true
+        "x-activation-blocked": true,
+        "x-leo-matrix-row": "L16",
+        "x-leo-implementation-status": "DIFERIDO (aplicación directa de beneficios por Leo; el usuario los aplica en el checkout FAMEDIC)"
       }
     },
     "/cart/benefits/applications/{application_ref}/remove": {
@@ -5816,9 +5820,11 @@
             "ProposedMachineCredential": []
           }
         ],
-        "x-status": "IMPLEMENTADO_LOCAL",
+        "x-status": "IMPLEMENTADO_LOCAL [Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos]",
         "description": "Implementación local cerrada por aprobaciones. Preview y selección/retiro no consumen definitivamente saldo. Un beneficio por carrito; importe sólo calculado por servidor. La aprobación del contrato no activa la ruta.",
-        "x-activation-blocked": true
+        "x-activation-blocked": true,
+        "x-leo-matrix-row": "L16",
+        "x-leo-implementation-status": "DIFERIDO (aplicación directa de beneficios por Leo; el usuario los aplica en el checkout FAMEDIC)"
       }
     },
     "/benefits/consent": {
@@ -5838,7 +5844,7 @@
           }
         ],
         "description": "Sólo sesión first-party FAMEDIC. Confirmación reciente de contraseña ≤5 min, CSRF en POST. No emite Leo ni una credencial de máquina. HTML formulario incluye _token y web_intent; este contrato describe variante JSON. Emisión operativa bloqueada hasta aprobar texto, autoridad, retención e interfaz. Cuando se habilite, la página de revisión requiere los cinco parámetros del contexto. La página deshabilitada no es aceptación positiva. No expone ni emite credenciales de pago.",
-        "x-status": "IMPLEMENTADO_LOCAL",
+        "x-status": "IMPLEMENTADO_LOCAL [Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos]",
         "x-activation-blocked": true,
         "responses": {
           "200": {
@@ -5988,7 +5994,9 @@
             },
             "description": "Contexto de revisión autenticada. No registrar query en evidencia compartible; target_ref bnf para apply o app para remove."
           }
-        ]
+        ],
+        "x-leo-matrix-row": "L16",
+        "x-leo-implementation-status": "DIFERIDO (aplicación directa de beneficios por Leo; el usuario los aplica en el checkout FAMEDIC)"
       }
     },
     "/benefits/consent/review": {
@@ -6009,7 +6017,7 @@
           }
         ],
         "description": "Sólo sesión first-party FAMEDIC. Confirmación reciente de contraseña ≤5 min, CSRF en POST. No emite Leo ni una credencial de máquina. HTML formulario incluye _token y web_intent; este contrato describe variante JSON. Emisión operativa bloqueada hasta aprobar texto, autoridad, retención e interfaz.",
-        "x-status": "IMPLEMENTADO_LOCAL",
+        "x-status": "IMPLEMENTADO_LOCAL [Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos]",
         "x-activation-blocked": true,
         "responses": {
           "200": {
@@ -6115,7 +6123,9 @@
               }
             }
           }
-        }
+        },
+        "x-leo-matrix-row": "L16",
+        "x-leo-implementation-status": "DIFERIDO (aplicación directa de beneficios por Leo; el usuario los aplica en el checkout FAMEDIC)"
       }
     },
     "/benefits/consent/confirm": {
@@ -6136,7 +6146,7 @@
           }
         ],
         "description": "Sólo sesión first-party FAMEDIC. Confirmación reciente de contraseña ≤5 min, CSRF en POST. No emite Leo ni una credencial de máquina. HTML formulario incluye _token y web_intent; este contrato describe variante JSON. Emisión operativa bloqueada hasta aprobar texto, autoridad, retención e interfaz.",
-        "x-status": "IMPLEMENTADO_LOCAL",
+        "x-status": "IMPLEMENTADO_LOCAL [Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos]",
         "x-activation-blocked": true,
         "responses": {
           "200": {
@@ -6242,7 +6252,9 @@
               }
             }
           }
-        }
+        },
+        "x-leo-matrix-row": "L16",
+        "x-leo-implementation-status": "DIFERIDO (aplicación directa de beneficios por Leo; el usuario los aplica en el checkout FAMEDIC)"
       }
     },
     "/benefits/consent/{confirmation_ref}/revoke": {
@@ -6263,7 +6275,7 @@
           }
         ],
         "description": "Sólo sesión first-party FAMEDIC. Confirmación reciente de contraseña ≤5 min, CSRF en POST. No emite Leo ni una credencial de máquina. HTML formulario incluye _token y web_intent; este contrato describe variante JSON. Emisión operativa bloqueada hasta aprobar texto, autoridad, retención e interfaz.",
-        "x-status": "IMPLEMENTADO_LOCAL",
+        "x-status": "IMPLEMENTADO_LOCAL [Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos]",
         "x-activation-blocked": true,
         "responses": {
           "200": {
@@ -6369,7 +6381,9 @@
               "$ref": "#/components/schemas/ConfirmationRef"
             }
           }
-        ]
+        ],
+        "x-leo-matrix-row": "L16",
+        "x-leo-implementation-status": "DIFERIDO (aplicación directa de beneficios por Leo; el usuario los aplica en el checkout FAMEDIC)"
       }
     }
   },
@@ -12671,10 +12685,11 @@
   "x-approval-status": "PROPOSAL_NOT_APPROVED_NOT_RELEASE_CONTRACT",
   "x-proposal-state": "PROPUESTO_PARA_APROBACIÓN",
   "x-runtime-limitations": [
-    "Transporte, enrolamiento, consentimiento y finanzas operativos deshabilitados por defecto.",
-    "Certificación TLS/proxy y migración de todos los clientes nativos pendientes.",
-    "Gateways sujetos a evidencia autoritativa exacta; consulta Efevoo/Odessa y reverso Odessa no acreditados.",
-    "Fase0 abierta. FAIL histórico OTP7 se conserva."
+    "[Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos] Transporte, enrolamiento, consentimiento y finanzas operativos deshabilitados por defecto.",
+    "[Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos] Certificación TLS/proxy y migración de todos los clientes nativos pendientes.",
+    "[Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos] Gateways sujetos a evidencia autoritativa exacta; consulta Efevoo/Odessa y reverso Odessa no acreditados.",
+    "[Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos] Fase0 abierta. FAIL histórico OTP7 se conserva."
   ],
-  "x-source-proposal-sha256": "5924d9568d334386a9d25d6701ba7d5efcedb67d00795b8d69b9e735e12b37dc"
+  "x-source-proposal-sha256": "5924d9568d334386a9d25d6701ba7d5efcedb67d00795b8d69b9e735e12b37dc",
+  "x-state-reference": "Estado vigente: Batch 1 ENTREGADO_PARA_ACEPTACION (no aceptado). x-release-status, x-approval-status y x-proposal-state conservan los valores de [Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos] y son coherentes con \"no aprobado\"; x-runtime-limitations se rotula como histórico. x-status / x-continuity-state con IMPLEMENTADO_LOCAL son históricos de esa revisión; el estado vigente por operación de Leo es x-leo-matrix-row / x-leo-implementation-status."
 }

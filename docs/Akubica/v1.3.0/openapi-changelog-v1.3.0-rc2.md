@@ -8,13 +8,21 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · rev2 (2026-11-18, cinco correcciones antes de pedir la aceptación)
+
+1. **README:** las capacidades quedan separadas en aprobado en plan, implementación Batch 2, diferido (beneficios directos, L16) y prohibido. El laboratorio pasa a "aprobado en plan / implementación Batch 2". Se aclara que la línea base 1.2.3 es histórica.
+2. **OpenAPI y R30:** las descripciones generales se corrigen a 76 operaciones. Los estados heredados se rotulan como históricos con su referencia: `x-runtime-limitations`, `x-status IMPLEMENTADO_LOCAL` y `COMPLETE_LOCAL`, y `x-continuity-state` de `/cart`. Se agrega `x-state-reference`. Los beneficios opacos llevan `x-leo-matrix-row=L16` (diferido).
+3. **Colecciones:** la colección funcional (`-rc2-NEWMAN`, con guardas) queda separada del antecedente offline (`rc2-90`, cuyo guard omite siempre sus 92 peticiones). La tabla de omisiones por precondición está en `RC2-NEWMAN-LEEME.md`. El checklist QA ya no importa la rc2-90. La referencia a `preflight.cjs`, que no existe en el repo, queda rotulada como histórica.
+4. **B26:** se traza a S06/S12 como OBLIGATORIO_LANZAMIENTO (antes NO_APLICABLE). La descripción de Newman documenta la comprobación de que no hay activación antes del pago; las aserciones no cambian.
+5. El informe de entrega se corrige fuera del repo (comparación homogénea de Pest).
+
 ## Batch 1 · cierre de seguridad (2026-11-18)
 
 El ejemplo de `phone` en el OpenAPI pasa de un número secuencial con formato real (`+5255…5678`, preexistente) al sintético `+525500000003`, para cumplir el criterio de seguridad de la tabla 5 (sin teléfonos reales). No cambia el schema.
 
 ## Batch 1 · tarea 8 (2026-11-18)
 
-Nueva `RC2-MATRIZ-ESCENARIOS-CLASIFICACION.csv` / `.md`. Los 46 escenarios quedan así: 45 OBLIGATORIO_LANZAMIENTO, 1 NO_APLICABLE (B26, activación first-party) y 1 DIFERIDO adicional (X01, cupones aplicados por Leo). Cada uno se asigna a una fila S01–S16 de la tabla 8 o a UAT (R08) y conserva su estado histórico.
+Nueva `RC2-MATRIZ-ESCENARIOS-CLASIFICACION.csv` / `.md`. Los 46 escenarios quedan así: 45 OBLIGATORIO_LANZAMIENTO, 1 NO_APLICABLE (B26, activación first-party) y 1 DIFERIDO adicional (X01, cupones aplicados por Leo). [Corregido en rev2: B26 pasa a OBLIGATORIO, trazado a S06/S12.] Cada uno se asigna a una fila S01–S16 de la tabla 8 o a UAT (R08) y conserva su estado histórico.
 
 El README y el manifiesto corrigen la ruta del CSV de trazabilidad (`RC2-PREPARACION-QA/A-DOCUMENTACION/`) y la referencia a checksums, y apuntan el candidato al paquete de entrega de Batch 1.
 

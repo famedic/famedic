@@ -2,7 +2,7 @@
   "info": {
     "name": "FAMEDIC-Akubica RC2 — Newman ejecutable (A01–A12, B01–B26, R01–R08)",
     "_postman_id": "8b6f1e1c-rc2-newman-0001",
-    "description": "Colección ejecutable RC2. Sin secretos: credenciales, Bearer, HMAC y OTP se inyectan con --env-var en tiempo de ejecución. Bloquea hosts fuera de allowed_hosts y exige expected_release_sha. Los casos sin precondiciones se omiten (SKIPPED_PRECONDITION) y nunca cuentan como PASS.",
+    "description": "ARTEFACTO FUNCIONAL RC2 (único ejecutable). Colección ejecutable RC2. Sin secretos: credenciales, Bearer, HMAC y OTP se inyectan con --env-var en tiempo de ejecución. Bloquea hosts fuera de allowed_hosts y exige expected_release_sha. Los casos sin precondiciones se omiten (SKIPPED_PRECONDITION) y nunca cuentan como PASS. La colección rc2-90 (92 solicitudes) es un antecedente offline: su guard omite siempre todas las peticiones. Ver RC2-NEWMAN-LEEME.md.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -2029,7 +2029,7 @@
               }
             ],
             "url": "{{base_url}}/memberships/status",
-            "description": "requires: bearer_none,machine_credential"
+            "description": "Escenario original B26: ausencia de activación de la membresía antes del pago. Trazado a S06 (agregar membresía no la activa) y S12 (continuidad sin pago del asistente). Corre después de B12 (alta en carrito) y B23 (prepare) con el mismo bearer_none y verifica status=none y expires_at=null. Aserciones sin cambio. requires: bearer_none,machine_credential"
           },
           "event": [
             {
