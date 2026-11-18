@@ -567,7 +567,9 @@ class AkubicaUatFixtureMaterializer
         $disk = Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK);
         foreach ((array) Arr::get($metadata, 'storage_paths', []) as $path) {
             $this->assertAllowedStoragePath((string) $path);
-            if ($disk->exists($path) && hash('sha256', (string) $disk->get($path)) !== Arr::get($metadata, "storage_hashes.{$path}")) {
+            // Storage paths contain dots (e.g. ".pdf"); Arr::get dot-notation would split them and always return null.
+            $expectedHash = ((array) Arr::get($metadata, 'storage_hashes', []))[$path] ?? null;
+            if ($disk->exists($path) && hash('sha256', (string) $disk->get($path)) !== $expectedHash) {
                 throw new AkubicaUatFixtureException('UAT_STORAGE_HASH_MISMATCH');
             }
         }
