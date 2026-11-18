@@ -1867,6 +1867,7 @@
                 "exec": [
                   "pm.test('B23 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
                   "pm.test('B23 assistant_can_pay=false', function () { const b = pm.response.json(); pm.expect(b.data.assistant_can_pay).to.eql(false); pm.expect(b.data).to.not.have.property('payment_url'); });",
+                  "pm.test('B23 semántica T4: can_continue_on_platform=true y can_continue_to_payment_platform=false (el usuario continúa en FAMEDIC; sin pasarela para el asistente)', function () { const b = pm.response.json(); pm.expect(b.data.can_continue_on_platform).to.eql(true); pm.expect(b.data.can_continue_to_payment_platform).to.eql(false); });",
                   "pm.test('B23 continuidad según bandera B24 (apagada: ausente; habilitada: liga first-party de continuidad, nunca de pago)', function () {",
                   "  const b = pm.response.json();",
                   "  if (pm.variables.get('b24_enabled') !== '1') { pm.expect(b.data).to.not.have.property('continuity_url'); return; }",
@@ -1915,6 +1916,7 @@
                 "exec": [
                   "pm.test('B24a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
                   "pm.test('B24a liga https de continuidad, no de pago', function () { const b = pm.response.json(); pm.expect(b.data.continuity_url).to.match(/^https:\\/\\/[^/]+\\/checkout\\/continue\\/[A-Za-z0-9]+$/); pm.expect(b.data.continuity_url).to.not.match(/pay|efevoo|stripe/i); pm.expect(b.data.continuity_expires_at).to.be.a('string'); pm.collectionVariables.set('continuity_url', b.data.continuity_url); });",
+                  "pm.test('B24a semántica T4: assistant_can_pay=false, can_continue_on_platform=true, can_continue_to_payment_platform=false', function () { const b = pm.response.json(); pm.expect(b.data.assistant_can_pay).to.eql(false); pm.expect(b.data.can_continue_on_platform).to.eql(true); pm.expect(b.data.can_continue_to_payment_platform).to.eql(false); });",
                   "pm.test('B24a no-store', function(){ pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'); });"
                 ]
               }

@@ -8,6 +8,22 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · tarea 4 (2026-11-18)
+
+Se congela la semántica de checkout (plan v1.0, tabla 4):
+- `assistant_can_pay=false`: Leo nunca paga.
+- `can_continue_on_platform=true`: el usuario continúa en FAMEDIC.
+- `can_continue_to_payment_platform=false`: sin pasarela para el asistente.
+- `continuity_url`: liga first-party de un uso, nunca de pago, sólo en staging.
+
+Cambios en el OpenAPI:
+- Se actualizan las descripciones en `MedicalServiceCheckoutPrepareData`, `LeoOpaque*` y `LaboratoryCheckoutPrepareData`; este último queda como DTO sólo para consumidores nativos.
+- `can_continue_to_payment_platform` deja de estar `deprecated` en el carrito médico, porque el plan le da un significado contractual.
+- Se añaden `LeoLaboratoryCheckoutPrepareData/Response` (D-2, continuidad de laboratorio; `x-implementation-status: BATCH_2`) y `x-checkout-semantics` en `checkoutPrepare`.
+- Se actualiza `x-continuity-state`, que ya no reflejaba la bandera B24 de staging.
+
+El número de operaciones no cambia (76), ni el formato de `X-Correlation-ID`. Newman refuerza B23 y B24a con aserciones de `can_continue_on_platform=true` y `can_continue_to_payment_platform=false`, que el runtime médico ya emite; ninguna aserción de seguridad se relaja.
+
 ## Batch 1 · tarea 3 (2026-11-18)
 
 Nueva `RC2-MATRIZ-PERMISOS-LEO.md`, sólo documental, según las tablas 2, 3 y 6 del plan v1.0. Leo obtiene el carrito de laboratorio por línea y marca, pedidos y familiares propios, metadatos y step-up con liga segura de resultados y facturas, y la solicitud de factura: todo **pendiente de implementar en Batch 2**. Siguen prohibidos el pago, el payment link (sólo como prueba negativa) y la descarga directa de PDF (403). La aplicación directa de cupones y saldo por Leo queda **diferida** y no es una capacidad disponible. El OpenAPI no cambia en esta tarea; la alineación de `x-consumer-allowlist` queda pendiente en Batch 1.
