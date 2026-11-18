@@ -25,6 +25,14 @@
 4. Verificar que no se activa membresía antes de pago confirmado.
 5. Ejecutar solo los cuatro casos R30 desde el documento first-party separado, nunca como capacidad de Leo.
 
+## Flujos obligatorios de Leo (Batch 2, colección `…-rc2-LEO-FUNCIONAL`)
+
+1. Sólo sobre el build de Batch 2 desplegado en staging, con `target_env=staging`, `expected_release_sha` verificado y `leo_batch2_contract=1` (ver `RC2-LEO-FUNCIONAL-LEEME.md`).
+2. Credencial y Bearer de Leo (INT-003) en runtime. Nunca credencial native.
+3. Step-up (L10/L14) sólo con `sms_authorized=1`. El código lo lee el titular y el operador lo teclea con `read -s`.
+4. Escrituras (L06 carrito de laboratorio, L13 solicitud de factura y negativos con efecto) sólo con su bandera y los fixtures INT-005.
+5. Las ligas seguras y la de continuidad no se abren desde Newman; su apertura es prueba de navegador.
+
 ## Criterio de salida
 
 Cada caso debe tener código HTTP contractual, efecto funcional, lectura posterior, evidencia sanitizada, responsable y dependencia. Un 404/403/409/500 no acredita un positivo. Sin fases A y B ejecutadas, el estado es `NO GO` para certificación RC2.
