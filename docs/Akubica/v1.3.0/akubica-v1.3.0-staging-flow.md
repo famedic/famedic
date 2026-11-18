@@ -2,7 +2,7 @@
 
 ## Preflight
 
-1. Confirmar que el release activo corresponde a la rama `feature/akubica-api-v1.3.0` y al commit esperado por la ventana de despliegue.
+1. Confirmar que el release activo corresponde a la rama `prep/akubica-technical-integration-rc11` y al commit esperado por la ventana de despliegue.
 2. Consultar `php artisan migrate:status` en staging, sin `migrate:fresh`, sin rollback y sin borrar datos.
 3. Confirmar que `tax_profiles.default_owner_key` es columna ordinaria nullable y que las migraciones ATIX están en estado `Ran`.
 4. Verificar que el environment de Postman no contiene valores sensibles persistidos.
