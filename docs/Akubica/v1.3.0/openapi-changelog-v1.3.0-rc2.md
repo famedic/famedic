@@ -8,6 +8,16 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · tarea 5 (2026-11-18)
+
+`POST /checkout/payment-link` se conserva en Postman/Newman sólo como **prueba negativa de seguridad** (B25/S14). Leo lo ejecuta únicamente para comprobar HTTP 403 y que no haya liga ni cobro.
+
+- Newman B25 conserva sus aserciones (403 y ninguna URL) y suma una: la respuesta no contiene llaves de liga, intento de pago ni checkout.
+- Los casos PAYMENT-LINK-* de rc2-90 se rotulan como negativos.
+- OpenAPI agrega una descripción y `x-leo-test-usage=NEGATIVE_SECURITY_TEST_ONLY`.
+- Las guías se reconcilian: consumo, checklist, staging-flow, README, los LEEME y el checklist QA.
+- No se debilitó ninguna aserción ni cambió el código.
+
 ## Batch 1 · tarea 4 (2026-11-18)
 
 Se congela la semántica de checkout (plan v1.0, tabla 4):

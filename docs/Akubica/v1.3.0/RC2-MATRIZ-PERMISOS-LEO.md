@@ -58,7 +58,7 @@ Native conserva todo lo anterior, más: descarga directa de PDF con grant de ste
 ## 5. Pendientes que este documento no cierra
 
 - **OpenAPI.** Para cumplir "ninguna operación obligatoria de Leo marcada como native only", hay que actualizar `x-consumer-allowlist` (`[native]` → `[leo, native]`) en L07–L10, L12–L14 y L13b y añadir `cart:laboratory:*` (L06). Es un cambio contractual de Batch 1 que esta tarea no hace (sólo documentación). Va junto con B1-T7, que define los esquemas explícitos de pedidos y familiares.
-- **Guías.** `akubica-v1.3.0-checklist-endpoints.md`: el criterio de `checkout/prepare` quedó reconciliado en B1-T4. Las filas `medical-benefit` (C6) y el payment link como prueba negativa se reconcilian en B1-T5.
+- **Guías.** `akubica-v1.3.0-checklist-endpoints.md`: el criterio de `checkout/prepare` quedó reconciliado en B1-T4. Las filas `medical-benefit` (C6, perfil native y DIFERIDO para Leo) y el payment link como prueba negativa (B25/S14) quedaron reconciliados en B1-T5.
 - Los literales `cart:laboratory:read/write` son la nomenclatura propuesta para Batch 2. Al aceptar Batch 1 quedan congelados; cambiarlos después sería un defecto contra el contrato.
 
 ## 5b. Decisiones registradas

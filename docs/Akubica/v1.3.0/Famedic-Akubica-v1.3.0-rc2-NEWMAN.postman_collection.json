@@ -1956,7 +1956,7 @@
           "response": []
         },
         {
-          "name": "B25 Leo no puede generar liga de pago",
+          "name": "B25 NEGATIVA DE SEGURIDAD: Leo no puede generar liga de pago (403)",
           "request": {
             "method": "POST",
             "header": [
@@ -1978,7 +1978,7 @@
               }
             ],
             "url": "{{base_url}}/checkout/payment-link",
-            "description": "requires: bearer_none,machine_credential",
+            "description": "PRUEBA NEGATIVA DE SEGURIDAD (Batch 1 · T5, escenario S14): se ejecuta sólo para comprobar HTTP 403 y la ausencia de liga o cobro. No es una capacidad de Leo ni un flujo de pago. Ausencia de cobro: la respuesta no trae URL ni identificadores de liga, intento de pago o checkout. El readback de que no se creó un intento de pago se hace en Batch 2 por consulta de sólo lectura del operador (Lalio), fuera de Newman. requires: bearer_none,machine_credential",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"service_line\": \"medical_services\"\n}",
@@ -1996,7 +1996,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('B25 HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });",
-                  "pm.test('B25 sin URL de pago', function () { const b = pm.response.json(); pm.expect(JSON.stringify(b)).to.not.match(/https?:\\/\\//); });"
+                  "pm.test('B25 sin URL de pago', function () { const b = pm.response.json(); pm.expect(JSON.stringify(b)).to.not.match(/https?:\\/\\//); });",
+                  "pm.test('B25 sin liga, intento de pago ni checkout en la respuesta', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(payment_link|payment_url|payment_link_id|payment_attempt_id|checkout_url|continuity_url)\"\\s*:/); });"
                 ]
               }
             }

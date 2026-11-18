@@ -2504,7 +2504,9 @@
           "authorization_before_idempotency_replay": true
         },
         "x-required-capability": "akubica:payment-link:create",
-        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas."
+        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
+        "description": "Operación exclusiva de consumidores nativos con capacidad literal de pagos. **Leo: siempre 403** (`payments:*` y `akubica:payment-link:create` denegados por política; un comodín no concede pago). En la colección RC2 se conserva sólo como prueba negativa de seguridad (B25/S14): se verifica HTTP 403 y que no haya liga ni cobro.",
+        "x-leo-test-usage": "NEGATIVE_SECURITY_TEST_ONLY"
       }
     },
     "/laboratory-appointments/requirements": {
