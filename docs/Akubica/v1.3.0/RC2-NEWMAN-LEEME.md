@@ -6,6 +6,7 @@ Archivos: `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` y `Famedic
 - Bloquea cualquier host fuera de `allowed_hosts` y cualquier dominio de producción (`*.famedic.com.mx`, `*.famedic.mx`), salvo el host QA oficial exacto `staging.famedic.com.mx` (alias QA equivalente: `famedic-otp.on-forge.com`). Ante cualquier fallo de guarda el request se omite (`pm.execution.skipRequest()`, no sale tráfico) y queda una aserción fallida `GUARDA …` visible en el reporte.
 - Exige `expected_release_sha` (40 hex); cada aserción lleva el prefijo del SHA → evidencia ligada al release.
 - Casos sin precondiciones se **omiten** (`SKIPPED_PRECONDITION`) y nunca cuentan como PASS.
+- R01, R02a, R03a y R04 verifican el contrato Leo de Batch 1 · T7 (datos mínimos, sin descarga). Sólo corren con `leo_batch2_contract=1` sobre el build de Batch 2; si no, quedan en `SKIPPED_PRECONDITION`.
 - B25 es una **prueba negativa de seguridad** (Batch 1 · T5, S14): `POST /checkout/payment-link` con credencial Leo sólo para comprobar HTTP 403 y la ausencia de liga o cobro. Nunca se corre con credencial native de pagos.
 - B18 (concurrencia), R05 (sesión FAMEDIC en navegador) y R08 (UAT conversacional) no son ejecutables en Newman; quedan marcados.
 

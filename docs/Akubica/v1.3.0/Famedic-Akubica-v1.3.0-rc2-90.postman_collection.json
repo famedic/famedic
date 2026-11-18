@@ -2434,7 +2434,7 @@
           }
         ],
         "url": "{{base_url}}/orders",
-        "description": "operationId=ordersIndex; Listar pedidos. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersIndex; Listar pedidos. perfil=leo|native (L07) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -2476,7 +2476,7 @@
           }
         ],
         "url": "{{base_url}}/orders/results",
-        "description": "operationId=ordersResultsIndex; Listar resultados agregados. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersResultsIndex; Listar resultados agregados. perfil=leo|native (L09) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -2518,7 +2518,7 @@
           }
         ],
         "url": "{{base_url}}/orders/invoices",
-        "description": "operationId=ordersInvoicesIndex; Listar facturas agregadas. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersInvoicesIndex; Listar facturas agregadas. perfil=leo|native (L12) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -2560,7 +2560,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/products",
-        "description": "operationId=ordersProducts; Productos del pedido. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersProducts; Productos del pedido. perfil=leo|native (L07) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -2602,7 +2602,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/status",
-        "description": "operationId=ordersStatus; Estado del pedido. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersStatus; Estado del pedido. perfil=leo|native (L07) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -2648,7 +2648,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/cancel",
-        "description": "operationId=ordersCancel; Cancelar pedido (deshabilitado). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=ordersCancel; Cancelar pedido (deshabilitado). perfil=native; Leo 403 (L07) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{}",
@@ -2699,7 +2699,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/results",
-        "description": "operationId=ordersResults; Metadata de resultados del pedido. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersResults; Metadata de resultados del pedido. perfil=leo|native (L09) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -2746,7 +2746,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/results/download",
-        "description": "operationId=ordersResultsDownload; Descargar PDF resultados (Bearer). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersResultsDownload; Descargar PDF resultados (Bearer). perfil=native; Leo siempre 403 (L11) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -2797,7 +2797,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/results/step-up/request",
-        "description": "operationId=ordersResultsStepUpRequest; Solicitar OTP step-up resultados. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=ordersResultsStepUpRequest; Solicitar OTP step-up resultados. perfil=leo|native (L10) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{}",
@@ -2852,7 +2852,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/results/step-up/verify",
-        "description": "operationId=ordersResultsStepUpVerify; Verificar OTP step-up resultados → grant. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=ordersResultsStepUpVerify; Verificar OTP step-up resultados → grant. perfil=leo|native (L10) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"challenge_id\": \"{{vault:challenge_id}}\",\n  \"code\": \"{{vault:code}}\"\n}",
@@ -2912,7 +2912,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/results/secure-link",
-        "description": "operationId=ordersResultsSecureLink; Emitir secure link de resultados. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=ordersResultsSecureLink; Emitir secure link de resultados. perfil=leo|native (L10) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"grant_id\": \"{{vault:grant_id}}\"\n}",
@@ -2963,7 +2963,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/invoices",
-        "description": "operationId=ordersInvoices; Facturas del pedido. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersInvoices; Facturas del pedido. perfil=leo|native (L12) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -3010,7 +3010,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/invoices/{{vault:invoice_id}}/download",
-        "description": "operationId=ordersInvoiceDownload; Descargar PDF factura (Bearer). Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersInvoiceDownload; Descargar PDF factura (Bearer). perfil=native; Leo siempre 403 (L15) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -3061,7 +3061,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/invoices/{{vault:invoice_id}}/step-up/request",
-        "description": "operationId=ordersInvoiceStepUpRequest; Solicitar OTP step-up factura. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=ordersInvoiceStepUpRequest; Solicitar OTP step-up factura. perfil=leo|native (L14, sólo PDF) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{}",
@@ -3116,7 +3116,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/invoices/{{vault:invoice_id}}/step-up/verify",
-        "description": "operationId=ordersInvoiceStepUpVerify; Verificar OTP step-up factura → grant. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=ordersInvoiceStepUpVerify; Verificar OTP step-up factura → grant. perfil=leo|native (L14, sólo PDF) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"challenge_id\": \"{{vault:challenge_id}}\",\n  \"code\": \"{{vault:code}}\"\n}",
@@ -3176,7 +3176,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/invoices/{{vault:invoice_id}}/secure-link",
-        "description": "operationId=ordersInvoiceSecureLink; Emitir secure link de factura. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=ordersInvoiceSecureLink; Emitir secure link de factura. perfil=leo|native (L14, sólo PDF) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"grant_id\": \"{{vault:grant_id}}\"\n}",
@@ -3227,7 +3227,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/invoice-request/status",
-        "description": "operationId=ordersInvoiceRequestStatus; Estado de solicitud de factura. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=ordersInvoiceRequestStatus; Estado de solicitud de factura. perfil=leo|native (L13) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -3278,7 +3278,7 @@
           }
         ],
         "url": "{{base_url}}/orders/{{vault:order_id}}/invoice-request",
-        "description": "operationId=ordersInvoiceRequestStore; Solicitar factura. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=ordersInvoiceRequestStore; Solicitar factura. perfil=leo|native (L13, mismo mes y tras confirmación) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"tax_profile_id\": \"{{vault:tax_profile_id}}\"\n}",
@@ -3329,7 +3329,7 @@
           }
         ],
         "url": "{{base_url}}/user/family",
-        "description": "operationId=userFamily; Cuentas familiares. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=userFamily; Cuentas familiares. perfil=leo|native (L08, LeoFamilyMember) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -3413,7 +3413,7 @@
           }
         ],
         "url": "{{base_url}}/user/tax-profiles",
-        "description": "operationId=userTaxProfilesIndex; Listar perfiles fiscales. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=userTaxProfilesIndex; Listar perfiles fiscales. perfil=leo|native (L13b/D-1, LeoTaxProfileSummary) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [
@@ -3459,7 +3459,7 @@
           }
         ],
         "url": "{{base_url}}/user/tax-profiles",
-        "description": "operationId=userTaxProfilesStore; Crear perfil fiscal. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=userTaxProfilesStore; Crear perfil fiscal. perfil=native; Leo 403 (L13b) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"rfc\": \"{{vault:rfc}}\",\n  \"business_name\": \"{{vault:business_name}}\",\n  \"tax_regime\": \"{{vault:tax_regime}}\",\n  \"postal_code\": \"{{vault:postal_code}}\"\n}",
@@ -3514,7 +3514,7 @@
           }
         ],
         "url": "{{base_url}}/user/tax-profiles/{{vault:tax_profile_id}}",
-        "description": "operationId=userTaxProfilesUpdate; Actualizar perfil fiscal. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY.",
+        "description": "operationId=userTaxProfilesUpdate; Actualizar perfil fiscal. perfil=native; Leo 403 (L13b) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"rfc\": \"{{vault:rfc}}\",\n  \"business_name\": \"{{vault:business_name}}\",\n  \"tax_regime\": \"{{vault:tax_regime}}\",\n  \"postal_code\": \"{{vault:postal_code}}\"\n}",
@@ -3565,7 +3565,7 @@
           }
         ],
         "url": "{{base_url}}/user/tax-profiles/{{vault:tax_profile_id}}",
-        "description": "operationId=userTaxProfilesDestroy; Eliminar perfil fiscal. Perfil según MATRIZ-ENDPOINTS. OFFLINE ONLY."
+        "description": "operationId=userTaxProfilesDestroy; Eliminar perfil fiscal. perfil=native; Leo 403 (L13b) según RC2-MATRIZ-PERMISOS-LEO (Batch 1 · T7; Leo se implementa en Batch 2). OFFLINE ONLY."
       },
       "response": [],
       "event": [

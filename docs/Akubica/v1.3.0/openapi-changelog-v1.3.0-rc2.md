@@ -8,6 +8,18 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · tarea 7 (2026-11-18)
+
+Se agregan esquemas explícitos para Leo (`additionalProperties=false`) y se cierra el criterio pendiente de T3: ninguna operación obligatoria de Leo queda marcada como native only.
+
+- Esquemas nuevos: `LeoOrdersIndexResponse`, `LeoOrderStatusResponse`, `LeoOrderProductsResponse`, `LeoResultsIndexResponse`, `LeoOrderResultsResponse`, `LeoInvoicesIndexResponse`, `LeoOrderInvoicesResponse`, `LeoInvoiceRequestStatusResponse`, `LeoFamilyResponse` y `LeoTaxProfilesResponse` (D-1), con sus elementos y `LeoPagination`. Se cablean con `anyOf` junto a la respuesta nativa.
+- `x-consumer-allowlist` pasa de `[native]` a `[leo, native]` en 17 operaciones (L07–L10, L12–L14 y L13b), con `x-leo-matrix-row` y `x-leo-implementation-status=BATCH_2`.
+- Siguen `[native]`, con nota de 403 para Leo: descargas (L11, L15), cancelación y escrituras de perfil fiscal.
+- `x-leo-capabilities` (`cart:laboratory:*`, L06) en `cart*` y `checkoutPrepare`.
+- Newman: R01, R02a, R03a y R04 verifican el contrato (200, datos mínimos, sin descarga ni nacimiento/género) con la nueva precondición `leo_batch2_contract`, que en la plantilla va vacía. R02a/R03a dejan de esperar 403 porque la matriz sustituye a D5. R04 deja de aceptar 200/403 ambiguo.
+- rc2-90: perfil `leo|native` por fila de la matriz.
+- Sin cambio de código; las operaciones siguen siendo 76.
+
 ## Batch 1 · tarea 6 (2026-11-18)
 
 B02 (S05) se evalúa exactamente con siete puntos: nombre, marca, `item_type`, precio público, precio FAMEDIC, ahorro y detalle.
