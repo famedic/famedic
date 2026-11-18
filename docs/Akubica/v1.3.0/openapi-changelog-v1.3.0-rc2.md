@@ -8,6 +8,16 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · rev5 (2026-11-18, cuerpos de solicitud conformes e inventario)
+
+Sin cambios en el OpenAPI, R30 ni el código. Sólo colecciones y documentación:
+
+- **B06b** (native): `{"laboratory_test_id": <entero>, "brand": …}` sin `quantity`, según `LaboratoryCartItemCreateLegacy`. Se omite si el id no es entero o la marca no es válida.
+- **B25 y LF-L17a:** cuerpo válido según el requestBody de `checkoutPaymentLink` (`brand`). Credencial Leo, nunca native; esperado 403 sin liga, intento de pago ni checkout. La comprobación externa de ausencia de efectos queda en Batch 2. LF-L17a requiere además `leo_negative_writes_authorized`.
+- **A07:** se conserva el canal/audiencia inválido y el 422, y se marca como negativo intencional de validación (`INVALIDO_DELIBERADO`). También se marcan B22, R07a, R07a2, LF-L13g y LF-L13x.
+- **Nuevo `RC2-INVENTARIO-CUERPOS.md` / `.csv`:** las 117 solicitudes clasificadas en CONFORME 39, INVALIDO_DELIBERADO 6, DISCREPANCIA_PENDIENTE 0 y N/A 72.
+- Conteos sin cambios: NEWMAN 69, LEO-FUNCIONAL 48, OpenAPI 76/64, R30 4, rc2-90 92.
+
 ## Batch 1 · rev4 (2026-11-18, conciliación de las observaciones de contrato de rev3)
 
 1. **OBS-CONTRATO-TAXPROFILE-ID:**

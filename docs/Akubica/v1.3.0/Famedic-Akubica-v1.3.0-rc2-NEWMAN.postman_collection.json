@@ -2,7 +2,7 @@
   "info": {
     "name": "FAMEDIC-Akubica RC2 — Newman ejecutable (A01–A12, B01–B26, R01–R08)",
     "_postman_id": "8b6f1e1c-rc2-newman-0001",
-    "description": "ARTEFACTO FUNCIONAL RC2 (único ejecutable). Colección ejecutable RC2. Sin secretos: credenciales, Bearer, HMAC y OTP se inyectan con --env-var en tiempo de ejecución. Bloquea hosts fuera de allowed_hosts y exige expected_release_sha. Los casos sin precondiciones se omiten (SKIPPED_PRECONDITION) y nunca cuentan como PASS. La colección rc2-90 (92 solicitudes) es un antecedente offline: su guard omite siempre todas las peticiones. Ver RC2-NEWMAN-LEEME.md.",
+    "description": "ARTEFACTO FUNCIONAL RC2 (único ejecutable). Colección ejecutable RC2. Sin secretos: credenciales, Bearer, HMAC y OTP se inyectan con --env-var en tiempo de ejecución. Bloquea hosts fuera de allowed_hosts y exige expected_release_sha. Los casos sin precondiciones se omiten (SKIPPED_PRECONDITION) y nunca cuentan como PASS. La colección rc2-90 (92 solicitudes) es un antecedente offline: su guard omite siempre todas las peticiones. Ver RC2-NEWMAN-LEEME.md.\n\nrev5 (IT-0026): B06b sin `quantity` y con `laboratory_test_id` entero; B25 con cuerpo válido (`brand`), credencial Leo y 403; A07, B22, R07a y R07a2 marcados como inválidos deliberados. Inventario de cuerpos: `RC2-INVENTARIO-CUERPOS.md`/`.csv`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -651,7 +651,7 @@
               }
             ],
             "url": "{{base_url}}/integrations/atix/phone-lookups",
-            "description": "requires: phone_registered",
+            "description": "**INVALIDO_DELIBERADO · negativo intencional de validación:** `channel: \"sms\"` y `audience: \"otro\"` están fuera de los enum de `AtixPhoneLookupRequest` (`whatsapp` / `leo`). Esperado 422 VALIDATION_ERROR sin efecto. No corregir el cuerpo: el valor inválido es el objeto de la prueba. requires: phone_registered",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"phone\": \"{{phone_registered}}\",\n  \"conversation_id\": \"conv-{{run_id}}-phone_registered\",\n  \"channel_event_id\": \"evt-{{$guid}}\",\n  \"channel\": \"sms\",\n  \"audience\": \"otro\",\n  \"personalization\": {\n    \"allowed\": true\n  }\n}",
@@ -1357,10 +1357,10 @@
               }
             ],
             "url": "{{base_url}}/cart/items",
-            "description": "requires: test_id_mutable,native_bearer_token,lab_brand",
+            "description": "**Cuerpo (rev5):** `LaboratoryCartItemCreateLegacy` del perfil native: `laboratory_test_id` entero (`test_id_mutable`) y `brand` (`lab_brand`, una `LaboratoryBrand`), sin `quantity`. Si el id no es entero o la marca no es válida, se omite (`SKIPPED_PRECONDITION`). requires: test_id_mutable,native_bearer_token,lab_brand",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"laboratory_test_id\": \"{{test_id_mutable}}\",\n  \"brand\": \"{{lab_brand}}\",\n  \"quantity\": 1\n}",
+              "raw": "{\n  \"laboratory_test_id\": {{test_id_mutable}},\n  \"brand\": \"{{lab_brand}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1369,6 +1369,16 @@
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.variables.get('test_id_mutable') && !/^[1-9][0-9]*$/.test(String(pm.variables.get('test_id_mutable')))) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> test_id_mutable no entero'); pm.execution.skipRequest(); }",
+                  "(function () { const b = pm.variables.get('lab_brand'); if (b && ['olab', 'swisslab', 'jenner', 'liacsa', 'azteca'].indexOf(b) === -1) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> lab_brand no es una LaboratoryBrand válida'); pm.execution.skipRequest(); } })();"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1980,10 +1990,10 @@
               }
             ],
             "url": "{{base_url}}/checkout/payment-link",
-            "description": "PRUEBA NEGATIVA DE SEGURIDAD (Batch 1 · T5, escenario S14): se ejecuta sólo para comprobar HTTP 403 y la ausencia de liga o cobro. No es una capacidad de Leo ni un flujo de pago. Ausencia de cobro: la respuesta no trae URL ni identificadores de liga, intento de pago o checkout. El readback de que no se creó un intento de pago se hace en Batch 2 por consulta de sólo lectura del operador (Lalio), fuera de Newman. requires: bearer_none,machine_credential",
+            "description": "PRUEBA NEGATIVA DE SEGURIDAD (Batch 1 · T5, escenario S14): se ejecuta sólo para comprobar HTTP 403 y la ausencia de liga o cobro. No es una capacidad de Leo ni un flujo de pago. Ausencia de cobro: la respuesta no trae URL ni identificadores de liga, intento de pago o checkout. El readback de que no se creó un intento de pago se hace en Batch 2 por consulta de sólo lectura del operador (Lalio), fuera de Newman. **Cuerpo (rev5):** válido según el requestBody de `checkoutPaymentLink` (`brand` requerida, `lab_brand`), para que el 403 provenga sólo de la autorización y no de la validación. Credencial siempre Leo (`machine_credential` + `bearer_none`), nunca native. Esperado 403 sin liga, intento de pago ni checkout; la comprobación externa de ausencia de efectos queda en Batch 2. requires: bearer_none,machine_credential,lab_brand",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"service_line\": \"medical_services\"\n}",
+              "raw": "{\n  \"brand\": \"{{lab_brand}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1992,6 +2002,15 @@
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function () { const b = pm.variables.get('lab_brand'); if (b && ['olab', 'swisslab', 'jenner', 'liacsa', 'azteca'].indexOf(b) === -1) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> lab_brand no es una LaboratoryBrand válida'); pm.execution.skipRequest(); } })();"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -2544,7 +2563,7 @@
               }
             ],
             "url": "{{base_url}}/cart/items",
-            "description": "requires: bearer_none,machine_credential",
+            "description": "**INVALIDO_DELIBERADO · intención de farmacia:** el cuerpo (`service_line=pharmacy`, `item_type=medication`, `medication_id`) no corresponde a ningún esquema de `cartItemsStore` a propósito; el contrato responde 503 PHARMACY_SUSPENDED (`retryable=false`) sin efectos. requires: bearer_none,machine_credential",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"service_line\": \"pharmacy\",\n  \"item_type\": \"medication\",\n  \"medication_id\": 1,\n  \"quantity\": 1\n}",
@@ -2959,7 +2978,7 @@
               }
             ],
             "url": "{{base_url}}/cart/items",
-            "description": "requires: bearer_token",
+            "description": "**INVALIDO_DELIBERADO · negativo de validación:** `membership_plan_code: \"plan_inexistente\"` no cumple `MembershipCartItemCreate` (`basic_annual`). Esperado 422 VALIDATION_ERROR tipado. requires: bearer_token",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"service_line\": \"medical_services\",\n  \"item_type\": \"membership\",\n  \"membership_plan_code\": \"plan_inexistente\"\n}",
@@ -3007,7 +3026,7 @@
               }
             ],
             "url": "{{base_url}}/cart/items",
-            "description": "requires: bearer_token",
+            "description": "**INVALIDO_DELIBERADO · autorización antes que validación:** el cuerpo omite `item_type` a propósito; con credencial Leo se espera 403 CONSUMER_NOT_AUTHORIZED, no 422. requires: bearer_token",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"service_line\": \"medical_services\"\n}",
