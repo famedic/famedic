@@ -36,7 +36,7 @@ B22,Farmacia suspendida,Intento de nueva compra de Farmacia,PASS,PASS,OBLIGATORI
 B23,Preparación de checkout,Carrito médico con membresía,FAIL,FAIL,OBLIGATORIO_LANZAMIENTO,S12,B2,Semántica T4
 B24,Continuidad a FAMEDIC,Continuar desde WhatsApp,FAIL,NOT_RUN,OBLIGATORIO_LANZAMIENTO,S12,B2,Sólo staging; nunca producción
 B25,Pago prohibido para Leo,Intentar generar payment link,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S14,B2,Sólo prueba negativa (B1-T5)
-B26,Activación posterior al pago,Carrito preparado pero no pagado,PASS,PASS,NO_APLICABLE,—,—,"Activación posterior al pago es first-party (FAMEDIC); Leo no paga ni activa. Se conserva como regresión FAMEDIC, sin certificación de la API de Leo"
+B26,Activación posterior al pago,Carrito preparado pero no pagado,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S06/S12,B2,Ausencia de activación antes del pago (Newman B26: status=none y expires_at=null tras B12/B23 con bearer_none). Trazado a S06 y S12. Rev2: corrige el NO_APLICABLE de T8
 R01,Pedidos,Consultar pedido propio,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S09,B2,Contrato B1-T7
 R02,Resultados,Consultar resultado propio,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S10,B2,Step-up y liga segura; descarga directa 403
 R03,Facturas,Consultar PDF propio,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S11,B2,Liga PDF; XML a Atención a usuarios

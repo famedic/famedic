@@ -2,7 +2,7 @@
   "info": {
     "name": "FAMEDIC RC2 — colección offline protegida",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Revisión offline; no existe bandera de colección que habilite red. Sin autorización de distribución/uso externo."
+    "description": "ANTECEDENTE OFFLINE (no funcional). Revisión offline; no existe bandera de colección que habilite red. Sin autorización de distribución/uso externo. El prerequest de colección reescribe toda URL a https://rc11.invalid/blocked y llama pm.execution.skipRequest(): las 92 solicitudes se omiten siempre, por diseño. Sirve sólo para revisar la cobertura del contrato (76 + 4 R30). El artefacto funcional es Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json con su plantilla de entorno (ver RC2-NEWMAN-LEEME.md)."
   },
   "event": [
     {
