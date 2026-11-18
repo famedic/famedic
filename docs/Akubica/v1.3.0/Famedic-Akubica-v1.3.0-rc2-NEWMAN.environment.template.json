@@ -153,6 +153,12 @@
       "enabled": true
     },
     {
+      "key": "lab_brand_not_granted",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "test_id_available",
       "value": "",
       "type": "default",

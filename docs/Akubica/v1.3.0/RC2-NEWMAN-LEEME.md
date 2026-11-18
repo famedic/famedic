@@ -2,12 +2,12 @@
 
 Archivos: `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` y `Famedic-Akubica-v1.3.0-rc2-NEWMAN.environment.template.json` (plantilla **sin secretos**).
 
-## Artefactos funcionales y antecedente offline (Batch 1 · rev2; colección Leo agregada en rev3)
+## Artefactos funcionales y antecedente offline (Batch 1 · rev2; colección Leo agregada en rev3; B20/B21x conciliados en rev4)
 
 | Colección | Solicitudes | Papel | Guarda |
 |---|---|---|---|
-| `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` + `…-rc2-NEWMAN.environment.template.json` | 69 (A, B y R) | **Funcional** A/B/R: se ejecuta en QA sólo con autorización. Sin cambios en rev3 | Guardas de ejecución (abajo) |
-| `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.postman_collection.json` + `…-rc2-LEO-FUNCIONAL.environment.template.json` | 47 (flujos obligatorios de Leo, contrato de Batch 2) | **Funcional diferenciada de Leo** (Batch 1 · rev3): step-up, ligas seguras, solicitud y estado de factura, lectura fiscal mínima (D-1), pedidos, resultados, facturas, carrito y continuidad de laboratorio (D-2) y negativos de alcance. Sólo sobre el build de Batch 2 y con autorización | Guardas propias, más estrictas (ver `RC2-LEO-FUNCIONAL-LEEME.md`) |
+| `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` + `…-rc2-NEWMAN.environment.template.json` | 69 (A, B y R) | **Funcional** A/B/R: se ejecuta en QA sólo con autorización. Sin cambios en rev3. Rev4: sólo B20/B21x (ver "B20/B21x en rev4") | Guardas de ejecución (abajo) |
+| `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.postman_collection.json` + `…-rc2-LEO-FUNCIONAL.environment.template.json` | 48 (flujos obligatorios de Leo, contrato de Batch 2) | **Funcional diferenciada de Leo** (Batch 1 · rev3): step-up, ligas seguras, solicitud y estado de factura, lectura fiscal mínima (D-1), pedidos, resultados, facturas, carrito y continuidad de laboratorio (D-2) y negativos de alcance. Sólo sobre el build de Batch 2 y con autorización | Guardas propias, más estrictas (ver `RC2-LEO-FUNCIONAL-LEEME.md`) |
 | `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json` | 92 (76 operaciones + 4 R30) | **Antecedente offline**: revisión de cobertura del contrato | Reescribe toda URL a `https://rc11.invalid/blocked` y llama `skipRequest()`. **Omite siempre las 92**, por diseño; no hay bandera que lo habilite |
 
 Guardas de la colección funcional (prerequest de colección), en orden:
@@ -30,7 +30,20 @@ Qué omite cada precondición (generado desde la colección):
 | Fixtures QA o datos encadenados (ids de estudio/paquete/pedido, teléfonos sintéticos, valores de pasos previos) | 34 | A01, A02, A03, A04, A05a, A05b, A06a, A06b, A07, A10r, A11b, A11c, B01, B01r, B02, B02r, B03, B03r, B04, B05, B06a, B06b, B06r, B17, B13, B16, B20, B19r/B20r, B21, B21x, R01b, R02b, R02c, R03b |
 | Sin precondiciones (corre siempre que pasen las guardas) | 2 | B07, R06 |
 
-Las operaciones de Leo que esta colección no incluye (step-up, ligas seguras, solicitud y estado de factura, lectura fiscal mínima, pedidos y resultados por id, carrito de laboratorio) están en la colección funcional diferenciada `…-rc2-LEO-FUNCIONAL` (47 solicitudes; cobertura en `RC2-LEO-FUNCIONAL-LEEME.md` y `RC2-LEO-FUNCIONAL-COBERTURA.csv`). Antes sólo aparecían en la rc2-90, que las omite siempre.
+Las operaciones de Leo que esta colección no incluye (step-up, ligas seguras, solicitud y estado de factura, lectura fiscal mínima, pedidos y resultados por id, carrito de laboratorio) están en la colección funcional diferenciada `…-rc2-LEO-FUNCIONAL` (48 solicitudes; cobertura en `RC2-LEO-FUNCIONAL-LEEME.md` y `RC2-LEO-FUNCIONAL-COBERTURA.csv`). Antes sólo aparecían en la rc2-90, que las omite siempre.
+
+### B20/B21x en rev4 (OBS-NEWMAN-QUANTITY y OBS-NEWMAN-B21X)
+
+| ID | Perfil | Capacidades | Línea | Marca | Cuerpo | Esperado | Traza |
+|---|---|---|---|---|---|---|---|
+| B20 | native (`native_machine_credential` + `native_bearer_token`) | Usuario nativo | `laboratory` | `lab_brand` | `{"laboratory_test_id": <entero>, "brand": …}` (`LaboratoryCartItemCreateLegacy`, sin `quantity`) | 201/409 | S08 |
+| B21x | leo (`machine_credential` + `bearer_none`) | El binding **no** concede `cart:laboratory:write` para esa marca (antes de Batch 2 no hay ninguna capacidad de laboratorio; `cart:write` siempre denegado) | `laboratory` | `lab_brand_not_granted`: `LaboratoryBrand` válida y distinta de `lab_brand` | Igual que B20 | 403 sin efecto | L06/C1 · S08 |
+| LF-L06b (`…-rc2-LEO-FUNCIONAL`) | leo (`machine_credential` + `bearer_token`) | `cart:laboratory:write` ligada a `laboratory` y `lab_brand` (Batch 2) | `laboratory` | `lab_brand` | Igual que B20 | 201 | L06 · S07 (positivo autorizado) |
+
+- Ninguna escritura positiva de Leo se agrega a esta colección. El positivo vive en la colección de Leo, con sus guardas y `qa_writes_authorized=1`.
+- B20 y B21x omiten la solicitud (`SKIPPED_PRECONDITION`) si `test_id_available` no es entero. B21x también la omite si `lab_brand_not_granted` no es una `LaboratoryBrand` válida o coincide con `lab_brand`: en ese caso no sería el caso no autorizado.
+- Variable nueva en la plantilla: `lab_brand_not_granted` (vacía).
+- Rev4 no cambia la clasificación ni el estado histórico de B20/B21x.
 
 Ejecución bajo guardas: usar el comando de la sección "Ejecución (QA, solo con autorización)" con `allowed_hosts` y `expected_release_sha` del build verificado. **En Batch 1 no se ejecutó en QA.**
 

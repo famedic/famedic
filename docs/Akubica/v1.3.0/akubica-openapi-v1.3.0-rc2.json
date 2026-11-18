@@ -1634,6 +1634,23 @@
                     "$ref": "#/components/schemas/MembershipCartItemCreate"
                   }
                 ]
+              },
+              "examples": {
+                "laboratorio": {
+                  "summary": "Laboratorio (LaboratoryCartItemCreateLegacy): laboratory_test_id entero y brand; sin quantity",
+                  "value": {
+                    "laboratory_test_id": 11,
+                    "brand": "olab"
+                  }
+                },
+                "membresia": {
+                  "summary": "Membresía (MembershipCartItemCreate)",
+                  "value": {
+                    "service_line": "medical_services",
+                    "item_type": "membership",
+                    "membership_plan_code": "basic_annual"
+                  }
+                }
               }
             }
           }
@@ -1725,12 +1742,47 @@
         },
         "x-required-capability": "cart:membership:write",
         "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
-        "description": "B22: la compra de farmacia está suspendida; la ruta documentada para el negativo es este POST y responde 503 PHARMACY_SUSPENDED sin efectos.",
+        "description": "B22: la compra de farmacia está suspendida; la ruta documentada para el negativo es este POST y responde 503 PHARMACY_SUSPENDED sin efectos. **Laboratorio (rev4):** el cuerpo es `LaboratoryCartItemCreateLegacy` (`laboratory_test_id` entero y `brand`; `quantity` no se admite). Leo sólo agrega con `cart:laboratory:write` ligada a la línea `laboratory` y a la `brand` del cuerpo (L06/C1, Batch 2); sin esa capacidad o con otra marca ⇒ 403 sin efecto. `cart:write` sigue denegado. Ver `x-authorization-cases`.",
         "x-leo-capabilities": {
           "medical_services": "EXISTE (membresía)",
           "laboratory": "cart:laboratory:write por línea y marca (L06/C1)",
           "implementation_status": "BATCH_2"
-        }
+        },
+        "x-authorization-cases": [
+          {
+            "case": "native-laboratorio",
+            "profile": "native",
+            "capabilities": [
+              "token de usuario nativo"
+            ],
+            "service_line": "laboratory",
+            "brand": "cualquier LaboratoryBrand",
+            "expected": "201 LaboratoryCartItemAddedResponse (409 si ya existe)",
+            "trace": "rc2-NEWMAN B20 · S08"
+          },
+          {
+            "case": "leo-laboratorio-autorizado",
+            "profile": "leo",
+            "capabilities": [
+              "cart:laboratory:write ligada a service_line=laboratory y a la brand del cuerpo"
+            ],
+            "service_line": "laboratory",
+            "brand": "la marca concedida en el binding",
+            "expected": "201 LaboratoryCartItemAddedResponse (Batch 2)",
+            "trace": "L06 · S07 · LEO-FUNCIONAL LF-L06b"
+          },
+          {
+            "case": "leo-laboratorio-no-autorizado",
+            "profile": "leo",
+            "capabilities": [
+              "sin cart:laboratory:write para esa marca (antes de Batch 2: sin ninguna capacidad de laboratorio)"
+            ],
+            "service_line": "laboratory",
+            "brand": "marca no concedida",
+            "expected": "403 sin efecto",
+            "trace": "L06 · S08 · rc2-NEWMAN B21x"
+          }
+        ]
       }
     },
     "/cart/items/{cart_item_id}": {
@@ -4277,28 +4329,38 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": [
-                  "tax_profile_id"
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/LeoInvoiceRequestCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NativeInvoiceRequestCreate"
+                  }
                 ],
-                "properties": {
-                  "tax_profile_id": {
-                    "type": "integer"
-                  },
-                  "cfdi_use": {
-                    "type": "string"
-                  },
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  },
-                  "notes": {
-                    "type": "string"
+                "description": "El esquema aplicable lo determina el consumidor autenticado, no la forma del cuerpo (ver `x-request-schema-by-consumer`): Leo ⇒ `LeoInvoiceRequestCreate` (id opaco string); native ⇒ `NativeInvoiceRequestCreate` (id interno integer, sin cambios). Las dos ramas son excluyentes por tipo de `tax_profile_id`."
+              },
+              "examples": {
+                "leo": {
+                  "summary": "Leo: id opaco recibido en GET /user/tax-profiles (L13b)",
+                  "value": {
+                    "tax_profile_id": "tp_3Lm9aZ",
+                    "cfdi_use": "D01"
+                  }
+                },
+                "native": {
+                  "summary": "Native: id interno entero (sin cambios)",
+                  "value": {
+                    "tax_profile_id": 42,
+                    "cfdi_use": "G03"
                   }
                 }
               }
             }
           }
+        },
+        "x-request-schema-by-consumer": {
+          "leo": "#/components/schemas/LeoInvoiceRequestCreate",
+          "native": "#/components/schemas/NativeInvoiceRequestCreate"
         },
         "responses": {
           "201": {
@@ -4350,6 +4412,9 @@
                 }
               }
             }
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
           }
         },
         "x-required-capability": "api:operation:api:v1:orders:invoice-request:store",
@@ -4360,7 +4425,7 @@
         "x-rollout": "Sólo con transporte habilitado y certificado, tras migración nativa por ruta; Leo denegado incluso con esta capacidad.",
         "x-leo-matrix-row": "L13",
         "x-leo-implementation-status": "BATCH_2",
-        "description": "**Leo (L13, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo)."
+        "description": "**Leo (L13, RC2-MATRIZ-PERMISOS-LEO):** permitido para recursos propios; ajeno ⇒ 404. Contrato congelado en Batch 1 · T7; implementación y certificación en Batch 2 (hoy el build QA responde 403 a Leo). **Referencia de perfil fiscal (rev4, OBS-CONTRATO-TAXPROFILE-ID):** Leo envía en `tax_profile_id` el id opaco (string) recibido en la lectura mínima `GET /user/tax-profiles` (`LeoOpaqueTaxProfileId`); el servidor lo resuelve contra los perfiles propios del usuario. Un id desconocido, ajeno o entero ⇒ 422 VALIDATION_ERROR sin efecto y sin revelar existencia. El contrato native conserva el id interno entero (`NativeInvoiceRequestCreate`). Los fixtures enteros (`tax_profile_id_int`) no forman parte del contrato de Leo."
       }
     },
     "/user/family": {
@@ -12598,9 +12663,7 @@
         ],
         "properties": {
           "id": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Id opaco."
+            "$ref": "#/components/schemas/LeoOpaqueTaxProfileId"
           },
           "business_name": {
             "type": "string"
@@ -12676,6 +12739,65 @@
                 }
               ]
             }
+          }
+        ]
+      },
+      "LeoOpaqueTaxProfileId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Id opaco de un perfil fiscal propio, tal como lo entrega la lectura mínima (L13b, `LeoTaxProfileSummary.id`). Leo lo envía sin transformar como `tax_profile_id` de `LeoInvoiceRequestCreate` (L13). No es el id interno entero ni se deriva de él; un id desconocido o ajeno se rechaza igual (422 VALIDATION_ERROR en `tax_profile_id`, sin revelar existencia).",
+        "examples": [
+          "tp_3Lm9aZ"
+        ]
+      },
+      "LeoInvoiceRequestCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tax_profile_id"
+        ],
+        "properties": {
+          "tax_profile_id": {
+            "$ref": "#/components/schemas/LeoOpaqueTaxProfileId"
+          },
+          "cfdi_use": {
+            "type": "string",
+            "description": "Opcional; por omisión, el `cfdi_use` del perfil (`LeoTaxProfileSummary.cfdi_use`)."
+          }
+        },
+        "description": "Solicitud de factura de Leo (L13, Batch 2): referencia de extremo a extremo con el id opaco de la lectura mínima (L13b). Sin correo ni notas libres. Un entero (id interno) no es válido para Leo: 422 VALIDATION_ERROR.",
+        "examples": [
+          {
+            "tax_profile_id": "tp_3Lm9aZ",
+            "cfdi_use": "D01"
+          }
+        ]
+      },
+      "NativeInvoiceRequestCreate": {
+        "type": "object",
+        "required": [
+          "tax_profile_id"
+        ],
+        "properties": {
+          "tax_profile_id": {
+            "type": "integer"
+          },
+          "cfdi_use": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "description": "Solicitud de factura de consumidores nativos (sin cambios respecto a rev3): `tax_profile_id` es el id interno entero del perfil fiscal. No aplica a Leo.",
+        "examples": [
+          {
+            "tax_profile_id": 42,
+            "cfdi_use": "G03"
           }
         ]
       }
