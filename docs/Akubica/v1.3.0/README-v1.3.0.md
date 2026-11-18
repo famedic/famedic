@@ -1,6 +1,6 @@
 # Akúbica API v1.3.0 — Entrega de integración
 
-Entrega versionada para la integración de Akúbica con FAMEDIC. La documentación histórica permanece sin cambios; esta carpeta usa como fuente técnica el código, `docs/Akubica/akubica-openapi.yaml` y la regresión actual de la rama `feature/akubica-api-v1.3.0`.
+Entrega versionada para la integración de Akúbica con FAMEDIC. La documentación histórica permanece sin cambios; esta carpeta usa como fuente técnica el código, `docs/Akubica/akubica-openapi.yaml` y la regresión actual de la rama de integración `prep/akubica-technical-integration-rc11` (candidato de Batch 2 registrado en `RC2-MANIFIESTO.md`).
 
 ## Alcance
 
@@ -33,9 +33,9 @@ El contrato OpenAPI continúa siendo v1.2.3. Los `operationId` existentes se con
 - `akubica-api-v1.3.0-consumption-guide.md`: guía de consumo y seguridad.
 - `akubica-v1.3.0-checklist-endpoints.md`: matriz de endpoints y criterios.
 - `akubica-v1.3.0-staging-flow.md`: orden seguro de staging.
-- `akubica-openapi-v1.3.0-rc2.json`: contrato principal RC2 con 74 operaciones.
+- `akubica-openapi-v1.3.0-rc2.json`: contrato principal RC2 con 76 operaciones (64 paths).
 - `r30-first-party-v1.3.0.json`: suplemento first party separado con cuatro operaciones R30; no es capacidad de Leo.
-- `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: colección reconciliada de 90 solicitudes.
+- `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: colección reconciliada de 92 solicitudes que cubre las 76 operaciones principales y las 4 R30. El sufijo `-90` del nombre de archivo es histórico y se conserva para no alterar referencias ni checksums; no indica el número de solicitudes.
 - `Famedic-Akubica-v1.3.0-rc2-synthetic.environment.json`: environment sin secretos y con URLs reservadas.
 - `RC2-MATRIZ-TRAZABILIDAD-46.csv`: trazabilidad de los 46 escenarios.
 - `openapi-changelog-v1.3.0.md`: cambios documentales y compatibilidad.

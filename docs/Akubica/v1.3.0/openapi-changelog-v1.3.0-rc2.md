@@ -2,7 +2,11 @@
 
 ## Compatibilidad
 
-OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de 74 operaciones derivado del paquete RC1.1 reconciliado. R30 se conserva en un documento first party separado de cuatro operaciones.
+OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de 76 operaciones derivado del paquete RC1.1 reconciliado. R30 se conserva en un documento first party separado de cuatro operaciones.
+
+## Batch 1 · tareas 1–2 (2026-11-18)
+
+Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
 ## Correcciones y límites
 
