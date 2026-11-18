@@ -22,7 +22,7 @@
 - Local: 20 PASS y 137 assertions en Pest.
 - Autorización offline: 24 PASS.
 - Staging/Newman/UAT: NOT_RUN.
-- B02: BLOCKED por falta de fuente autorizada.
+- B02: BLOCKED por falta de fuente autorizada (histórico; criterio vigente en `RC2-B02-BLOQUEO-FUENTE-PAQUETES.md`, Batch 1 · T6).
 - B24: BLOCKED para certificación operativa porque la continuidad permanece deshabilitada.
 
 ## Integridad

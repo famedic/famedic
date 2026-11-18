@@ -7,7 +7,7 @@
 - [ ] Se registra el SHA exacto que será desplegado.
 - [ ] Seguridad aprueba secretos HMAC, máquina, OTP y Bearer mediante gestor seguro.
 - [ ] Akúbica entrega fixtures QA autorizados para estudios, membresías y usuario Leo.
-- [ ] Se confirma que B02 tiene catálogo autorizado de paquetes y precios.
+- [ ] B02 (S05): hay un paquete QA con nombre, marca, precio público, precio FAMEDIC y ahorro. `composition_status` es informativo y no se exige `validated` (criterio de Batch 1 · T6 en `RC2-B02-BLOQUEO-FUENTE-PAQUETES.md`).
 - [ ] Se confirma el mecanismo de continuidad B24 hacia FAMEDIC.
 
 ## Fase A
