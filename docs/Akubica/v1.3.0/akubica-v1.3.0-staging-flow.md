@@ -25,7 +25,7 @@ La colección calcula HMAC-SHA256 sobre el método, ruta, timestamp, nonce y has
 
 - No enviar OTP, Bearer, teléfonos completos o secretos a reportes.
 - No solicitar ni aceptar `account_context_token` como sustituto de Bearer.
-- No ejecutar payment links, pagos, activaciones, farmacia ni laboratorio transaccional.
+- `POST /checkout/payment-link` sólo como prueba negativa de Leo (B25/S14: HTTP 403, sin liga ni cobro). No ejecutar pagos, activaciones, farmacia ni laboratorio transaccional.
 - Para `checkout/prepare`, registrar sólo HTTP, correlation ID, fecha y los valores `assistant_can_pay=false`, `can_continue_on_platform=true` y `can_continue_to_payment_platform=false`. Si hay `continuity_url`, registrar sólo su presencia y su host first-party, nunca el token. La continuidad (B24 y la de laboratorio D-2) sólo existe en staging y nunca en producción.
 
 ## Evidencia

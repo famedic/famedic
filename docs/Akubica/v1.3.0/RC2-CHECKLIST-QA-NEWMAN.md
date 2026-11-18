@@ -21,7 +21,7 @@
 
 1. Ejecutar catálogo, precios, Plan Básico y estado de membresía.
 2. Ejecutar altas, duplicados, retiros, concurrencia, read-back y aislamiento de carritos.
-3. Ejecutar checkout prepare y negativos de Leo para pago, payment link, cupones y saldo legacy.
+3. Ejecutar checkout prepare y los negativos de Leo para pago, cupones y saldo legacy. Payment link (B25/S14) sólo como prueba negativa de seguridad: HTTP 403, sin liga ni cobro, y readback de sólo lectura sin intento de pago creado.
 4. Verificar que no se activa membresía antes de pago confirmado.
 5. Ejecutar solo los cuatro casos R30 desde el documento first-party separado, nunca como capacidad de Leo.
 

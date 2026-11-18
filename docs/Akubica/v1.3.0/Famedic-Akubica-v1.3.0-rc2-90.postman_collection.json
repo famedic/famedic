@@ -759,7 +759,7 @@
           }
         ],
         "url": "{{base_url}}/checkout/payment-link",
-        "description": "case_id=PAYMENT-LINK-LEO-DENIED; operationId=checkoutPaymentLink; perfil=leo; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "description": "case_id=PAYMENT-LINK-LEO-DENIED; operationId=checkoutPaymentLink; PRUEBA NEGATIVA DE SEGURIDAD (Batch 1 · T5, escenario S14): se ejecuta sólo para comprobar HTTP 403 y la ausencia de liga o cobro. No es una capacidad de Leo ni un flujo de pago. perfil=leo; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"brand\": \"olab\",\n  \"expires_in_minutes\": 5\n}",
@@ -816,7 +816,7 @@
           }
         ],
         "url": "{{base_url}}/checkout/payment-link",
-        "description": "case_id=PAYMENT-LINK-WILDCARD-DENIED; operationId=checkoutPaymentLink; perfil=leo-wildcard; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "description": "case_id=PAYMENT-LINK-WILDCARD-DENIED; operationId=checkoutPaymentLink; PRUEBA NEGATIVA DE SEGURIDAD (Batch 1 · T5, escenario S14): se ejecuta sólo para comprobar HTTP 403 y la ausencia de liga o cobro. No es una capacidad de Leo ni un flujo de pago. perfil=leo-wildcard; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"brand\": \"olab\",\n  \"expires_in_minutes\": 5\n}",
@@ -873,7 +873,7 @@
           }
         ],
         "url": "{{base_url}}/checkout/payment-link",
-        "description": "case_id=PAYMENT-LINK-READONLY-DENIED; operationId=checkoutPaymentLink; perfil=native-readonly; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "description": "case_id=PAYMENT-LINK-READONLY-DENIED; operationId=checkoutPaymentLink; PRUEBA NEGATIVA DE SEGURIDAD (Batch 1 · T5, escenario S14): se ejecuta sólo para comprobar HTTP 403 y la ausencia de liga o cobro. No es una capacidad de Leo ni un flujo de pago. perfil=native-readonly; esperado UAT=403.  NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"brand\": \"olab\",\n  \"expires_in_minutes\": 5\n}",
@@ -930,7 +930,7 @@
           }
         ],
         "url": "{{base_url}}/checkout/payment-link",
-        "description": "case_id=PAYMENT-LINK-NATIVE; operationId=checkoutPaymentLink; perfil=native-payments; esperado UAT=200. Checkout nativo de laboratorio con marca válida; sin ruta de pago médico Leo; efecto real de emisión prohibido en esta edición; autorización separada. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
+        "description": "case_id=PAYMENT-LINK-NATIVE; operationId=checkoutPaymentLink; perfil=native-payments; esperado UAT=200. Sólo referencia de contrato nativo; fuera del alcance de Leo y del UAT de Batch 3 (Batch 1 · T5). Checkout nativo de laboratorio con marca válida; sin ruta de pago médico Leo; efecto real de emisión prohibido en esta edición; autorización separada. NO EJECUTAR: edición offline, sin credenciales ni respuestas guardadas.",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"brand\": \"olab\",\n  \"expires_in_minutes\": 5\n}",

@@ -47,7 +47,7 @@ El valor puede representar un cupón o un saldo a favor según la configuración
 GET /checkout/prepare?service_line=medical_services
 ```
 
-Esta operación sólo devuelve carrito, requisitos, warnings, las banderas de checkout y, si la continuidad está habilitada, `continuity_url`. No crea pagos, payment links, activaciones ni llamadas a gateways. No usar `POST /checkout/payment-link` en esta entrega.
+Esta operación sólo devuelve carrito, requisitos, warnings, las banderas de checkout y, si la continuidad está habilitada, `continuity_url`. No crea pagos, payment links, activaciones ni llamadas a gateways. Leo no usa `POST /checkout/payment-link` como flujo; sólo se ejecuta como prueba negativa de seguridad (ver abajo).
 
 Semántica congelada en Batch 1 · T4 (plan v1.0, tabla 4; D-2):
 
@@ -63,7 +63,7 @@ La prohibición de pago del asistente no impide que el usuario continúe en FAME
 - **Membresía (`medical_services`, B24/S12):** implementada. La continuidad sólo puede encenderse con `APP_ENV=staging` y la variable autorizada por Seguridad; en producción siempre está apagada.
 - **Laboratorio (`laboratory`, D-2, decisión de Eulalio Medina, 2026-11-18 11:15 CST):** la continuidad también aplica, con las mismas reglas (un uso, TTL ≤ 10 min, ligada a usuario, carrito y marca, sólo staging). Leo recibe `LeoLaboratoryCheckoutPrepareResponse`, minimizada, sin contactos, direcciones ni métodos de pago. **Implementación: Batch 2**; hoy Leo recibe 403 en la línea de laboratorio.
 - El DTO legacy `LaboratoryCheckoutPrepareResponse` es sólo para consumidores nativos. Ahí `can_continue_to_payment_platform` conserva su significado legacy (true si hay ítems).
-- `POST /checkout/payment-link` para Leo responde siempre 403, sin liga ni cobro.
+- `POST /checkout/payment-link` para Leo responde siempre 403, sin liga ni cobro. En Postman/Newman se conserva sólo como **prueba negativa de seguridad** (B25/S14, Batch 1 · T5): se ejecuta únicamente para comprobar HTTP 403 y la ausencia de liga o cobro (sin URL ni ids de liga o intento de pago en la respuesta; en Batch 2 hay readback de sólo lectura sin intento de pago creado).
 
 ## Reconocimiento pre-OTP y elevación
 

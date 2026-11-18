@@ -10,8 +10,8 @@ Marcar cada caso solo con evidencia sanitizada: HTTP, `operationId`, `X-Correlat
 | [ ] | GET | `/memberships/status` | `membershipStatusShow` | Bearer; no acceso pre-OTP. |
 | [ ] | GET | `/cart?service_line=medical_services` | `cartIndex` | Aislamiento de carrito médico. |
 | [ ] | GET | `/cart/totals?service_line=medical_services` | `cartTotals` | Totales no negativos y recalculados. |
-| [ ] | POST | `/cart/medical-benefit` | `medicalServiceBenefitApply` | Cupón/saldo aplicado sin importar enviado por cliente. |
-| [ ] | DELETE | `/cart/medical-benefit?service_line=medical_services` | `medicalServiceBenefitRemove` | Beneficio retirado. |
+| [ ] | POST | `/cart/medical-benefit` | `medicalServiceBenefitApply` | **Perfil native; para Leo DIFERIDO (C6/L16, 403).** Cupón/saldo aplicado sin importar enviado por cliente. Leo sólo informa que los beneficios elegibles se aplican en el checkout de FAMEDIC. |
+| [ ] | DELETE | `/cart/medical-benefit?service_line=medical_services` | `medicalServiceBenefitRemove` | **Perfil native; para Leo DIFERIDO (C6/L16, 403).** Beneficio retirado. |
 | [ ] | GET | `/checkout/prepare?service_line=medical_services` | `checkoutPrepare` | `assistant_can_pay=false`, `can_continue_on_platform=true`, `can_continue_to_payment_platform=false`; `continuity_url` sólo first-party y con B24 (staging); sin pago, liga de pago ni gateway. |
 | [ ] | GET | `/checkout/prepare?service_line=laboratory&brand={brand}` | `checkoutPrepare` | **Batch 2 (D-2).** Respuesta Leo minimizada (`LeoLaboratoryCheckoutPrepareResponse`) con las mismas tres banderas y continuidad first-party sólo en staging. |
 | [ ] | POST | `/integrations/atix/phone-lookups` | `atixPhoneLookup` | HMAC, nonce, timestamp, idempotencia y anti-enumeración. |
@@ -30,4 +30,4 @@ Marcar cada caso solo con evidencia sanitizada: HTTP, `operationId`, `X-Correlat
 
 ## Fuera de alcance
 
-No ejecutar `POST /checkout/payment-link`, compras de laboratorio, citas, farmacia, pagos, activaciones de membresía ni operaciones de producción.
+`POST /checkout/payment-link` sólo se ejecuta como prueba negativa de seguridad de Leo (B25/S14: HTTP 403, sin liga ni cobro); nunca con credencial de pagos. No ejecutar compras de laboratorio, citas, farmacia, pagos, activaciones de membresía ni operaciones de producción.

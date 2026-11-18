@@ -22,7 +22,7 @@ La integración no mezcla laboratorio, farmacia y servicio médico:
 | Farmacia | Fuera de alcance; no se consultan ni modifican carritos de farmacia. |
 | Servicio médico | Membresías, carrito `medical_services`, beneficios y preparación de checkout. |
 
-Leo no paga, no tokeniza tarjetas, no genera payment links y no activa membresías desde esta integración. La colección no contiene esas operaciones.
+Leo no paga, no tokeniza tarjetas, no genera payment links y no activa membresías desde esta integración. La única llamada relacionada en la colección es la prueba negativa de seguridad B25 (`POST /checkout/payment-link`, S14), que se ejecuta sólo para comprobar HTTP 403 y que no haya liga ni cobro.
 
 ## Compatibilidad
 
@@ -47,4 +47,4 @@ El contrato OpenAPI continúa siendo v1.2.3. Los `operationId` existentes se con
 2. Definir `base_url`, `token` y, para ATIX, las variables sensibles desde el gestor seguro del ambiente; no guardarlas en este archivo.
 3. Usar únicamente cuentas, cupones y teléfonos de prueba controlados.
 4. Ejecutar primero catálogo, planes y estado; después carrito médico y beneficios.
-5. Validar que `checkout/prepare` devuelve `assistant_can_pay=false`, `can_continue_on_platform=true` y `can_continue_to_payment_platform=false` (semántica de Batch 1 · T4 en la guía de consumo) y no invocar payment links.
+5. Validar que `checkout/prepare` devuelve `assistant_can_pay=false`, `can_continue_on_platform=true` y `can_continue_to_payment_platform=false` (semántica de Batch 1 · T4 en la guía de consumo) e invocar payment links sólo como la prueba negativa B25.
