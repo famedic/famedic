@@ -8,6 +8,10 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · cierre de seguridad (2026-11-18)
+
+El ejemplo de `phone` en el OpenAPI pasa de un número secuencial con formato real (`+5255…5678`, preexistente) al sintético `+525500000003`, para cumplir el criterio de seguridad de la tabla 5 (sin teléfonos reales). No cambia el schema.
+
 ## Batch 1 · tarea 8 (2026-11-18)
 
 Nueva `RC2-MATRIZ-ESCENARIOS-CLASIFICACION.csv` / `.md`. Los 46 escenarios quedan así: 45 OBLIGATORIO_LANZAMIENTO, 1 NO_APLICABLE (B26, activación first-party) y 1 DIFERIDO adicional (X01, cupones aplicados por Leo). Cada uno se asigna a una fila S01–S16 de la tabla 8 o a UAT (R08) y conserva su estado histórico.

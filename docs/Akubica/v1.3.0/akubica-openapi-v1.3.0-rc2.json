@@ -5309,7 +5309,7 @@
                 "$ref": "#/components/schemas/AtixPhoneLookupRequest"
               },
               "example": {
-                "phone": "+525512345678",
+                "phone": "+525500000003",
                 "conversation_id": "8f5d9f2d-7b7a-4a89-9f2c-111111111111",
                 "channel_event_id": "evt-sandbox-0001",
                 "channel": "whatsapp",
