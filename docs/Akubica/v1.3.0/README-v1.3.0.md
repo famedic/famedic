@@ -37,7 +37,8 @@ El contrato OpenAPI continúa siendo v1.2.3. Los `operationId` existentes se con
 - `r30-first-party-v1.3.0.json`: suplemento first party separado con cuatro operaciones R30; no es capacidad de Leo.
 - `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: colección reconciliada de 92 solicitudes que cubre las 76 operaciones principales y las 4 R30. El sufijo `-90` del nombre de archivo es histórico y se conserva para no alterar referencias ni checksums; no indica el número de solicitudes.
 - `Famedic-Akubica-v1.3.0-rc2-synthetic.environment.json`: environment sin secretos y con URLs reservadas.
-- `RC2-MATRIZ-TRAZABILIDAD-46.csv`: trazabilidad de los 46 escenarios.
+- `RC2-MATRIZ-TRAZABILIDAD-46.csv` (en el repo, en `RC2-PREPARACION-QA/A-DOCUMENTACION/`, no en este directorio): trazabilidad histórica de los 46 escenarios.
+- `RC2-MATRIZ-ESCENARIOS-CLASIFICACION.csv` / `.md`: clasificación de los 46 escenarios (obligatorio para lanzamiento, diferido o no aplicable) y su S01–S16 del plan (Batch 1 · T8).
 - `RC2-MATRIZ-PERMISOS-LEO.md`: matriz de permisos de Leo por capacidad y operación (Batch 1 · T3). Distingue lo que existe hoy de lo que implementa Batch 2.
 - `openapi-changelog-v1.3.0.md`: cambios documentales y compatibilidad.
 
