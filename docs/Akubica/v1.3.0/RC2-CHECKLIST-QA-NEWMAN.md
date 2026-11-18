@@ -30,8 +30,9 @@
 1. Sólo sobre el build de Batch 2 desplegado en staging, con `target_env=staging`, `expected_release_sha` verificado y `leo_batch2_contract=1` (ver `RC2-LEO-FUNCIONAL-LEEME.md`).
 2. Credencial y Bearer de Leo (INT-003) en runtime. Nunca credencial native.
 3. Step-up (L10/L14) sólo con `sms_authorized=1`. El código lo lee el titular y el operador lo teclea con `read -s`.
-4. Escrituras (L06 carrito de laboratorio, L13 solicitud de factura y negativos con efecto) sólo con su bandera y los fixtures INT-005.
+4. Escrituras (L06 carrito de laboratorio, L13 solicitud de factura y negativos con efecto) sólo con su bandera y los fixtures INT-005. La solicitud de factura usa el id opaco que entrega la lectura mínima (LF-L13b → `tax_profile_ref`); no hay fixture entero para Leo (rev4).
 5. Las ligas seguras y la de continuidad no se abren desde Newman; su apertura es prueba de navegador.
+6. B21x (`rc2-NEWMAN`) exige `lab_brand_not_granted`, una marca válida sin `cart:laboratory:write` en el binding de Leo. El positivo autorizado de laboratorio es LF-L06b (L06/S07).
 
 ## Criterio de salida
 

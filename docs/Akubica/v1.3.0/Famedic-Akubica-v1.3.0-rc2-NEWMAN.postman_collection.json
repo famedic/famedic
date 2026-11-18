@@ -2308,10 +2308,10 @@
               }
             ],
             "url": "{{base_url}}/cart/items",
-            "description": "requires: native_bearer_token,native_machine_credential,test_id_available,lab_brand",
+            "description": "requires: native_bearer_token,native_machine_credential,test_id_available,lab_brand · perfil native (native_machine_credential + native_bearer_token) · línea laboratory · marca {{lab_brand}} · cuerpo LaboratoryCartItemCreateLegacy (laboratory_test_id entero, sin quantity; rev4 OBS-NEWMAN-QUANTITY) · traza S08 (OpenAPI x-authorization-cases native-laboratorio)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"laboratory_test_id\": \"{{test_id_available}}\",\n  \"brand\": \"{{lab_brand}}\",\n  \"quantity\": 1\n}",
+              "raw": "{\n  \"laboratory_test_id\": {{test_id_available}},\n  \"brand\": \"{{lab_brand}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2320,6 +2320,17 @@
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// rev4 (OBS-NEWMAN-QUANTITY): el cuerpo es LaboratoryCartItemCreateLegacy (laboratory_test_id entero, brand; sin quantity).",
+                  "// Si test_id_available no es un entero positivo, el cuerpo no sería conforme: se omite (precondición), nunca PASS.",
+                  "if (pm.variables.get('test_id_available') && !/^[1-9][0-9]*$/.test(String(pm.variables.get('test_id_available')))) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> test_id_available no entero'); pm.execution.skipRequest(); }"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -2449,7 +2460,7 @@
           "response": []
         },
         {
-          "name": "B21x Leo no se amplía a laboratorio",
+          "name": "B21x Leo sin cart:laboratory:write para la marca: 403",
           "request": {
             "method": "POST",
             "header": [
@@ -2471,10 +2482,10 @@
               }
             ],
             "url": "{{base_url}}/cart/items",
-            "description": "requires: bearer_none,machine_credential,test_id_available,lab_brand",
+            "description": "requires: bearer_none,machine_credential,test_id_available,lab_brand_not_granted · NEGATIVA_SEGURIDAD (caso realmente no autorizado, L06/C1 · S08) · perfil leo (machine_credential + bearer_none) · capacidades: el binding NO concede cart:laboratory:write para lab_brand_not_granted (antes de Batch 2 Leo no tiene ninguna capacidad de laboratorio; cart:write siempre denegado) · línea laboratory · marca {{lab_brand_not_granted}}: LaboratoryBrand válida y distinta de la marca concedida (lab_brand) · cuerpo LaboratoryCartItemCreateLegacy (entero, sin quantity) · esperado 403 sin efecto. El positivo autorizado (Leo con cart:laboratory:write para lab_brand, 201) NO está en esta colección: se traza a L06/S07, LEO-FUNCIONAL LF-L06b, con sus guardas y qa_writes_authorized=1.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"laboratory_test_id\": \"{{test_id_available}}\",\n  \"brand\": \"{{lab_brand}}\",\n  \"quantity\": 1\n}",
+              "raw": "{\n  \"laboratory_test_id\": {{test_id_available}},\n  \"brand\": \"{{lab_brand_not_granted}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2484,11 +2495,26 @@
           },
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// rev4 (OBS-NEWMAN-QUANTITY): el cuerpo es LaboratoryCartItemCreateLegacy (laboratory_test_id entero, brand; sin quantity).",
+                  "// Si test_id_available no es un entero positivo, el cuerpo no sería conforme: se omite (precondición), nunca PASS.",
+                  "if (pm.variables.get('test_id_available') && !/^[1-9][0-9]*$/.test(String(pm.variables.get('test_id_available')))) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> test_id_available no entero'); pm.execution.skipRequest(); }",
+                  "// rev4 (OBS-NEWMAN-B21X): la marca debe ser una LaboratoryBrand válida y distinta de la concedida; si no, el caso no sería el no autorizado: se omite.",
+                  "(function () { const nb = String(pm.variables.get('lab_brand_not_granted') || ''); const g = String(pm.variables.get('lab_brand') || '');",
+                  "  if (nb && (['olab', 'swisslab', 'jenner', 'liacsa', 'azteca'].indexOf(nb) === -1 || nb === g)) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> lab_brand_not_granted inválida o igual a lab_brand'); pm.execution.skipRequest(); } })();"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('B21x HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                  "pm.test('B21x HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });",
+                  "pm.test('B21x sin ítem creado (403 sin efecto)', function () { let b = null; try { b = pm.response.json(); } catch (e) { b = null; } pm.expect(JSON.stringify(b || {})).to.not.match(/\"item\"\\s*:\\s*\\{/); });"
                 ]
               }
             }

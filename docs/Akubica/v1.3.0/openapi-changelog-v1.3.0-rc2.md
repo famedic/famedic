@@ -8,6 +8,29 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · rev4 (2026-11-18, conciliación de las observaciones de contrato de rev3)
+
+1. **OBS-CONTRATO-TAXPROFILE-ID:**
+   - Nuevos esquemas: `LeoOpaqueTaxProfileId` (string, `minLength` 1), `LeoInvoiceRequestCreate` y `NativeInvoiceRequestCreate`.
+   - `LeoInvoiceRequestCreate` usa `additionalProperties=false`, con `tax_profile_id` = id opaco y `cfdi_use` opcional, sin correo ni notas.
+   - `NativeInvoiceRequestCreate` es el cuerpo anterior sin cambios (entero, `cfdi_use`, `email`, `notes`).
+   - `LeoTaxProfileSummary.id` referencia a `LeoOpaqueTaxProfileId`; mismo tipo y misma restricción.
+   - `ordersInvoiceRequestStore`: cuerpo `oneOf` [Leo, native] con `x-request-schema-by-consumer`, ejemplos `leo`/`native` y respuesta 422 `ValidationError`.
+   - Un id desconocido, ajeno o entero enviado por Leo da 422 sin efecto. No se usa ningún fixture entero como solución para Leo.
+2. **OBS-NEWMAN-B21X:**
+   - `cartItemsStore` agrega `x-authorization-cases` (native-laboratorio, leo-laboratorio-autorizado y leo-laboratorio-no-autorizado), con perfil, capacidades, línea, marca y traza.
+   - La descripción aclara que sin `cart:laboratory:write` para la marca la respuesta es 403. No se relaja ningún control: `cart:write` sigue denegado.
+   - `rc2-NEWMAN` B21x pasa a ser el caso realmente no autorizado (marca `lab_brand_not_granted`, 403 sin efecto). El positivo autorizado se traza a L06/S07 (LF-L06b).
+3. **OBS-NEWMAN-QUANTITY:**
+   - `cartItemsStore` agrega ejemplos de cuerpo (laboratorio y membresía).
+   - B20 y B21x envían `laboratory_test_id` entero sin `quantity`, conforme a `LaboratoryCartItemCreateLegacy`. El esquema no cambia.
+
+Colecciones:
+
+- `…-rc2-LEO-FUNCIONAL`: 48 solicitudes, con la nueva LF-L13g. LF-L13b captura `tax_profile_ref` y LF-L13c/LF-L13f lo envían. Se retira `tax_profile_id_int`.
+- `…-rc2-NEWMAN`: siguen las 69 solicitudes; sólo cambian B20/B21x. Se agrega `lab_brand_not_granted` a la plantilla.
+- Sin cambios: `rc2-90`, R30, la matriz, la clasificación y el código. Los cuatro puntos cerrados de rev2 y la colección funcional de rev3 no se reabren.
+
 ## Batch 1 · rev3 (2026-11-18, Postman funcional de Leo)
 
 Nueva colección funcional diferenciada `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.postman_collection.json` (47 solicitudes) con su plantilla sin secretos, `RC2-LEO-FUNCIONAL-LEEME.md` y `RC2-LEO-FUNCIONAL-COBERTURA.csv`. Reutiliza solicitudes de `rc2-NEWMAN` (R01, R02a, R03a, R04, B23 y B25, sin cambiar aserciones) y de `rc2-90`, y cubre los flujos obligatorios de Leo que sólo estaban en el antecedente offline. Tiene guardas propias: sólo staging, producción y hosts desconocidos bloqueados, `target_env` y SHA obligatorios, sólo credencial Leo, sin first-party y pago sólo como negativa. Sin cambios en el OpenAPI, R30, `rc2-NEWMAN`, `rc2-90` ni el código.

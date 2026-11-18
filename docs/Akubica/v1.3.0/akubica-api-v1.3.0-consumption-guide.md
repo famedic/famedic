@@ -76,7 +76,7 @@ El contrato queda congelado en el OpenAPI con esquemas explícitos (`additionalP
 | `GET /orders/results`, `/orders/{id}/results` | L09 | `LeoResultsIndexResponse`, `LeoOrderResultsResponse` | Contenido, URL y descarga |
 | Step-up y `secure-link` de resultados | L10 | `OtpGrant`, `SecureLink` | Abrir o interpretar el PDF |
 | `GET /orders/invoices`, `/orders/{id}/invoices` | L12 | `LeoInvoicesIndexResponse`, `LeoOrderInvoicesResponse` | `download_url`, `download` y XML |
-| `GET`/`POST /orders/{id}/invoice-request` | L13 | `LeoInvoiceRequestStatusResponse` | `download_url` |
+| `GET`/`POST /orders/{id}/invoice-request` | L13 | `LeoInvoiceRequestStatusResponse`; cuerpo `LeoInvoiceRequestCreate` con `tax_profile_id` = id opaco recibido en `GET /user/tax-profiles` (rev4) | `download_url`; el id interno entero (sólo native, `NativeInvoiceRequestCreate`) |
 | `GET /user/tax-profiles` | L13b (D-1) | `LeoTaxProfilesResponse` (RFC enmascarado, últimos 3) | RFC completo, domicilio, CP, correo y CSF; las escrituras son 403 |
 | Step-up y `secure-link` de factura | L14 | `OtpGrant`, `SecureLink` | XML (se canaliza a Atención a usuarios) |
 | Descargas directas de resultado y factura | L11, L15 | — | **Siempre 403 para Leo** |

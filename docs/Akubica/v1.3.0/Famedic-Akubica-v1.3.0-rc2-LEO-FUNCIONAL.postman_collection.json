@@ -2,7 +2,7 @@
   "info": {
     "name": "FAMEDIC-Akubica RC2 — Newman funcional Leo (flujos obligatorios, contrato Batch 1 para el build de Batch 2)",
     "_postman_id": "8b6f1e1c-rc2-leo-funcional-0001",
-    "description": "COLECCIÓN FUNCIONAL DIFERENCIADA LEO (Batch 1 · rev3). Complementa a la colección funcional rc2-NEWMAN (69, sin cambios) con los flujos obligatorios de Leo de RC2-MATRIZ-PERMISOS-LEO (L05 D-2, L06, L07–L15, L13b, negativos L16–L20) que sólo existían en el antecedente offline rc2-90 (92, sin cambios). Reutiliza solicitudes de ambas. Sólo staging (staging.famedic.com.mx o el alias exacto); bloquea producción y hosts desconocidos; exige expected_release_sha y target_env=staging; sólo credencial Leo (machine_credential), nunca native ni first-party; payment-link y draft sólo como NEGATIVA_SEGURIDAD 403. Todo se omite (SKIPPED_PRECONDITION, nunca PASS) sin leo_batch2_contract=1 o sin sus precondiciones. Sin secretos: Bearer, credencial y códigos step-up se inyectan en runtime. Ver RC2-LEO-FUNCIONAL-LEEME.md.",
+    "description": "COLECCIÓN FUNCIONAL DIFERENCIADA LEO (Batch 1 · rev3; rev4: id opaco de perfil fiscal en L13). Complementa a la colección funcional rc2-NEWMAN (69; rev4 sólo alinea B20/B21x) con los flujos obligatorios de Leo de RC2-MATRIZ-PERMISOS-LEO (L05 D-2, L06, L07–L15, L13b, negativos L16–L20) que sólo existían en el antecedente offline rc2-90 (92, sin cambios). Reutiliza solicitudes de ambas. Sólo staging (staging.famedic.com.mx o el alias exacto); bloquea producción y hosts desconocidos; exige expected_release_sha y target_env=staging; sólo credencial Leo (machine_credential), nunca native ni first-party; payment-link y draft sólo como NEGATIVA_SEGURIDAD 403. Todo se omite (SKIPPED_PRECONDITION, nunca PASS) sin leo_batch2_contract=1 o sin sus precondiciones. Sin secretos: Bearer, credencial y códigos step-up se inyectan en runtime. Ver RC2-LEO-FUNCIONAL-LEEME.md.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -921,7 +921,7 @@
               }
             ],
             "url": "{{base_url}}/user/tax-profiles",
-            "description": "Lectura mínima de perfiles fiscales propios (D-1) · fila L13b · escenario S11 · operationId=userTaxProfilesIndex (GET /user/tax-profiles) · reutiliza P90:userTaxProfilesIndex. Esperado: 200 LeoTaxProfilesResponse (RFC enmascarado, sin PII completa). requires: bearer_token,machine_credential"
+            "description": "Lectura mínima de perfiles fiscales propios (D-1) · fila L13b · escenario S11 · operationId=userTaxProfilesIndex (GET /user/tax-profiles) · reutiliza P90:userTaxProfilesIndex. Esperado: 200 LeoTaxProfilesResponse (RFC enmascarado, sin PII completa); entrega el id opaco que usa L13. requires: bearer_token,machine_credential"
           },
           "event": [
             {
@@ -930,6 +930,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('LF-L13b HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L13b id opaco (LeoOpaqueTaxProfileId) disponible para la solicitud de factura', function () { const t = pm.response.json().data.tax_profiles; t.forEach(function (p) { pm.expect(p.id, 'id opaco string').to.be.a('string').and.not.empty; }); if (t.length) { const d = t.filter(function (p) { return p.is_default === true; })[0] || t[0]; pm.collectionVariables.set('tax_profile_ref', d.id); } });",
                   "pm.test('LF-L13b LeoTaxProfileSummary exacto', function () { const t = pm.response.json().data.tax_profiles; pm.expect(t).to.be.an('array'); t.forEach(function (p) { Object.keys(p).forEach(function (k) { pm.expect(['id','business_name','rfc_masked','tax_regime','cfdi_use','is_default'], 'campo ' + k).to.include(k); }); ['id','business_name','rfc_masked','tax_regime','cfdi_use'].forEach(function (k) { pm.expect(p, k).to.have.property(k); }); pm.expect(p.id).to.be.a('string'); pm.expect(p.rfc_masked).to.match(/^\\*{9,10}[A-Z0-9]{3}$/); }); });",
                   "pm.test('LF-L13b sin PII fiscal completa (RFC, domicilio, CP, correo, constancia)', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(rfc|postal_code|zip_code|address|fiscal_address|email|tax_certificate|csf|constancia\\w*)\"\\s*:/i); pm.expect(s).to.not.match(/\\b[A-ZÑ&]{3,4}\\d{6}[A-Z0-9]{3}\\b/); });"
                 ]
@@ -979,6 +980,54 @@
           "response": []
         },
         {
+          "name": "LF-L13g Leo envía un id interno entero (forma native): rechazo de esquema",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{invoice_request_order_id}}/invoice-request",
+            "description": "NEGATIVA_SEGURIDAD · Leo envía un id interno entero (forma native): rechazo de esquema · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStore (POST /orders/{order_id}/invoice-request) · reutiliza P90:ordersInvoiceRequestStore. Esperado: 422 VALIDATION_ERROR sin efecto (LeoInvoiceRequestCreate sólo admite el id opaco string). Rev4 (OBS-CONTRATO-TAXPROFILE-ID): el entero es la forma NativeInvoiceRequestCreate; para Leo no es válido aunque exista un perfil con ese id interno. Un 201 o 409 sería FAIL. Sólo con leo_negative_writes_authorized=1. requires: bearer_token,machine_credential,invoice_request_order_id,leo_negative_writes_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tax_profile_id\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L13g HTTP 422', function () { pm.expect(pm.response.code).to.be.oneOf([422]); });",
+                  "pm.test('LF-L13g VALIDATION_ERROR en tax_profile_id, sin solicitud creada', function () { const b = pm.response.json(); pm.expect(b.error.code).to.eql('VALIDATION_ERROR'); pm.expect(JSON.stringify(b)).to.not.match(/\"invoice_request\"\\s*:\\s*\\{/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
           "name": "LF-L13c Solicitar factura de pedido propio del mismo mes (tras confirmación del usuario)",
           "request": {
             "method": "POST",
@@ -1001,10 +1050,10 @@
               }
             ],
             "url": "{{base_url}}/orders/{{invoice_request_order_id}}/invoice-request",
-            "description": "Solicitar factura de pedido propio del mismo mes (tras confirmación del usuario) · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStore (POST /orders/{order_id}/invoice-request) · reutiliza P90:ordersInvoiceRequestStore. Esperado: 201 LeoInvoiceRequestStatusResponse con invoice_request. Escritura QA (fixture INT-005): sólo con invoice_request_authorized=1. tax_profile_id es integer en el contrato (ver OBS-CONTRATO-TAXPROFILE-ID). requires: bearer_token,machine_credential,invoice_request_order_id,tax_profile_id_int,invoice_request_authorized",
+            "description": "Solicitar factura de pedido propio del mismo mes (tras confirmación del usuario) · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStore (POST /orders/{order_id}/invoice-request) · reutiliza P90:ordersInvoiceRequestStore. Esperado: 201 LeoInvoiceRequestStatusResponse con invoice_request. Escritura QA (fixture INT-005): sólo con invoice_request_authorized=1. Cuerpo LeoInvoiceRequestCreate: tax_profile_id = id opaco (string) recibido en LF-L13b, sin transformar (rev4, OBS-CONTRATO-TAXPROFILE-ID). requires: bearer_token,machine_credential,invoice_request_order_id,tax_profile_ref,invoice_request_authorized",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tax_profile_id\": {{tax_profile_id_int}}\n}",
+              "raw": "{\n  \"tax_profile_id\": \"{{tax_profile_ref}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1128,10 +1177,10 @@
               }
             ],
             "url": "{{base_url}}/orders/{{invoice_old_order_id}}/invoice-request",
-            "description": "Solicitud de factura fuera del mes calendario · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStore (POST /orders/{order_id}/invoice-request) · reutiliza P90:ordersInvoiceRequestStore. Esperado: 409 ORDER_NOT_INVOICEABLE sin efecto. Pedido propio de un mes anterior (fixture INT-005). requires: bearer_token,machine_credential,invoice_old_order_id,tax_profile_id_int,invoice_request_authorized",
+            "description": "Solicitud de factura fuera del mes calendario · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStore (POST /orders/{order_id}/invoice-request) · reutiliza P90:ordersInvoiceRequestStore. Esperado: 409 ORDER_NOT_INVOICEABLE sin efecto. Pedido propio de un mes anterior (fixture INT-005). Cuerpo LeoInvoiceRequestCreate con el id opaco de LF-L13b. requires: bearer_token,machine_credential,invoice_old_order_id,tax_profile_ref,invoice_request_authorized",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tax_profile_id\": {{tax_profile_id_int}}\n}",
+              "raw": "{\n  \"tax_profile_id\": \"{{tax_profile_ref}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1498,7 +1547,7 @@
               }
             ],
             "url": "{{base_url}}/cart/items",
-            "description": "Agregar estudio propio al carrito de laboratorio · fila L06 · escenario S07 · operationId=cartItemsStore (POST /cart/items) · reutiliza P90:cartItemsStore. Esperado: 201 con el ítem; precio calculado en servidor. Cuerpo LaboratoryCartItemCreateLegacy (laboratory_test_id, brand). Escritura QA: sólo con qa_writes_authorized=1. requires: bearer_token,machine_credential,lab_brand,test_id_available,qa_writes_authorized",
+            "description": "Agregar estudio propio al carrito de laboratorio · fila L06 · escenario S07 · operationId=cartItemsStore (POST /cart/items) · reutiliza P90:cartItemsStore. Esperado: 201 con el ítem; precio calculado en servidor. Positivo autorizado de L06/S07: perfil leo (machine_credential + bearer_token), capacidad cart:laboratory:write ligada a la línea laboratory y a la marca lab_brand (Batch 2). Contraparte no autorizada: rc2-NEWMAN B21x (otra marca, 403). Cuerpo LaboratoryCartItemCreateLegacy (laboratory_test_id entero, brand; sin quantity). Escritura QA: sólo con qa_writes_authorized=1. requires: bearer_token,machine_credential,lab_brand,test_id_available,qa_writes_authorized",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"laboratory_test_id\": {{test_id_available}},\n  \"brand\": \"{{lab_brand}}\"\n}",
@@ -1510,6 +1559,15 @@
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.variables.get('test_id_available') && !/^[1-9][0-9]*$/.test(String(pm.variables.get('test_id_available')))) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> test_id_available no entero'); pm.execution.skipRequest(); }"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
