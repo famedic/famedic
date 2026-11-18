@@ -2,7 +2,7 @@
   "info": {
     "name": "FAMEDIC-Akubica RC2 — Newman funcional Leo (flujos obligatorios, contrato Batch 1 para el build de Batch 2)",
     "_postman_id": "8b6f1e1c-rc2-leo-funcional-0001",
-    "description": "COLECCIÓN FUNCIONAL DIFERENCIADA LEO (Batch 1 · rev3; rev4: id opaco de perfil fiscal en L13). Complementa a la colección funcional rc2-NEWMAN (69; rev4 sólo alinea B20/B21x) con los flujos obligatorios de Leo de RC2-MATRIZ-PERMISOS-LEO (L05 D-2, L06, L07–L15, L13b, negativos L16–L20) que sólo existían en el antecedente offline rc2-90 (92, sin cambios). Reutiliza solicitudes de ambas. Sólo staging (staging.famedic.com.mx o el alias exacto); bloquea producción y hosts desconocidos; exige expected_release_sha y target_env=staging; sólo credencial Leo (machine_credential), nunca native ni first-party; payment-link y draft sólo como NEGATIVA_SEGURIDAD 403. Todo se omite (SKIPPED_PRECONDITION, nunca PASS) sin leo_batch2_contract=1 o sin sus precondiciones. Sin secretos: Bearer, credencial y códigos step-up se inyectan en runtime. Ver RC2-LEO-FUNCIONAL-LEEME.md.",
+    "description": "COLECCIÓN FUNCIONAL DIFERENCIADA LEO (Batch 1 · rev3; rev4: id opaco de perfil fiscal en L13). Complementa a la colección funcional rc2-NEWMAN (69; rev4 sólo alinea B20/B21x) con los flujos obligatorios de Leo de RC2-MATRIZ-PERMISOS-LEO (L05 D-2, L06, L07–L15, L13b, negativos L16–L20) que sólo existían en el antecedente offline rc2-90 (92, sin cambios). Reutiliza solicitudes de ambas. Sólo staging (staging.famedic.com.mx o el alias exacto); bloquea producción y hosts desconocidos; exige expected_release_sha y target_env=staging; sólo credencial Leo (machine_credential), nunca native ni first-party; payment-link y draft sólo como NEGATIVA_SEGURIDAD 403. Todo se omite (SKIPPED_PRECONDITION, nunca PASS) sin leo_batch2_contract=1 o sin sus precondiciones. Sin secretos: Bearer, credencial y códigos step-up se inyectan en runtime. Ver RC2-LEO-FUNCIONAL-LEEME.md.\n\nrev5 (IT-0026): LF-L17a con cuerpo válido de payment-link (`brand`), credencial Leo y 403; LF-L13g y LF-L13x marcados como inválidos deliberados. Inventario de cuerpos: `RC2-INVENTARIO-CUERPOS.md`/`.csv`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -1002,7 +1002,7 @@
               }
             ],
             "url": "{{base_url}}/orders/{{invoice_request_order_id}}/invoice-request",
-            "description": "NEGATIVA_SEGURIDAD · Leo envía un id interno entero (forma native): rechazo de esquema · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStore (POST /orders/{order_id}/invoice-request) · reutiliza P90:ordersInvoiceRequestStore. Esperado: 422 VALIDATION_ERROR sin efecto (LeoInvoiceRequestCreate sólo admite el id opaco string). Rev4 (OBS-CONTRATO-TAXPROFILE-ID): el entero es la forma NativeInvoiceRequestCreate; para Leo no es válido aunque exista un perfil con ese id interno. Un 201 o 409 sería FAIL. Sólo con leo_negative_writes_authorized=1. requires: bearer_token,machine_credential,invoice_request_order_id,leo_negative_writes_authorized",
+            "description": "NEGATIVA_SEGURIDAD · INVALIDO_DELIBERADO (cuerpo): · Leo envía un id interno entero (forma native): rechazo de esquema · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStore (POST /orders/{order_id}/invoice-request) · reutiliza P90:ordersInvoiceRequestStore. Esperado: 422 VALIDATION_ERROR sin efecto (LeoInvoiceRequestCreate sólo admite el id opaco string). Rev4 (OBS-CONTRATO-TAXPROFILE-ID): el entero es la forma NativeInvoiceRequestCreate; para Leo no es válido aunque exista un perfil con ese id interno. Un 201 o 409 sería FAIL. Sólo con leo_negative_writes_authorized=1. requires: bearer_token,machine_credential,invoice_request_order_id,leo_negative_writes_authorized",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"tax_profile_id\": 1\n}",
@@ -1225,7 +1225,7 @@
               }
             ],
             "url": "{{base_url}}/user/tax-profiles",
-            "description": "NEGATIVA_SEGURIDAD · Leo no crea perfiles fiscales · fila L13b/L20 · escenario S11 · operationId=userTaxProfilesStore (POST /user/tax-profiles) · reutiliza P90:userTaxProfilesStore. Esperado: 403 (native-only); cuerpo vacío: aun con un defecto, la validación impide crear. Un 422 significaría que la autorización no se evaluó antes de la validación: FAIL. requires: bearer_token,machine_credential",
+            "description": "NEGATIVA_SEGURIDAD · INVALIDO_DELIBERADO (cuerpo vacío a propósito): · Leo no crea perfiles fiscales · fila L13b/L20 · escenario S11 · operationId=userTaxProfilesStore (POST /user/tax-profiles) · reutiliza P90:userTaxProfilesStore. Esperado: 403 (native-only); cuerpo vacío: aun con un defecto, la validación impide crear. Un 422 significaría que la autorización no se evaluó antes de la validación: FAIL. requires: bearer_token,machine_credential",
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -1890,10 +1890,10 @@
               }
             ],
             "url": "{{base_url}}/checkout/payment-link",
-            "description": "NEGATIVA_SEGURIDAD · Leo no puede generar liga de pago · fila L17 · escenario S14 · operationId=checkoutPaymentLink (POST /checkout/payment-link) · reutiliza NEWMAN:B25. Esperado: 403 sin liga, intento de pago ni checkout. requires: bearer_none,machine_credential",
+            "description": "NEGATIVA_SEGURIDAD · Leo no puede generar liga de pago · fila L17 · escenario S14 · operationId=checkoutPaymentLink (POST /checkout/payment-link) · reutiliza NEWMAN:B25 (cuerpo rev5). Esperado: 403 sin liga, intento de pago ni checkout. Cuerpo (rev5): válido según `checkoutPaymentLink` (`brand` = `lab_brand`); el 403 sólo puede venir de la autorización. Como un defecto de autorización ya podría tener efecto, exige `leo_negative_writes_authorized=1` (igual que LF-L17b). Credencial Leo, nunca native; ausencia de efectos comprobada fuera de Newman en Batch 2. requires: bearer_none,machine_credential,lab_brand,leo_negative_writes_authorized",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"service_line\": \"medical_services\"\n}",
+              "raw": "{\n  \"brand\": \"{{lab_brand}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1902,6 +1902,15 @@
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function () { const b = pm.variables.get('lab_brand'); if (b && ['olab', 'swisslab', 'jenner', 'liacsa', 'azteca'].indexOf(b) === -1) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> lab_brand no es una LaboratoryBrand válida'); pm.execution.skipRequest(); } })();"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {

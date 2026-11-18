@@ -2,7 +2,7 @@
 
 Archivos: `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` y `Famedic-Akubica-v1.3.0-rc2-NEWMAN.environment.template.json` (plantilla **sin secretos**).
 
-## Artefactos funcionales y antecedente offline (Batch 1 · rev2; colección Leo agregada en rev3; B20/B21x conciliados en rev4)
+## Artefactos funcionales y antecedente offline (Batch 1 · rev2; colección Leo agregada en rev3; B20/B21x conciliados en rev4; cuerpos conformes en rev5)
 
 | Colección | Solicitudes | Papel | Guarda |
 |---|---|---|---|
@@ -45,6 +45,21 @@ Las operaciones de Leo que esta colección no incluye (step-up, ligas seguras, s
 - Variable nueva en la plantilla: `lab_brand_not_granted` (vacía).
 - Rev4 no cambia la clasificación ni el estado histórico de B20/B21x.
 
+### Cuerpos en rev5 (IT-0026)
+
+Revisión de los cuerpos de las 69 solicitudes contra el `requestBody` del OpenAPI. Las variables se resuelven con valores sintéticos y se consideran los pre-request; además se capturan sin red los cuerpos reales. Ver `RC2-INVENTARIO-CUERPOS.md` / `.csv`. Resultado: 24 CONFORME, 4 INVALIDO_DELIBERADO, 0 DISCREPANCIA_PENDIENTE y 41 sin cuerpo (N/A).
+
+| ID | Perfil | Cuerpo rev5 | Esperado | Clasificación |
+|---|---|---|---|---|
+| B06b | native | `{"laboratory_test_id": <entero>, "brand": …}` (`LaboratoryCartItemCreateLegacy`, sin `quantity`); se omite si el id no es entero o la marca no es una `LaboratoryBrand` | 201 | CONFORME |
+| B25 | leo (`machine_credential` + `bearer_none`), nunca native | `{"brand": "{{lab_brand}}"}`, válido para `checkoutPaymentLink`. El 403 sólo puede venir de la autorización; la ausencia de efectos se comprueba fuera de Newman en Batch 2 | 403 sin liga, intento de pago ni checkout | CONFORME |
+| A07 | ATIX (HMAC) | `channel: "sms"`, `audience: "otro"`, fuera de los enum, sin cambios | 422 | INVALIDO_DELIBERADO: negativo intencional de validación |
+| B22 | leo | Intención de farmacia, sin cambios | 503 PHARMACY_SUSPENDED | INVALIDO_DELIBERADO |
+| R07a | leo | `membership_plan_code: "plan_inexistente"`, sin cambios | 422 | INVALIDO_DELIBERADO |
+| R07a2 | leo | Sin `item_type`, sin cambios | 403 (autorización antes que validación) | INVALIDO_DELIBERADO |
+
+No cambia ninguna aserción, credencial ni código esperado. B25 sigue en el grupo de credenciales de la tabla de precondiciones y ahora también requiere `lab_brand`.
+
 Ejecución bajo guardas: usar el comando de la sección "Ejecución (QA, solo con autorización)" con `allowed_hosts` y `expected_release_sha` del build verificado. **En Batch 1 no se ejecutó en QA.**
 
 ## Guardas
@@ -59,7 +74,7 @@ Ejecución bajo guardas: usar el comando de la sección "Ejecución (QA, solo co
 HTTP esperado · resultado funcional · readback (B01r, B06r, B12r, B13r, B16r, B19r/B20r, B21r, A10r) · autorización (Leo vs native) · `X-Correlation-ID` devuelto igual al enviado · errores tipados (`ApiErrorResponse` con `correlation_id` = header) · sin datos protegidos (OTP, secretos, teléfonos completos, credenciales del entorno) · SHA del release.
 
 ## ATIX (A01–A07)
-La firma HMAC se calcula en un pre-request desde `atix_key_id` y `atix_hmac_secret`, inyectados en tiempo de ejecución. El cuerpo se fija ya resuelto antes de firmar. Nunca usar credenciales de producción.
+La firma HMAC se calcula en un pre-request desde `atix_key_id` y `atix_hmac_secret`, inyectados en tiempo de ejecución. El cuerpo se fija ya resuelto antes de firmar. A07 es un **negativo intencional de validación**: su cuerpo es INVALIDO_DELIBERADO (canal y audiencia fuera de enum) y se espera 422. Nunca usar credenciales de producción.
 
 ## Ejecución (QA, solo con autorización)
 ```bash

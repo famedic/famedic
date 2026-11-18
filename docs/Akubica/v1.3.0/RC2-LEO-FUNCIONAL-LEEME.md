@@ -1,4 +1,4 @@
-# Colección funcional diferenciada de Leo (Batch 1 · rev3; rev4: referencia opaca de perfil fiscal)
+# Colección funcional diferenciada de Leo (Batch 1 · rev3; rev4: referencia opaca de perfil fiscal; rev5: cuerpos conformes)
 
 Archivos: `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.postman_collection.json` (48 solicitudes en 7 carpetas), `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.environment.template.json` (plantilla **sin secretos**) y `RC2-LEO-FUNCIONAL-COBERTURA.csv` (cobertura por solicitud, generada desde la colección).
 
@@ -18,7 +18,7 @@ Contrato congelado de referencia: `akubica-openapi-v1.3.0-rc2.json` (rev2; rev4 
 
 Cada solicitud declara en su descripción la solicitud de origen (`reutiliza NEWMAN:<ID>` o `reutiliza P90:<nombre>`):
 
-- De `rc2-NEWMAN` se copian sin cambiar aserciones R01 (LF-L07a), R02a (LF-L09b), R03a (LF-L12b), R04 (LF-L08a), B23 (LF-L05m) y B25 (LF-L17a); sólo cambia el prefijo del nombre de la prueba.
+- De `rc2-NEWMAN` se copian sin cambiar aserciones R01 (LF-L07a), R02a (LF-L09b), R03a (LF-L12b), R04 (LF-L08a), B23 (LF-L05m) y B25 (LF-L17a); sólo cambia el prefijo del nombre de la prueba. En rev5, LF-L17a toma el cuerpo corregido de B25 (`brand`) y exige `leo_negative_writes_authorized`; las aserciones no cambian.
 - De `rc2-90` se toman método, ruta y cuerpo de las demás. Las referencias `{{vault:*}}` pasan a variables de la plantilla y se agregan las aserciones del contrato (esquemas `Leo*Response`, soft deny 404, propósito del grant, TTL y aperturas de la liga).
 - Las aserciones comunes de colección son las de `rc2-NEWMAN` (correlation ID, sin datos protegidos, error tipado). Se agrega un control Leo: no recibe PDF/XML, datos de pago ni RFC completo.
 
@@ -43,7 +43,7 @@ Fallan cerradas: aserción `GUARDA …` en FAIL, la solicitud se omite (no sale 
 | `step_up_code_results`, `step_up_code_invoices` | El titular lo lee en su dispositivo y el operador lo teclea con `read -s` | Verificación step-up. Nunca se lee de BD, logs ni canales internos |
 | `qa_writes_authorized=1` | Eulalio (ventana de escrituras QA) | Alta y retiro en el carrito de laboratorio (L06) |
 | `invoice_request_authorized=1` | Eulalio (fixture INT-005) | Solicitud de factura (L13) |
-| `leo_negative_writes_authorized=1` | Eulalio | Negativos de escritura cuyo defecto tendría efecto: cancelar pedido, vaciar carrito, draft |
+| `leo_negative_writes_authorized=1` | Eulalio | Negativos de escritura cuyo defecto tendría efecto: cancelar pedido, vaciar carrito, draft, payment link (LF-L17a desde rev5) |
 | `lab_continuity_enabled=1` | Sólo si la bandera de continuidad de laboratorio está encendida en staging | Exige `continuity_url` en LF-L05a; sin ella se exige su ausencia |
 | `own_order_id`, `own_invoice_id`, `foreign_order_id`, `invoice_request_order_id`, `invoice_old_order_id`, `lab_brand`, `test_id_available` (entero; si no lo es, la solicitud se omite) | Fixtures INT-005 | Lecturas y escrituras sobre recursos propios y ajenos |
 | `tax_profile_ref` | Encadenada: LF-L13b la toma de la lectura mínima (perfil por omisión o el primero) | Id opaco que LF-L13c y LF-L13f envían sin transformar como `tax_profile_id` (`LeoInvoiceRequestCreate`). No hay fixture entero para Leo |
@@ -53,7 +53,7 @@ Fallan cerradas: aserción `GUARDA …` en FAIL, la solicitud se omite (no sale 
 
 | Fila | Flujo | Escenario | Solicitudes | Fuente contractual | Esperado | Guarda y precondiciones |
 |---|---|---|---|---|---|---|
-| L01 | Identificación ATIX | — | rc2-NEWMAN A01–A07 (sin cambios) | Matriz L01 | Sin cambios | Guardas de `rc2-NEWMAN` |
+| L01 | Identificación ATIX | — | rc2-NEWMAN A01–A07 (A07: negativo intencional de validación, cuerpo INVALIDO_DELIBERADO, 422) | Matriz L01 | Sin cambios | Guardas de `rc2-NEWMAN` |
 | L02 | Login OTP y Bearer · además rc2-NEWMAN A08–A12 (sin cambios); aquí sólo el readback LF00 | S03 | LF00 `GET /memberships/status` | Matriz L02; `membershipStatusShow` (—) | LF00: 200; el Bearer de Leo proviene de A10 (rc2-NEWMAN), inyectado en runtime | Guardas de colección + `leo_batch2_contract=1`<br>LF00: bearer_token,machine_credential |
 | L03 | Catálogo y precios | — | rc2-NEWMAN B01–B07 (sin cambios) | Matriz L03 | Sin cambios | Guardas de `rc2-NEWMAN` |
 | L04 | Carrito médico (membresía) · además rc2-NEWMAN B08–B17 y B26 (sin cambios) | S12 | LF-L05m `GET /checkout/prepare` | Matriz L04; `checkoutPrepare` (—) | LF-L05m: 200 assistant_can_pay=false; continuidad según b24_enabled | Guardas de colección + `leo_batch2_contract=1`<br>LF-L05m: bearer_none,machine_credential |
@@ -70,7 +70,7 @@ Fallan cerradas: aserción `GUARDA …` en FAIL, la solicitud se omite (no sale 
 | L14 | Step-up y liga segura de factura (PDF) | S11 | LF-L14a `POST /orders/{order_id}/invoices/{invoice_id}/step-up/request`<br>LF-L14b `POST /orders/{order_id}/invoices/{invoice_id}/step-up/verify`<br>LF-L14c `POST /orders/{order_id}/invoices/{invoice_id}/secure-link`<br>LF-L14d `POST /orders/{order_id}/invoices/{invoice_id}/secure-link` | Matriz L14; `ordersInvoiceSecureLink` (leo, native)<br>`ordersInvoiceStepUpRequest` (leo, native)<br>`ordersInvoiceStepUpVerify` (leo, native) | LF-L14a: 202 OtpChallenge purpose=step_up_invoices<br>LF-L14b: 200 OtpGrant purpose=step_up_invoices<br>LF-L14c: 201 SecureLink PDF (sin XML)<br>LF-L14d: 422 STEP_UP_GRANT_INVALID sin liga | Guardas de colección + `leo_batch2_contract=1`<br>LF-L14a: bearer_token,machine_credential,own_order_id,own_invoice_id,sms_authorized<br>LF-L14b: bearer_token,machine_credential,own_order_id,own_invoice_id,invoices_challenge_id,step_up_code_invoices<br>LF-L14c: bearer_token,machine_credential,own_order_id,own_invoice_id,invoices_grant_id<br>LF-L14d: bearer_token,machine_credential,own_order_id,own_invoice_id,results_grant_id |
 | L15 | Descarga directa de factura (negativa) | S11 | LF-L15 `GET /orders/{order_id}/invoices/{invoice_id}/download` | Matriz L15; `ordersInvoiceDownload` (native) | LF-L15: 403 sin PDF ni XML | Guardas de colección + `leo_batch2_contract=1`<br>LF-L15: bearer_token,machine_credential,own_order_id,own_invoice_id |
 | L16 | Cupones y créditos (diferido) | X01 | LF-L16a `GET /cart/coupon`<br>LF-L16b `GET /cart/medical-benefit` | Matriz L16; `cartCouponShow` (—)<br>`medicalServiceBenefitShow` (—) | LF-L16a: 403<br>LF-L16b: 403 | Guardas de colección + `leo_batch2_contract=1`<br>LF-L16a: bearer_token,machine_credential,lab_brand<br>LF-L16b: bearer_token,machine_credential |
-| L17 | Pagos y payment link (negativa) · además rc2-NEWMAN B25 (sin cambios) | S14 | LF-L17a `POST /checkout/payment-link`<br>LF-L17b `POST /checkout/draft` | Matriz L17; `checkoutDraft` (—)<br>`checkoutPaymentLink` (—) | LF-L17a: 403 sin liga, intento de pago ni checkout<br>LF-L17b: 403 sin draft ni liga | Guardas de colección + `leo_batch2_contract=1`<br>LF-L17a: bearer_none,machine_credential<br>LF-L17b: bearer_token,machine_credential,lab_brand,leo_negative_writes_authorized |
+| L17 | Pagos y payment link (negativa) · además rc2-NEWMAN B25 (rev5: cuerpo válido con `brand`) | S14 | LF-L17a `POST /checkout/payment-link`<br>LF-L17b `POST /checkout/draft` | Matriz L17; `checkoutDraft` (—)<br>`checkoutPaymentLink` (—) | LF-L17a: 403 sin liga, intento de pago ni checkout; cuerpo válido con brand (rev5)<br>LF-L17b: 403 sin draft ni liga | Guardas de colección + `leo_batch2_contract=1`<br>LF-L17a: bearer_none,machine_credential,lab_brand,leo_negative_writes_authorized<br>LF-L17b: bearer_token,machine_credential,lab_brand,leo_negative_writes_authorized |
 | L18 | Citas (negativa) | S13 | LF-L18 `GET /laboratory-appointments` | Matriz L18; `appointmentsIndex` (native) | LF-L18: 403 (native-only) | Guardas de colección + `leo_batch2_contract=1`<br>LF-L18: bearer_token,machine_credential |
 | L19 | Farmacia | — | rc2-NEWMAN B22 (sin cambios) | Matriz L19 | Sin cambios | Guardas de `rc2-NEWMAN` |
 | L20 | Resto de la superficie privada (negativa) | S09/S11/S14/S16 | LF-L07x `PUT /orders/{order_id}/cancel`<br>LF-L13x `POST /user/tax-profiles`<br>LF-L20a `GET /user/payment-methods`<br>LF-L20b `GET /user/addresses`<br>LF-L20c `GET /user/contacts` | Matriz L20; `ordersCancel` (native)<br>`userAddressesIndex` (native)<br>`userContactsIndex` (native)<br>`userPaymentMethods` (native)<br>`userTaxProfilesStore` (native) | LF-L07x: 403 (native-only)<br>LF-L13x: 403 (native-only); cuerpo vacío: aun con un defecto, la validación impide crear<br>LF-L20a: 403<br>LF-L20b: 403<br>LF-L20c: 403 | Guardas de colección + `leo_batch2_contract=1`<br>LF-L07x: bearer_token,machine_credential,own_order_id,leo_negative_writes_authorized<br>LF-L13x: bearer_token,machine_credential<br>LF-L20a: bearer_token,machine_credential<br>LF-L20b: bearer_token,machine_credential<br>LF-L20c: bearer_token,machine_credential |
@@ -99,6 +99,17 @@ Conciliación rev4 (contrato documental; la implementación sigue en Batch 2):
 | OBS-CONTRATO-TAXPROFILE-ID | Referencia única `LeoOpaqueTaxProfileId` (string). `LeoTaxProfileSummary.id` la usa en la lectura (L13b) y `LeoInvoiceRequestCreate.tax_profile_id` en la solicitud (L13), así que Leo envía el mismo id opaco que recibió. El contrato native se conserva en `NativeInvoiceRequestCreate` (entero, `cfdi_use`, `email`, `notes`). El cuerpo es `oneOf` [Leo, native] y el esquema aplicable lo fija el consumidor autenticado (`x-request-schema-by-consumer`). Un id desconocido, ajeno o entero da 422 VALIDATION_ERROR sin efecto y sin revelar existencia. Se retira `tax_profile_id_int` de la colección y la plantilla de Leo | OpenAPI `ordersInvoiceRequestStore`; LF-L13b (captura `tax_profile_ref`), LF-L13c y LF-L13f (envían el id opaco); LF-L13g nueva (entero ⇒ 422) |
 | OBS-NEWMAN-B21X | B21x es ahora el caso realmente no autorizado. Perfil leo (`machine_credential` + `bearer_none`); capacidades: el binding no concede `cart:laboratory:write` para la marca; línea `laboratory`; marca `lab_brand_not_granted`, una `LaboratoryBrand` válida y distinta de la concedida. Esperado 403 sin efecto. El positivo autorizado (`cart:laboratory:write` para `lab_brand`, 201) se traza a L06/S07 con LF-L06b de esta colección. No se agrega a la NEWMAN ninguna escritura positiva de Leo | `rc2-NEWMAN` B21x; OpenAPI `cartItemsStore` (`x-authorization-cases`); LF-L06b |
 | OBS-NEWMAN-QUANTITY | B20 y B21x envían `{"laboratory_test_id": <entero>, "brand": …}` sin `quantity`, conforme a `LaboratoryCartItemCreateLegacy`. Si `test_id_available` no es entero, la solicitud se omite (SKIPPED_PRECONDITION) | `rc2-NEWMAN` B20/B21x; LF-L06b |
+
+## Cuerpos de solicitud (rev5, IT-0026)
+
+Revisión de los cuerpos de las 48 solicitudes contra el `requestBody` del OpenAPI. Las variables se resuelven con valores sintéticos y se consideran los pre-request; además se capturan sin red los cuerpos reales. Ver `RC2-INVENTARIO-CUERPOS.md` / `.csv`.
+
+| Clasificación | Solicitudes |
+|---|---|
+| CONFORME | 15 |
+| INVALIDO_DELIBERADO | 2: LF-L13g (entero para Leo, 422) y LF-L13x (cuerpo vacío a propósito, 403) |
+| DISCREPANCIA_PENDIENTE | 0 (antes LF-L17a sin `brand`; corregida) |
+| N/A (sin cuerpo) | 31 |
 
 ## Validación local (Batch 1 · rev3 y rev4, sin QA)
 
