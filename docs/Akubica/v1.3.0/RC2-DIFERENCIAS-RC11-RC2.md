@@ -15,7 +15,7 @@ RC2 continúa desde `prep/akubica-technical-integration-rc11` en `9c060c81e6eda7
 
 ## Pendientes y exclusiones
 
-B02 permanece bloqueado. No existe una fuente autorizada y verificable para catálogo de paquetes, precios, vigencia y reglas de comparación. No se inventaron schemas, precios ni solicitudes positivas.
+[Histórico; criterio vigente en `RC2-B02-BLOQUEO-FUENTE-PAQUETES.md` (Batch 1 · T6)]. B02 permanece bloqueado. No existe una fuente autorizada y verificable para catálogo de paquetes, precios, vigencia y reglas de comparación. No se inventaron schemas, precios ni solicitudes positivas.
 
 B24 queda preparado localmente, pero no certificado operacionalmente. Falta autorizar el transporte y el mecanismo de continuidad hacia el checkout FAMEDIC en QA.
 

@@ -11309,7 +11309,7 @@
               "validated",
               "incomplete"
             ],
-            "description": "`validated` solo si TODOS los elementos (estudios y descriptores) están validated."
+            "description": "`validated` solo si TODOS los elementos (estudios y descriptores) están validated. Informativo para B02: no se exige `validated` (Batch 1 · T6)."
           },
           "pricing": {
             "$ref": "#/components/schemas/LaboratoryPricing"
@@ -11317,7 +11317,17 @@
           "available": {
             "type": "boolean"
           }
-        }
+        },
+        "description": "Paquete de laboratorio. Criterio de aceptación B02 (plan v1.0, Batch 1 · T6): nombre, marca, item_type=package, precio público, precio FAMEDIC, ahorro y detalle consistente con el listado. `composition_status` es informativo: un paquete `incomplete` sigue siendo publicable y aceptable para B02 siempre que no se presente como composición validada.",
+        "x-acceptance-criterion-b02": [
+          "name",
+          "brand",
+          "item_type",
+          "pricing.public_price_cents",
+          "pricing.famedic_price_cents",
+          "pricing.savings_cents",
+          "detail_matches_list"
+        ]
       },
       "CatalogPackagesResponse": {
         "allOf": [

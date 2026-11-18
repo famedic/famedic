@@ -12,7 +12,7 @@ Worktree aislado `codex/rc2-local-20261110`, base `9c060c81e6eda7871e2c902563e3c
 - Migración opaca: aplicada en MySQL local después de configurar `log_bin_trust_function_creators=1` solo dentro del contenedor exclusivo.
 - Triggers: **9/9** verificados.
 - B24: controles de continuidad deshabilitados; no se certificó transporte QA.
-- B02: **BLOCKED**, sin fuente autorizada de paquetes y precios.
+- B02: **BLOCKED**, sin fuente autorizada de paquetes y precios (histórico; criterio vigente en Batch 1 · T6).
 
 ## Cobertura local
 

@@ -8,6 +8,15 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · tarea 6 (2026-11-18)
+
+B02 (S05) se evalúa exactamente con siete puntos: nombre, marca, `item_type`, precio público, precio FAMEDIC, ahorro y detalle.
+
+- En Newman, B02 y B02r separan esas aserciones; `composition_status`, impuestos y vigencia pasan a ser informativos (`console.log`).
+- No se exige `composition_status=validated`.
+- OpenAPI `LaboratoryPackage` documenta el criterio (`x-acceptance-criterion-b02`) sin cambiar el schema.
+- La nota B02 suma el criterio vigente y conserva el histórico.
+
 ## Batch 1 · tarea 5 (2026-11-18)
 
 `POST /checkout/payment-link` se conserva en Postman/Newman sólo como **prueba negativa de seguridad** (B25/S14). Leo lo ejecuta únicamente para comprobar HTTP 403 y que no haya liga ni cobro.
