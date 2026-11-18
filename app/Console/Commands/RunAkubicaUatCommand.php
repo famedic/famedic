@@ -397,6 +397,20 @@ final class RunAkubicaUatCommand extends Command
         return User::query()->whereIn('id', array_map('intval', $ids))->get()->filter(fn (User $u) => $u->customer()->count() === 1)->values()->all();
     }
 
+    /**
+     * QA hosts allowed for --full: the official QA URL and its Forge alias (same site/release).
+     * Exact match only (no wildcard); every other host, including production, is rejected.
+     */
+    public const AUTHORIZED_BASE_URLS = [
+        'https://staging.famedic.com.mx',
+        'https://famedic-otp.on-forge.com',
+    ];
+
+    public static function isAuthorizedBaseUrl(string $baseUrl): bool
+    {
+        return in_array(rtrim($baseUrl, '/'), self::AUTHORIZED_BASE_URLS, true);
+    }
+
     /** @return list<string> */
     private function scenarios(): array
     {
@@ -418,7 +432,7 @@ final class RunAkubicaUatCommand extends Command
     private function runFull(array $users, string $machineCredential, array $scenarios): array
     {
         $baseUrl = rtrim((string) ($this->option('base-url') ?: env('AKUBICA_UAT_BASE_URL')), '/');
-        if ($baseUrl !== 'https://famedic-otp.on-forge.com') {
+        if (! self::isAuthorizedBaseUrl($baseUrl)) {
             throw new \DomainException('UAT_BASE_URL_NOT_AUTHORIZED');
         }
         $keys = config('atix.sandbox.keys', []);
