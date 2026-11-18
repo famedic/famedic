@@ -693,6 +693,44 @@ test('final hash divergence blocks recovery', function () {
         ->assertFailed();
 });
 
+test('failed manifest recovers when promoted documents already exist with matching hashes', function () {
+    eulU01Apply($this);
+    $disk = Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK);
+
+    config()->set('akubica_uat.testing_faults', ['after_preparing_manifest']);
+    $this->artisan('akubica:uat-fixtures', ['--apply' => true, '--confirm' => AkubicaUatFixtureContract::NAMESPACE])
+        ->expectsOutputToContain('UAT_TESTING_FAULT_after_preparing_manifest')
+        ->assertFailed();
+
+    $manifest = AkubicaUatFixtureManifest::query()->firstOrFail();
+    expect($manifest->status)->toBe(AkubicaUatFixtureContract::STATUS_FAILED)
+        ->and($manifest->metadata['storage_paths'])->not->toBeEmpty();
+    foreach ($manifest->metadata['storage_paths'] as $path) {
+        expect($disk->exists($path))->toBeTrue()
+            ->and(hash('sha256', (string) $disk->get($path)))->toBe($manifest->metadata['storage_hashes'][$path]);
+    }
+
+    config()->set('akubica_uat.testing_faults', []);
+    eulU01Apply($this);
+
+    expect(AkubicaUatFixtureManifest::query()->firstOrFail()->status)->toBe(AkubicaUatFixtureContract::STATUS_ACTIVE);
+});
+
+test('failed manifest with promoted documents still blocks recovery on real hash divergence', function () {
+    eulU01Apply($this);
+
+    config()->set('akubica_uat.testing_faults', ['after_preparing_manifest']);
+    $this->artisan('akubica:uat-fixtures', ['--apply' => true, '--confirm' => AkubicaUatFixtureContract::NAMESPACE])->assertFailed();
+    Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK)->put(AkubicaUatFixtureContract::storagePath('results/result-ready.pdf'), '%PDF-1.4 changed');
+
+    config()->set('akubica_uat.testing_faults', []);
+    $this->artisan('akubica:uat-fixtures', ['--apply' => true, '--confirm' => AkubicaUatFixtureContract::NAMESPACE])
+        ->expectsOutputToContain('UAT_STORAGE_HASH_MISMATCH')
+        ->assertFailed();
+
+    expect(AkubicaUatFixtureManifest::query()->firstOrFail()->status)->toBe(AkubicaUatFixtureContract::STATUS_FAILED);
+});
+
 test('failed manifest with foreign divergence is not adopted', function () {
     config()->set('akubica_uat.testing_faults', ['after_preparing_manifest']);
     $this->artisan('akubica:uat-fixtures', ['--apply' => true, '--confirm' => AkubicaUatFixtureContract::NAMESPACE])->assertFailed();
