@@ -28,7 +28,7 @@ La integración no mezcla laboratorio, farmacia y servicio médico:
 | Farmacia | Fuera de alcance; no se consultan ni modifican carritos de farmacia. |
 | Servicio médico | Membresías, carrito `medical_services`, preparación de checkout y continuidad (staging). Beneficios: los aplica el usuario en el checkout de FAMEDIC; la aplicación directa por Leo está diferida (L16). |
 
-Leo no paga, no tokeniza tarjetas, no genera payment links y no activa membresías desde esta integración. La única llamada relacionada en la colección es la prueba negativa de seguridad B25 (`POST /checkout/payment-link`, S14), que se ejecuta sólo para comprobar HTTP 403 y que no haya liga ni cobro.
+Leo no paga, no tokeniza tarjetas, no genera payment links y no activa membresías desde esta integración. Las únicas llamadas relacionadas son pruebas negativas de seguridad: B25 en la NEWMAN y LF-L17a/LF-L17b en la colección Leo (`POST /checkout/payment-link` y `POST /checkout/draft`, S14). Se ejecutan sólo para comprobar HTTP 403 y que no haya liga ni cobro.
 
 ## Compatibilidad
 
@@ -42,6 +42,7 @@ La línea base histórica OpenAPI v1.2.3 (`docs/Akubica/akubica-openapi.yaml`) p
 - `akubica-openapi-v1.3.0-rc2.json`: contrato principal RC2 con 76 operaciones (64 paths).
 - `r30-first-party-v1.3.0.json`: suplemento first party separado con cuatro operaciones R30; no es capacidad de Leo.
 - `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` y `…-rc2-NEWMAN.environment.template.json`: **colección funcional** de 69 solicitudes, con guardas de ejecución. Plantilla sin secretos (ver `RC2-NEWMAN-LEEME.md`).
+- `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.postman_collection.json` y `…-rc2-LEO-FUNCIONAL.environment.template.json`: **colección funcional diferenciada de Leo** (Batch 1 · rev3) de 47 solicitudes. Cubre los flujos obligatorios de la matriz que faltaban en la NEWMAN (step-up, ligas seguras, solicitud y estado de factura, lectura fiscal mínima D-1, pedidos, resultados, facturas, carrito y continuidad de laboratorio D-2) y los negativos de alcance. Sólo staging y el build de Batch 2 (ver `RC2-LEO-FUNCIONAL-LEEME.md` y `RC2-LEO-FUNCIONAL-COBERTURA.csv`).
 - `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: **antecedente offline** de 92 solicitudes que cubre las 76 operaciones principales y las 4 R30. Su guard omite siempre todas las peticiones y no es ejecutable. El sufijo `-90` es histórico.
 - `Famedic-Akubica-v1.3.0-rc2-synthetic.environment.json`: environment sin secretos y con URLs reservadas.
 - `RC2-MATRIZ-TRAZABILIDAD-46.csv` (en el repo, en `RC2-PREPARACION-QA/A-DOCUMENTACION/`, no en este directorio): trazabilidad histórica de los 46 escenarios.
@@ -51,7 +52,7 @@ La línea base histórica OpenAPI v1.2.3 (`docs/Akubica/akubica-openapi.yaml`) p
 
 ## Uso seguro
 
-1. Usar la colección funcional `…-rc2-NEWMAN` con su plantilla de entorno, bajo sus guardas. La rc2-90 sólo sirve para revisar cobertura offline.
+1. Usar la colección funcional `…-rc2-NEWMAN` con su plantilla de entorno, bajo sus guardas. Sobre el build de Batch 2, usar además la colección Leo `…-rc2-LEO-FUNCIONAL` con su plantilla. La rc2-90 sólo sirve para revisar cobertura offline.
 2. Definir `base_url`, `token` y, para ATIX, las variables sensibles desde el gestor seguro del ambiente; no guardarlas en este archivo.
 3. Usar únicamente cuentas, cupones y teléfonos de prueba controlados.
 4. Ejecutar primero catálogo, planes y estado; después el carrito médico. Leo no aplica beneficios directamente (L16, diferido).

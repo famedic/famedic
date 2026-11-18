@@ -1,6 +1,6 @@
 # Colección y entorno offline RC2 (antecedente, no funcional)
 
-> **Batch 1 · rev2:** esta colección de 92 solicitudes es un antecedente offline. Su guard omite **todas** las peticiones siempre. La colección funcional, con guardas de ejecución, es `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` (ver `RC2-NEWMAN-LEEME.md`).
+> **Batch 1 · rev2:** esta colección de 92 solicitudes es un antecedente offline. Su guard omite **todas** las peticiones siempre. La colección funcional, con guardas de ejecución, es `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` (ver `RC2-NEWMAN-LEEME.md`). **Rev3:** los flujos obligatorios de Leo que sólo estaban aquí (step-up, secure-links, solicitud y estado de factura, lectura fiscal mínima) se reutilizan en la colección funcional diferenciada `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.postman_collection.json` (ver `RC2-LEO-FUNCIONAL-LEEME.md`). Esta colección no cambia.
 
 Importar la colección y el entorno de ejemplo. Los únicos valores de entorno son URLs del dominio reservado rc11.invalid; no hay secretos, cookies ni respuestas guardadas. Los valores `{{vault:...}}` son referencias vacías que deberá aprovisionar un operador autorizado en almacenamiento local después de certificación; no son credenciales de ejemplo reutilizables.
 

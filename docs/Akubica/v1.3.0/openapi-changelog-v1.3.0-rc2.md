@@ -8,6 +8,10 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · rev3 (2026-11-18, Postman funcional de Leo)
+
+Nueva colección funcional diferenciada `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.postman_collection.json` (47 solicitudes) con su plantilla sin secretos, `RC2-LEO-FUNCIONAL-LEEME.md` y `RC2-LEO-FUNCIONAL-COBERTURA.csv`. Reutiliza solicitudes de `rc2-NEWMAN` (R01, R02a, R03a, R04, B23 y B25, sin cambiar aserciones) y de `rc2-90`, y cubre los flujos obligatorios de Leo que sólo estaban en el antecedente offline. Tiene guardas propias: sólo staging, producción y hosts desconocidos bloqueados, `target_env` y SHA obligatorios, sólo credencial Leo, sin first-party y pago sólo como negativa. Sin cambios en el OpenAPI, R30, `rc2-NEWMAN`, `rc2-90` ni el código.
+
 ## Batch 1 · rev2 (2026-11-18, cinco correcciones antes de pedir la aceptación)
 
 1. **README:** las capacidades quedan separadas en aprobado en plan, implementación Batch 2, diferido (beneficios directos, L16) y prohibido. El laboratorio pasa a "aprobado en plan / implementación Batch 2". Se aclara que la línea base 1.2.3 es histórica.

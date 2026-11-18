@@ -2,11 +2,12 @@
 
 Archivos: `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` y `Famedic-Akubica-v1.3.0-rc2-NEWMAN.environment.template.json` (plantilla **sin secretos**).
 
-## Artefacto funcional y antecedente offline (Batch 1 · rev2)
+## Artefactos funcionales y antecedente offline (Batch 1 · rev2; colección Leo agregada en rev3)
 
 | Colección | Solicitudes | Papel | Guarda |
 |---|---|---|---|
-| `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` + `…-rc2-NEWMAN.environment.template.json` | 69 (A, B y R) | **Funcional**: la única que se ejecuta en QA, y sólo con autorización | Guardas de ejecución (abajo) |
+| `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` + `…-rc2-NEWMAN.environment.template.json` | 69 (A, B y R) | **Funcional** A/B/R: se ejecuta en QA sólo con autorización. Sin cambios en rev3 | Guardas de ejecución (abajo) |
+| `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.postman_collection.json` + `…-rc2-LEO-FUNCIONAL.environment.template.json` | 47 (flujos obligatorios de Leo, contrato de Batch 2) | **Funcional diferenciada de Leo** (Batch 1 · rev3): step-up, ligas seguras, solicitud y estado de factura, lectura fiscal mínima (D-1), pedidos, resultados, facturas, carrito y continuidad de laboratorio (D-2) y negativos de alcance. Sólo sobre el build de Batch 2 y con autorización | Guardas propias, más estrictas (ver `RC2-LEO-FUNCIONAL-LEEME.md`) |
 | `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json` | 92 (76 operaciones + 4 R30) | **Antecedente offline**: revisión de cobertura del contrato | Reescribe toda URL a `https://rc11.invalid/blocked` y llama `skipRequest()`. **Omite siempre las 92**, por diseño; no hay bandera que lo habilite |
 
 Guardas de la colección funcional (prerequest de colección), en orden:
@@ -28,6 +29,8 @@ Qué omite cada precondición (generado desde la colección):
 | Credenciales y Bearer de prueba inyectados en runtime (`machine_credential`, `native_*`, `bearer_*`, `atix_*`) | 20 | A12, B08, B09, B10, B11, B12, B12r, B13r, B23, B25, B26, B16r, B14, B15, B19, B21r, B22, R07a, R07a2, R07b |
 | Fixtures QA o datos encadenados (ids de estudio/paquete/pedido, teléfonos sintéticos, valores de pasos previos) | 34 | A01, A02, A03, A04, A05a, A05b, A06a, A06b, A07, A10r, A11b, A11c, B01, B01r, B02, B02r, B03, B03r, B04, B05, B06a, B06b, B06r, B17, B13, B16, B20, B19r/B20r, B21, B21x, R01b, R02b, R02c, R03b |
 | Sin precondiciones (corre siempre que pasen las guardas) | 2 | B07, R06 |
+
+Las operaciones de Leo que esta colección no incluye (step-up, ligas seguras, solicitud y estado de factura, lectura fiscal mínima, pedidos y resultados por id, carrito de laboratorio) están en la colección funcional diferenciada `…-rc2-LEO-FUNCIONAL` (47 solicitudes; cobertura en `RC2-LEO-FUNCIONAL-LEEME.md` y `RC2-LEO-FUNCIONAL-COBERTURA.csv`). Antes sólo aparecían en la rc2-90, que las omite siempre.
 
 Ejecución bajo guardas: usar el comando de la sección "Ejecución (QA, solo con autorización)" con `allowed_hosts` y `expected_release_sha` del build verificado. **En Batch 1 no se ejecutó en QA.**
 

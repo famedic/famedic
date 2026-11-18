@@ -1,0 +1,2145 @@
+{
+  "info": {
+    "name": "FAMEDIC-Akubica RC2 — Newman funcional Leo (flujos obligatorios, contrato Batch 1 para el build de Batch 2)",
+    "_postman_id": "8b6f1e1c-rc2-leo-funcional-0001",
+    "description": "COLECCIÓN FUNCIONAL DIFERENCIADA LEO (Batch 1 · rev3). Complementa a la colección funcional rc2-NEWMAN (69, sin cambios) con los flujos obligatorios de Leo de RC2-MATRIZ-PERMISOS-LEO (L05 D-2, L06, L07–L15, L13b, negativos L16–L20) que sólo existían en el antecedente offline rc2-90 (92, sin cambios). Reutiliza solicitudes de ambas. Sólo staging (staging.famedic.com.mx o el alias exacto); bloquea producción y hosts desconocidos; exige expected_release_sha y target_env=staging; sólo credencial Leo (machine_credential), nunca native ni first-party; payment-link y draft sólo como NEGATIVA_SEGURIDAD 403. Todo se omite (SKIPPED_PRECONDITION, nunca PASS) sin leo_batch2_contract=1 o sin sus precondiciones. Sin secretos: Bearer, credencial y códigos step-up se inyectan en runtime. Ver RC2-LEO-FUNCIONAL-LEEME.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// === Guardas de ejecución (colección LEO-FUNCIONAL, Batch 1 · rev3) ===",
+          "// Guarda fallida: aserción \"GUARDA …\" en FAIL (exit ≠ 0), se omite el request (no sale tráfico) y se aborta el script.",
+          "// Precondición faltante: SKIPPED_PRECONDITION (se omite, no falla y nunca cuenta como PASS).",
+          "const guardFail = (msg) => { pm.test('GUARDA ' + msg, () => { throw new Error(msg); }); pm.execution.skipRequest(); throw new Error(msg); };",
+          "const skipPre = (why) => { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> ' + why); pm.execution.skipRequest(); };",
+          "// 1) Sólo QA staging: host oficial exacto o su alias exacto; producción y hosts desconocidos bloqueados.",
+          "const QA_HOSTS = ['staging.famedic.com.mx', 'famedic-otp.on-forge.com'];",
+          "const base = String(pm.environment.get('base_url') || '');",
+          "if (!/^https:\\/\\//.test(base)) { guardFail('BASE_URL_HTTPS_REQUERIDA'); }",
+          "const host = base.replace(/^https:\\/\\//, '').split('/')[0].toLowerCase();",
+          "const hostNorm = host.split(':')[0].replace(/\\.+$/, '');",
+          "if (!QA_HOSTS.includes(host)) {",
+          "  if (/(^|\\.)famedic\\.com\\.mx$/.test(hostNorm) || /(^|\\.)famedic\\.mx$/.test(hostNorm)) { guardFail('HOST_PRODUCCION_BLOQUEADO: ' + host); }",
+          "  guardFail('HOST_DESCONOCIDO_BLOQUEADO: ' + host);",
+          "}",
+          "const allowed = String(pm.environment.get('allowed_hosts') || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);",
+          "if (!allowed.includes(host)) { guardFail('HOST_NO_PERMITIDO: ' + host); }",
+          "if (pm.environment.get('target_env') !== 'staging') { guardFail('TARGET_ENV_STAGING_REQUERIDO'); }",
+          "const sha = String(pm.environment.get('expected_release_sha') || '');",
+          "if (!/^[0-9a-f]{40}$/.test(sha)) { guardFail('RELEASE_SHA_REQUERIDO (40 hex)'); }",
+          "// 2) Política de la colección: sólo API bajo base_url, sólo credencial Leo, sin first-party y pagos sólo como negativa.",
+          "const rawUrl = pm.request.url.toString();",
+          "const desc = (pm.request.description && pm.request.description.toString()) || '';",
+          "if (rawUrl.indexOf('{{base_url}}/') !== 0 && rawUrl.indexOf(base.replace(/\\/+$/, '') + '/') !== 0) { guardFail('URL_FUERA_DE_BASE_URL'); }",
+          "if (/\\/(secure-downloads|checkout\\/continue|benefits\\/consent|medical-attention)(\\/|\\?|$)/.test(rawUrl)) { guardFail('FIRST_PARTY_PROHIBIDO'); }",
+          "if (/\\/checkout\\/(payment-link|draft)(\\/|\\?|$)/.test(rawUrl) && desc.indexOf('NEGATIVA_SEGURIDAD') !== 0) { guardFail('PAGO_SOLO_COMO_NEGATIVA'); }",
+          "const credH = pm.request.headers.get('X-Consumer-Credential') || '';",
+          "const authH = pm.request.headers.get('Authorization') || '';",
+          "if (credH !== '{{machine_credential}}' || !/^Bearer \\{\\{(bearer_token|bearer_none)\\}\\}$/.test(authH)) { guardFail('SOLO_CREDENCIAL_LEO'); }",
+          "const nat = pm.variables.get('native_machine_credential');",
+          "if (nat && nat === pm.variables.get('machine_credential')) { guardFail('CREDENCIAL_NATIVE_PROHIBIDA'); }",
+          "// 3) Contrato Leo de Batch 2: sin la bandera, todo se omite (el build QA actual responde 403 a Leo en L06–L15).",
+          "let missing = [];",
+          "if (pm.variables.get('leo_batch2_contract') !== '1') { missing = ['leo_batch2_contract']; }",
+          "// 4) Precondiciones \"requires: a,b\" (banderas *_authorized/*_enabled deben valer 1; el resto, no vacío).",
+          "const m = desc.match(/requires:\\s*([A-Za-z0-9_, ]+)/);",
+          "if (!missing.length && m) {",
+          "  missing = m[1].split(',').map(s => s.trim()).filter(Boolean).filter(v => /_(authorized|enabled|contract)$/.test(v) ? pm.variables.get(v) !== '1' : !pm.variables.get(v));",
+          "}",
+          "if (missing.length) {",
+          "  skipPre(missing.join('|'));",
+          "} else {",
+          "  // 5) Correlation ID (mismo formato que rc2-NEWMAN) e Idempotency-Key por escritura.",
+          "  const cid = 'rc2-' + (pm.environment.get('run_id') || 'run') + '-' + pm.variables.replaceIn('{{$guid}}');",
+          "  pm.variables.set('cid', cid);",
+          "  pm.request.headers.upsert({ key: 'X-Correlation-ID', value: cid });",
+          "  if (!pm.request.headers.has('Idempotency-Key') && ['POST', 'PUT', 'DELETE'].includes(pm.request.method)) {",
+          "    pm.request.headers.upsert({ key: 'Idempotency-Key', value: pm.variables.replaceIn('{{$guid}}') });",
+          "  }",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// === Aserciones comunes (colección LEO-FUNCIONAL; reutiliza las de rc2-NEWMAN) ===",
+          "const scen = pm.info.requestName.split(' ')[0];",
+          "const sha = pm.environment.get('expected_release_sha');",
+          "let body = null; try { body = pm.response.json(); } catch (e) { body = null; }",
+          "const raw = pm.response.text() || '';",
+          "// Contrato (OpenAPI components.parameters.IdempotencyKey, rutas api.idempotency): un replay exitoso devuelve el cuerpo/estado original,",
+          "// Idempotency-Replayed: true y el X-Correlation-ID ORIGINAL; cualquier otra respuesta hace eco del correlation id enviado.",
+          "const idemKey = pm.request.headers.get('Idempotency-Key');",
+          "// ATIX phone-lookups usa AtixIdempotencyKey + AtixCorrelationId requerido (sin regla de CID original): hace eco del CID enviado.",
+          "const atixRoute = pm.request.url.getPath().indexOf('/integrations/atix/') !== -1;",
+          "const replayed = !atixRoute && pm.response.headers.get('Idempotency-Replayed') === 'true';",
+          "if (idemKey && !replayed && pm.response.code < 300) { pm.collectionVariables.set('cid_by_key_' + idemKey, pm.variables.get('cid')); }",
+          "pm.test(scen + ' [release ' + sha.substring(0, 12) + '] correlation id devuelto', function () {",
+          "  const got = pm.response.headers.get('X-Correlation-ID');",
+          "  if (replayed) {",
+          "    const original = pm.collectionVariables.get('cid_by_key_' + idemKey);",
+          "    pm.expect(original, 'correlation id original registrado para la Idempotency-Key').to.be.a('string');",
+          "    pm.expect(got).to.eql(original);",
+          "  } else {",
+          "    pm.expect(got).to.eql(pm.variables.get('cid'));",
+          "  }",
+          "});",
+          "pm.test(scen + ' sin datos protegidos en la respuesta', function () {",
+          "  pm.expect(raw).to.not.match(/\"(otp|otp_code|code_hash|password|secret|hmac_secret|machine_secret)\"\\s*:/i);",
+          "  pm.expect(raw).to.not.match(/\\+52\\d{10}/);",
+          "  ['machine_credential', 'bearer_token', 'bearer_none', 'step_up_code_results', 'step_up_code_invoices'].forEach(function (k) {",
+          "    const v = pm.variables.get(k); if (v && String(v).length > 3) { pm.expect(raw.indexOf(String(v))).to.eql(-1); }",
+          "  });",
+          "});",
+          "if (pm.response.code >= 400 && body) {",
+          "  pm.test(scen + ' error tipado (ApiErrorResponse)', function () {",
+          "    pm.expect(body.success).to.eql(false);",
+          "    pm.expect(body.error.code).to.be.a('string');",
+          "    pm.expect(body.error.message).to.be.a('string');",
+          "    pm.expect(body.error.retryable).to.be.a('boolean');",
+          "    pm.expect(body.error.correlation_id).to.eql(pm.response.headers.get('X-Correlation-ID'));",
+          "  });",
+          "}",
+          "// Controles Leo adicionales: nunca PDF/XML, nunca datos de pago, nunca RFC completo.",
+          "pm.test(scen + ' Leo no recibe PDF/XML ni datos de pago', function () {",
+          "  const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase();",
+          "  pm.expect(ct).to.not.match(/application\\/pdf|xml|octet-stream/);",
+          "  pm.expect(raw).to.not.match(/\"(payment_url|payment_link|payment_link_id|payment_attempt_id|card_number|card_token|cvv)\"\\s*:/i);",
+          "  pm.expect(raw).to.not.match(/\\b[A-ZÑ&]{3,4}\\d{6}[A-Z0-9]{3}\\b/);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "0 Precondición (L02)",
+      "item": [
+        {
+          "name": "LF00 Readback: Bearer Leo (OTP L02) autoriza memberships/status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/memberships/status",
+            "description": "Readback: Bearer Leo (OTP L02) autoriza memberships/status · fila L02 · escenario S03 · operationId=membershipStatusShow (GET /memberships/status) · reutiliza P90:MEMBERSHIP-STATUS. Esperado: 200; el Bearer de Leo proviene de A10 (rc2-NEWMAN), inyectado en runtime. requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF00 HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF00 data.status presente', function () { pm.expect(pm.response.json().data).to.have.property('status'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "S09 Pedidos y familiares (L07, L08)",
+      "item": [
+        {
+          "name": "LF-L07a Pedidos propios con datos mínimos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders",
+            "description": "Pedidos propios con datos mínimos · fila L07 · escenario S09 · operationId=ordersIndex (GET /orders) · reutiliza NEWMAN:R01. Esperado: 200 LeoOrdersIndexResponse sin pedido ajeno. requires: bearer_token,machine_credential,foreign_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L07a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L07a no incluye pedido ajeno', function () { const b = pm.response.json(); const orders = (b.data && b.data.orders); pm.expect(orders, 'data.orders').to.be.an('array'); pm.expect(orders.map(o=>String(o.id))).to.not.include(String(pm.variables.get('foreign_order_id'))); });",
+                  "pm.test('LF-L07a pedidos con datos mínimos (LeoOrderSummary)', function () { const allowed = ['id','status','status_label','brand','study_name','total_cents','currency','is_cancelled','created_at','updated_at']; (pm.response.json().data.orders || []).forEach(function (o) { Object.keys(o).forEach(function (k) { pm.expect(allowed, 'campo ' + k).to.include(k); }); }); pm.expect(pm.response.json().data).to.have.property('pagination'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L07b Estado de pedido propio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/status",
+            "description": "Estado de pedido propio · fila L07 · escenario S09 · operationId=ordersStatus (GET /orders/{order_id}/status) · reutiliza P90:ordersStatus. Esperado: 200 LeoOrderStatusResponse. requires: bearer_token,machine_credential,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L07b HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L07b LeoOrderStatus exacto', function () { const d = pm.response.json().data; pm.expect(Object.keys(d).sort()).to.eql(['is_cancelled','order_id','pipeline','results_available','status','status_label','updated_at']); pm.expect(String(d.order_id)).to.eql(String(pm.variables.get('own_order_id'))); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L07c Productos de pedido propio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/products",
+            "description": "Productos de pedido propio · fila L07 · escenario S09 · operationId=ordersProducts (GET /orders/{order_id}/products) · reutiliza P90:ordersProducts. Esperado: 200 LeoOrderProductsResponse. requires: bearer_token,machine_credential,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L07c HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L07c productos con datos mínimos (LeoOrderProduct)', function () { const allowed = [\"id\", \"laboratory_test_id\", \"name\", \"brand\", \"price_cents\", \"currency\", \"quantity\", \"requires_appointment\"]; (pm.response.json().data.products || []).forEach(function (x) { Object.keys(x).forEach(function (k) { pm.expect(allowed, 'campo ' + k).to.include(k); }); }); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L07d Estado de pedido ajeno: soft deny",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{foreign_order_id}}/status",
+            "description": "Estado de pedido ajeno: soft deny · fila L07 · escenario S09 · operationId=ordersStatus (GET /orders/{order_id}/status) · reutiliza P90:ordersStatus. Esperado: 404 ORDER_NOT_FOUND. requires: bearer_token,machine_credential,foreign_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L07d HTTP 404', function () { pm.expect(pm.response.code).to.be.oneOf([404]); });",
+                  "pm.test('LF-L07d soft deny ORDER_NOT_FOUND (sin revelar existencia)', function () { const b = pm.response.json(); pm.expect(b.error.code).to.be.oneOf(['ORDER_NOT_FOUND', 'INVOICE_NOT_FOUND']); pm.expect(JSON.stringify(b)).to.not.match(/\"(data|order|invoice)\"\\s*:\\s*\\{/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L07x Leo no cancela pedidos",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/cancel",
+            "description": "NEGATIVA_SEGURIDAD · Leo no cancela pedidos · fila L07/L20 · escenario S09 · operationId=ordersCancel (PUT /orders/{order_id}/cancel) · reutiliza P90:ordersCancel. Esperado: 403 (native-only). Escritura negativa: si el control fallara cancelaría un pedido QA; sólo con leo_negative_writes_authorized=1. requires: bearer_token,machine_credential,own_order_id,leo_negative_writes_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L07x HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L08a Familiares propios con datos mínimos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/user/family",
+            "description": "Familiares propios con datos mínimos · fila L08 · escenario S09 · operationId=userFamily (GET /user/family) · reutiliza NEWMAN:R04. Esperado: 200 LeoFamilyResponse sin fecha de nacimiento ni género. requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L08a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L08a familiares con datos mínimos (LeoFamilyMember)', function () { const f = pm.response.json().data.family; pm.expect(f).to.be.an('array'); f.forEach(function (m) { pm.expect(Object.keys(m).sort()).to.eql(['display_name','id','is_main_profile','relationship']); pm.expect(m.id).to.be.a('string'); }); });",
+                  "pm.test('LF-L08a sin fecha de nacimiento ni género', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(birth_date|gender|full_name)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "S10 Resultados (L09, L10, L11)",
+      "item": [
+        {
+          "name": "LF-L09a Índice de resultados propios (metadatos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/results",
+            "description": "Índice de resultados propios (metadatos) · fila L09 · escenario S10 · operationId=ordersResultsIndex (GET /orders/results) · reutiliza P90:ordersResultsIndex. Esperado: 200 LeoResultsIndexResponse. requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L09a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L09a metadatos mínimos (LeoResultMetadata)', function () { const allowed = [\"order_id\", \"study_name\", \"brand\", \"status\", \"results_available\", \"available_at\", \"has_pdf\"]; (pm.response.json().data.results || []).forEach(function (x) { Object.keys(x).forEach(function (k) { pm.expect(allowed, 'campo ' + k).to.include(k); }); }); });",
+                  "pm.test('LF-L09a sin descarga, URL de documento ni contenido', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(download_url|download|xml|xml_url|pdf_base64|content)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L09b Metadatos de resultado propio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/results",
+            "description": "Metadatos de resultado propio · fila L09 · escenario S10 · operationId=ordersResults (GET /orders/{order_id}/results) · reutiliza NEWMAN:R02a. Esperado: 200 LeoOrderResultsResponse sin descarga. requires: bearer_token,machine_credential,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L09b HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L09b metadatos mínimos (LeoResultMetadata)', function () { const d = pm.response.json().data; const allowed = ['order_id','study_name','brand','status','results_available','available_at','has_pdf']; Object.keys(d).forEach(function (k) { pm.expect(allowed, 'campo ' + k).to.include(k); }); pm.expect(String(d.order_id)).to.eql(String(pm.variables.get('own_order_id'))); });",
+                  "pm.test('LF-L09b sin descarga, URL ni contenido', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(download_url|download|url|xml|xml_url|pdf_base64|content)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L09c Resultado de pedido ajeno: soft deny",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{foreign_order_id}}/results",
+            "description": "Resultado de pedido ajeno: soft deny · fila L09 · escenario S10 · operationId=ordersResults (GET /orders/{order_id}/results) · reutiliza P90:ordersResults. Esperado: 404 ORDER_NOT_FOUND. requires: bearer_token,machine_credential,foreign_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L09c HTTP 404', function () { pm.expect(pm.response.code).to.be.oneOf([404]); });",
+                  "pm.test('LF-L09c soft deny ORDER_NOT_FOUND (sin revelar existencia)', function () { const b = pm.response.json(); pm.expect(b.error.code).to.be.oneOf(['ORDER_NOT_FOUND', 'INVOICE_NOT_FOUND']); pm.expect(JSON.stringify(b)).to.not.match(/\"(data|order|invoice)\"\\s*:\\s*\\{/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L10a Step-up de resultado: solicitar challenge (SMS al titular)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/results/step-up/request",
+            "description": "Step-up de resultado: solicitar challenge (SMS al titular) · fila L10 · escenario S10 · operationId=ordersResultsStepUpRequest (POST /orders/{order_id}/results/step-up/request) · reutiliza P90:ordersResultsStepUpRequest. Esperado: 202 OtpChallenge purpose=step_up_results, destino enmascarado. Envía un SMS al teléfono del titular: sólo con sms_authorized=1 (autorización de Seguridad). requires: bearer_token,machine_credential,own_order_id,sms_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L10a HTTP 202', function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+                  "pm.test('LF-L10a challenge step_up_results con destino enmascarado', function () { const d = pm.response.json().data; pm.expect(d.purpose).to.eql('step_up_results'); pm.expect(d.challenge_id).to.be.a('string'); pm.expect(String(d.destination_masked || '')).to.not.match(/\\d{7,}/); pm.expect(d).to.not.have.property('code'); pm.collectionVariables.set('results_challenge_id', d.challenge_id); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L10b Step-up de resultado: verificar OTP tecleado por el titular",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/results/step-up/verify",
+            "description": "Step-up de resultado: verificar OTP tecleado por el titular · fila L10 · escenario S10 · operationId=ordersResultsStepUpVerify (POST /orders/{order_id}/results/step-up/verify) · reutiliza P90:ordersResultsStepUpVerify. Esperado: 200 OtpGrant purpose=step_up_results. El código lo lee el titular en su dispositivo y el operador lo teclea con read -s; nunca se obtiene de BD, logs ni canales internos. requires: bearer_token,machine_credential,own_order_id,results_challenge_id,step_up_code_results",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{results_challenge_id}}\",\n  \"code\": \"{{step_up_code_results}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L10b HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L10b grant ligado al propósito step_up_results', function () { const d = pm.response.json().data; pm.expect(d.purpose).to.eql('step_up_results'); pm.expect(d.grant_id).to.be.a('string'); pm.expect(d.resource_id).to.be.a('number'); pm.collectionVariables.set('results_grant_id', d.grant_id); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L10c Liga segura de resultado (PDF) tras step-up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/results/secure-link",
+            "description": "Liga segura de resultado (PDF) tras step-up · fila L10 · escenario S10 · operationId=ordersResultsSecureLink (POST /orders/{order_id}/results/secure-link) · reutiliza P90:ordersResultsSecureLink. Esperado: 201 SecureLink (url temporal, ≤60 min, max_opens ≤3). La URL no se guarda en variables ni en el reporte; Leo la entrega al usuario y nunca la abre. requires: bearer_token,machine_credential,own_order_id,results_grant_id",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_id\": \"{{results_grant_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L10c HTTP 201', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+                  "pm.test('LF-L10c liga segura temporal (https, host QA, ≤60 min, ≤3 aperturas) sin exponerla', function () { const d = pm.response.json().data; pm.expect(Object.keys(d).sort()).to.eql(['expires_at','max_opens','url']); const u = String(d.url); pm.expect(u).to.match(/^https:\\/\\/[^/]+\\/[^?#]*secure-downloads\\/[A-Za-z0-9_-]+$/); const h = u.replace(/^https:\\/\\//,'').split('/')[0].toLowerCase(); pm.expect(['staging.famedic.com.mx','famedic-otp.on-forge.com']).to.include(h); pm.expect(u).to.not.match(/pay|efevoo|stripe|payment-link|checkout|\\.xml/i); const ttl = (Date.parse(d.expires_at) - Date.now()) / 60000; pm.expect(ttl).to.be.above(0); pm.expect(ttl).to.be.at.most(61); pm.expect(d.max_opens).to.be.at.least(1); pm.expect(d.max_opens).to.be.at.most(3); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L10d Liga segura con grant inválido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/results/secure-link",
+            "description": "Liga segura con grant inválido · fila L10 · escenario S10 · operationId=ordersResultsSecureLink (POST /orders/{order_id}/results/secure-link) · reutiliza P90:ordersResultsSecureLink. Esperado: 422 STEP_UP_GRANT_INVALID sin liga. grant_id sintético (UUID nulo), no emitido. requires: bearer_token,machine_credential,own_order_id",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_id\": \"00000000-0000-4000-8000-000000000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L10d HTTP 422', function () { pm.expect(pm.response.code).to.be.oneOf([422]); });",
+                  "pm.test('LF-L10d STEP_UP_GRANT_INVALID sin url', function () { const b = pm.response.json(); pm.expect(b.error.code).to.eql('STEP_UP_GRANT_INVALID'); pm.expect(JSON.stringify(b)).to.not.match(/https?:\\/\\//); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L10e Step-up de resultado sobre pedido ajeno: soft deny",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{foreign_order_id}}/results/step-up/request",
+            "description": "Step-up de resultado sobre pedido ajeno: soft deny · fila L10 · escenario S10 · operationId=ordersResultsStepUpRequest (POST /orders/{order_id}/results/step-up/request) · reutiliza P90:ordersResultsStepUpRequest. Esperado: 404 ORDER_NOT_FOUND sin challenge ni SMS. Si el control fallara enviaría un SMS; sólo con sms_authorized=1. requires: bearer_token,machine_credential,foreign_order_id,sms_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L10e HTTP 404', function () { pm.expect(pm.response.code).to.be.oneOf([404]); });",
+                  "pm.test('LF-L10e soft deny ORDER_NOT_FOUND (sin revelar existencia)', function () { const b = pm.response.json(); pm.expect(b.error.code).to.be.oneOf(['ORDER_NOT_FOUND', 'INVOICE_NOT_FOUND']); pm.expect(JSON.stringify(b)).to.not.match(/\"(data|order|invoice)\"\\s*:\\s*\\{/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L11 Descarga directa de resultado prohibida a Leo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/results/download",
+            "description": "NEGATIVA_SEGURIDAD · Descarga directa de resultado prohibida a Leo · fila L11 · escenario S10 · operationId=ordersResultsDownload (GET /orders/{order_id}/results/download) · reutiliza P90:ordersResultsDownload. Esperado: 403 sin PDF. requires: bearer_token,machine_credential,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L11 HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });",
+                  "pm.test('LF-L11 no entrega PDF/XML a Leo', function () { const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase(); pm.expect(ct).to.not.match(/pdf|xml|octet-stream/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "S11 Facturas y perfiles fiscales (L12, L13, L13b, L14, L15)",
+      "item": [
+        {
+          "name": "LF-L12a Índice de facturas propias (metadatos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/invoices",
+            "description": "Índice de facturas propias (metadatos) · fila L12 · escenario S11 · operationId=ordersInvoicesIndex (GET /orders/invoices) · reutiliza P90:ordersInvoicesIndex. Esperado: 200 LeoInvoicesIndexResponse. requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L12a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L12a metadatos mínimos (LeoInvoiceMetadata)', function () { const allowed = [\"id\", \"order_id\", \"uuid\", \"status\", \"issued_at\", \"total_cents\"]; (pm.response.json().data.invoices || []).forEach(function (x) { Object.keys(x).forEach(function (k) { pm.expect(allowed, 'campo ' + k).to.include(k); }); }); });",
+                  "pm.test('LF-L12a sin descarga, URL de documento ni contenido', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(download_url|download|xml|xml_url|pdf_base64|content)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L12b Metadatos de factura propia",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/invoices",
+            "description": "Metadatos de factura propia · fila L12 · escenario S11 · operationId=ordersInvoices (GET /orders/{order_id}/invoices) · reutiliza NEWMAN:R03a. Esperado: 200 LeoOrderInvoicesResponse sin descarga. requires: bearer_token,machine_credential,own_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L12b HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L12b metadatos mínimos (LeoInvoiceMetadata)', function () { const d = pm.response.json().data; pm.expect(String(d.order_id)).to.eql(String(pm.variables.get('own_order_id'))); const allowed = ['id','order_id','uuid','status','issued_at','total_cents']; (d.invoices || []).forEach(function (i) { Object.keys(i).forEach(function (k) { pm.expect(allowed, 'campo ' + k).to.include(k); }); }); });",
+                  "pm.test('LF-L12b sin descarga, URL ni XML', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(download_url|download|url|xml|xml_url|pdf_base64|content)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L13b Lectura mínima de perfiles fiscales propios (D-1)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/user/tax-profiles",
+            "description": "Lectura mínima de perfiles fiscales propios (D-1) · fila L13b · escenario S11 · operationId=userTaxProfilesIndex (GET /user/tax-profiles) · reutiliza P90:userTaxProfilesIndex. Esperado: 200 LeoTaxProfilesResponse (RFC enmascarado, sin PII completa). requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L13b HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L13b LeoTaxProfileSummary exacto', function () { const t = pm.response.json().data.tax_profiles; pm.expect(t).to.be.an('array'); t.forEach(function (p) { Object.keys(p).forEach(function (k) { pm.expect(['id','business_name','rfc_masked','tax_regime','cfdi_use','is_default'], 'campo ' + k).to.include(k); }); ['id','business_name','rfc_masked','tax_regime','cfdi_use'].forEach(function (k) { pm.expect(p, k).to.have.property(k); }); pm.expect(p.id).to.be.a('string'); pm.expect(p.rfc_masked).to.match(/^\\*{9,10}[A-Z0-9]{3}$/); }); });",
+                  "pm.test('LF-L13b sin PII fiscal completa (RFC, domicilio, CP, correo, constancia)', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(rfc|postal_code|zip_code|address|fiscal_address|email|tax_certificate|csf|constancia\\w*)\"\\s*:/i); pm.expect(s).to.not.match(/\\b[A-ZÑ&]{3,4}\\d{6}[A-Z0-9]{3}\\b/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L13a Estado de solicitud de factura de pedido propio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{invoice_request_order_id}}/invoice-request/status",
+            "description": "Estado de solicitud de factura de pedido propio · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStatus (GET /orders/{order_id}/invoice-request/status) · reutiliza P90:ordersInvoiceRequestStatus. Esperado: 200 LeoInvoiceRequestStatusResponse. requires: bearer_token,machine_credential,invoice_request_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L13a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L13a LeoInvoiceRequestStatus exacto', function () { const d = pm.response.json().data; pm.expect(Object.keys(d).sort()).to.eql(['invoice','invoice_request','invoice_status','order_id']); pm.expect(String(d.order_id)).to.eql(String(pm.variables.get('invoice_request_order_id'))); });",
+                  "pm.test('LF-L13a sin descarga, URL de documento ni contenido', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(download_url|download|xml|xml_url|pdf_base64|content)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L13c Solicitar factura de pedido propio del mismo mes (tras confirmación del usuario)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{invoice_request_order_id}}/invoice-request",
+            "description": "Solicitar factura de pedido propio del mismo mes (tras confirmación del usuario) · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStore (POST /orders/{order_id}/invoice-request) · reutiliza P90:ordersInvoiceRequestStore. Esperado: 201 LeoInvoiceRequestStatusResponse con invoice_request. Escritura QA (fixture INT-005): sólo con invoice_request_authorized=1. tax_profile_id es integer en el contrato (ver OBS-CONTRATO-TAXPROFILE-ID). requires: bearer_token,machine_credential,invoice_request_order_id,tax_profile_id_int,invoice_request_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tax_profile_id\": {{tax_profile_id_int}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L13c HTTP 201', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+                  "pm.test('LF-L13c solicitud registrada (LeoInvoiceRequestStatus)', function () { const d = pm.response.json().data; pm.expect(Object.keys(d).sort()).to.eql(['invoice','invoice_request','invoice_status','order_id']); pm.expect(d.invoice_request).to.be.an('object'); pm.expect(d.invoice_request.id).to.be.a('number'); pm.collectionVariables.set('lf_invoice_request_id', String(d.invoice_request.id)); });",
+                  "pm.test('LF-L13c sin descarga, URL de documento ni contenido', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(download_url|download|xml|xml_url|pdf_base64|content)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L13d Readback: estado muestra la solicitud creada",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{invoice_request_order_id}}/invoice-request/status",
+            "description": "Readback: estado muestra la solicitud creada · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStatus (GET /orders/{order_id}/invoice-request/status) · reutiliza P90:ordersInvoiceRequestStatus. Esperado: 200 con el mismo invoice_request.id. requires: bearer_token,machine_credential,invoice_request_order_id,lf_invoice_request_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L13d HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L13d readback de la solicitud', function () { const d = pm.response.json().data; pm.expect(d.invoice_request).to.be.an('object'); pm.expect(String(d.invoice_request.id)).to.eql(String(pm.variables.get('lf_invoice_request_id'))); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L13e Estado de solicitud de factura de pedido ajeno: soft deny",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{foreign_order_id}}/invoice-request/status",
+            "description": "Estado de solicitud de factura de pedido ajeno: soft deny · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStatus (GET /orders/{order_id}/invoice-request/status) · reutiliza P90:ordersInvoiceRequestStatus. Esperado: 404 ORDER_NOT_FOUND. requires: bearer_token,machine_credential,foreign_order_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L13e HTTP 404', function () { pm.expect(pm.response.code).to.be.oneOf([404]); });",
+                  "pm.test('LF-L13e soft deny ORDER_NOT_FOUND (sin revelar existencia)', function () { const b = pm.response.json(); pm.expect(b.error.code).to.be.oneOf(['ORDER_NOT_FOUND', 'INVOICE_NOT_FOUND']); pm.expect(JSON.stringify(b)).to.not.match(/\"(data|order|invoice)\"\\s*:\\s*\\{/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L13f Solicitud de factura fuera del mes calendario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{invoice_old_order_id}}/invoice-request",
+            "description": "Solicitud de factura fuera del mes calendario · fila L13 · escenario S11 · operationId=ordersInvoiceRequestStore (POST /orders/{order_id}/invoice-request) · reutiliza P90:ordersInvoiceRequestStore. Esperado: 409 ORDER_NOT_INVOICEABLE sin efecto. Pedido propio de un mes anterior (fixture INT-005). requires: bearer_token,machine_credential,invoice_old_order_id,tax_profile_id_int,invoice_request_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tax_profile_id\": {{tax_profile_id_int}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L13f HTTP 409', function () { pm.expect(pm.response.code).to.be.oneOf([409]); });",
+                  "pm.test('LF-L13f ORDER_NOT_INVOICEABLE', function () { pm.expect(pm.response.json().error.code).to.eql('ORDER_NOT_INVOICEABLE'); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L13x Leo no crea perfiles fiscales",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/user/tax-profiles",
+            "description": "NEGATIVA_SEGURIDAD · Leo no crea perfiles fiscales · fila L13b/L20 · escenario S11 · operationId=userTaxProfilesStore (POST /user/tax-profiles) · reutiliza P90:userTaxProfilesStore. Esperado: 403 (native-only); cuerpo vacío: aun con un defecto, la validación impide crear. Un 422 significaría que la autorización no se evaluó antes de la validación: FAIL. requires: bearer_token,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L13x HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L14a Step-up de factura: solicitar challenge (SMS al titular)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/invoices/{{own_invoice_id}}/step-up/request",
+            "description": "Step-up de factura: solicitar challenge (SMS al titular) · fila L14 · escenario S11 · operationId=ordersInvoiceStepUpRequest (POST /orders/{order_id}/invoices/{invoice_id}/step-up/request) · reutiliza P90:ordersInvoiceStepUpRequest. Esperado: 202 OtpChallenge purpose=step_up_invoices. Envía un SMS: sólo con sms_authorized=1. requires: bearer_token,machine_credential,own_order_id,own_invoice_id,sms_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L14a HTTP 202', function () { pm.expect(pm.response.code).to.be.oneOf([202]); });",
+                  "pm.test('LF-L14a challenge step_up_invoices con destino enmascarado', function () { const d = pm.response.json().data; pm.expect(d.purpose).to.eql('step_up_invoices'); pm.expect(d.challenge_id).to.be.a('string'); pm.expect(String(d.destination_masked || '')).to.not.match(/\\d{7,}/); pm.expect(d).to.not.have.property('code'); pm.collectionVariables.set('invoices_challenge_id', d.challenge_id); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L14b Step-up de factura: verificar OTP tecleado por el titular",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/invoices/{{own_invoice_id}}/step-up/verify",
+            "description": "Step-up de factura: verificar OTP tecleado por el titular · fila L14 · escenario S11 · operationId=ordersInvoiceStepUpVerify (POST /orders/{order_id}/invoices/{invoice_id}/step-up/verify) · reutiliza P90:ordersInvoiceStepUpVerify. Esperado: 200 OtpGrant purpose=step_up_invoices. Código tecleado con read -s por el operador a partir del dispositivo del titular. requires: bearer_token,machine_credential,own_order_id,own_invoice_id,invoices_challenge_id,step_up_code_invoices",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge_id\": \"{{invoices_challenge_id}}\",\n  \"code\": \"{{step_up_code_invoices}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L14b HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L14b grant ligado al propósito step_up_invoices', function () { const d = pm.response.json().data; pm.expect(d.purpose).to.eql('step_up_invoices'); pm.expect(d.grant_id).to.be.a('string'); pm.collectionVariables.set('invoices_grant_id', d.grant_id); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L14c Liga segura de factura (sólo PDF) tras step-up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/invoices/{{own_invoice_id}}/secure-link",
+            "description": "Liga segura de factura (sólo PDF) tras step-up · fila L14 · escenario S11 · operationId=ordersInvoiceSecureLink (POST /orders/{order_id}/invoices/{invoice_id}/secure-link) · reutiliza P90:ordersInvoiceSecureLink. Esperado: 201 SecureLink PDF (sin XML). La URL no se guarda en variables ni en el reporte; Leo la entrega al usuario y nunca la abre. El XML se canaliza a Atención a usuarios. requires: bearer_token,machine_credential,own_order_id,own_invoice_id,invoices_grant_id",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_id\": \"{{invoices_grant_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L14c HTTP 201', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+                  "pm.test('LF-L14c liga segura temporal (https, host QA, ≤60 min, ≤3 aperturas) sin exponerla', function () { const d = pm.response.json().data; pm.expect(Object.keys(d).sort()).to.eql(['expires_at','max_opens','url']); const u = String(d.url); pm.expect(u).to.match(/^https:\\/\\/[^/]+\\/[^?#]*secure-downloads\\/[A-Za-z0-9_-]+$/); const h = u.replace(/^https:\\/\\//,'').split('/')[0].toLowerCase(); pm.expect(['staging.famedic.com.mx','famedic-otp.on-forge.com']).to.include(h); pm.expect(u).to.not.match(/pay|efevoo|stripe|payment-link|checkout|\\.xml/i); const ttl = (Date.parse(d.expires_at) - Date.now()) / 60000; pm.expect(ttl).to.be.above(0); pm.expect(ttl).to.be.at.most(61); pm.expect(d.max_opens).to.be.at.least(1); pm.expect(d.max_opens).to.be.at.most(3); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L14d Grant de resultados no sirve para factura (propósito)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/invoices/{{own_invoice_id}}/secure-link",
+            "description": "Grant de resultados no sirve para factura (propósito) · fila L14 · escenario S11 · operationId=ordersInvoiceSecureLink (POST /orders/{order_id}/invoices/{invoice_id}/secure-link) · reutiliza P90:ordersInvoiceSecureLink. Esperado: 422 STEP_UP_GRANT_INVALID sin liga. requires: bearer_token,machine_credential,own_order_id,own_invoice_id,results_grant_id",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_id\": \"{{results_grant_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L14d HTTP 422', function () { pm.expect(pm.response.code).to.be.oneOf([422]); });",
+                  "pm.test('LF-L14d STEP_UP_GRANT_INVALID sin url', function () { const b = pm.response.json(); pm.expect(b.error.code).to.eql('STEP_UP_GRANT_INVALID'); pm.expect(JSON.stringify(b)).to.not.match(/https?:\\/\\//); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L15 Descarga directa de factura prohibida a Leo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/orders/{{own_order_id}}/invoices/{{own_invoice_id}}/download",
+            "description": "NEGATIVA_SEGURIDAD · Descarga directa de factura prohibida a Leo · fila L15 · escenario S11 · operationId=ordersInvoiceDownload (GET /orders/{order_id}/invoices/{invoice_id}/download) · reutiliza P90:ordersInvoiceDownload. Esperado: 403 sin PDF ni XML. requires: bearer_token,machine_credential,own_order_id,own_invoice_id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L15 HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });",
+                  "pm.test('LF-L15 no entrega PDF/XML a Leo', function () { const ct = (pm.response.headers.get('Content-Type') || '').toLowerCase(); pm.expect(ct).to.not.match(/pdf|xml|octet-stream/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "S07/S08/S12 Carrito y checkout de laboratorio (L05 D-2, L06)",
+      "item": [
+        {
+          "name": "LF-L06a Carrito de laboratorio propio por marca",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?service_line=laboratory&brand={{lab_brand}}",
+            "description": "Carrito de laboratorio propio por marca · fila L06 · escenario S07 · operationId=cartIndex (GET /cart) · reutiliza P90:CART-LEO-CONTINUITY. Esperado: 200 carrito de la línea laboratory y la marca. requires: bearer_token,machine_credential,lab_brand"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L06a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L06a sin datos de pago', function () { pm.expect(JSON.stringify(pm.response.json())).to.not.match(/\"(payment_url|payment_link|card|card_token)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L06b Agregar estudio propio al carrito de laboratorio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items",
+            "description": "Agregar estudio propio al carrito de laboratorio · fila L06 · escenario S07 · operationId=cartItemsStore (POST /cart/items) · reutiliza P90:cartItemsStore. Esperado: 201 con el ítem; precio calculado en servidor. Cuerpo LaboratoryCartItemCreateLegacy (laboratory_test_id, brand). Escritura QA: sólo con qa_writes_authorized=1. requires: bearer_token,machine_credential,lab_brand,test_id_available,qa_writes_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"laboratory_test_id\": {{test_id_available}},\n  \"brand\": \"{{lab_brand}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L06b HTTP 201', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+                  "pm.test('LF-L06b ítem creado en laboratorio', function () { const b = pm.response.json(); const id = b.data.item.id; pm.expect(id, 'id del ítem').to.be.a('number'); pm.expect(String(b.data.cart.brand)).to.eql(String(pm.variables.get('lab_brand'))); pm.expect(b.data.item.laboratory_test_id).to.eql(Number(pm.variables.get('test_id_available'))); pm.collectionVariables.set('lab_item_id_leo', String(id)); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L06c Readback: el carrito de laboratorio contiene el estudio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?service_line=laboratory&brand={{lab_brand}}",
+            "description": "Readback: el carrito de laboratorio contiene el estudio · fila L06 · escenario S07 · operationId=cartIndex (GET /cart) · reutiliza P90:CART-LEO-CONTINUITY. Esperado: 200 con el ítem agregado. requires: bearer_token,machine_credential,lab_brand,lab_item_id_leo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L06c HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L06c readback contiene el ítem', function () { const d = pm.response.json().data; pm.expect(String(d.brand)).to.eql(String(pm.variables.get('lab_brand'))); pm.expect(d.items.map(function (i) { return String(i.id); })).to.include(String(pm.variables.get('lab_item_id_leo'))); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L06d Totales del carrito de laboratorio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/totals?service_line=laboratory&brand={{lab_brand}}",
+            "description": "Totales del carrito de laboratorio · fila L06 · escenario S07 · operationId=cartTotals (GET /cart/totals) · reutiliza P90:cartTotals. Esperado: 200 totales de servidor. requires: bearer_token,machine_credential,lab_brand"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L06d HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L05a Checkout de laboratorio: semántica T4 y continuidad D-2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/checkout/prepare?service_line=laboratory&brand={{lab_brand}}",
+            "description": "Checkout de laboratorio: semántica T4 y continuidad D-2 · fila L05/L06 · escenario S12 · operationId=checkoutPrepare (GET /checkout/prepare) · reutiliza P90:CHECKOUT-LEO-CONTINUITY. Esperado: 200 LeoLaboratoryCheckoutPrepareResponse; assistant_can_pay=false; continuity_url first-party de un uso ≤10 min sólo si lab_continuity_enabled=1. La liga no se guarda; Leo la entrega al usuario. Abrirla (sesión del titular, session_mismatch) es prueba de navegador de S12, fuera de Newman. requires: bearer_token,machine_credential,lab_brand"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L05a HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L05a semántica T4 (Leo nunca paga)', function () { const d = pm.response.json().data; pm.expect(d.audience).to.eql('leo'); pm.expect(d.service_line).to.eql('laboratory'); pm.expect(d.assistant_can_pay).to.eql(false); pm.expect(d.can_continue_on_platform).to.eql(true); pm.expect(d.can_continue_to_payment_platform).to.eql(false); pm.expect(JSON.stringify(d)).to.not.match(/\"(payment_url|payment_link|checkout_url)\"\\s*:/); });",
+                  "pm.test('LF-L05a continuidad de laboratorio según bandera (sólo staging, nunca payment link)', function () { const d = pm.response.json().data; if (pm.variables.get('lab_continuity_enabled') !== '1') { pm.expect(d).to.not.have.property('continuity_url'); return; } const u = String(d.continuity_url); pm.expect(u).to.match(/^https:\\/\\/[^/]+\\/checkout\\/continue\\/[A-Za-z0-9]+$/); pm.expect(['staging.famedic.com.mx','famedic-otp.on-forge.com']).to.include(u.replace(/^https:\\/\\//,'').split('/')[0].toLowerCase()); pm.expect(u).to.not.match(/pay|efevoo|stripe|payment-link/i); const ttl = (Date.parse(d.continuity_expires_at) - Date.now()) / 60000; pm.expect(ttl).to.be.above(0); pm.expect(ttl).to.be.at.most(11); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L06e Retirar el estudio del carrito de laboratorio",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/items/{{lab_item_id_leo}}?service_line=laboratory&brand={{lab_brand}}",
+            "description": "Retirar el estudio del carrito de laboratorio · fila L06 · escenario S08 · operationId=cartItemsDestroy (DELETE /cart/items/{cart_item_id}) · reutiliza P90:cartItemsDestroy. Esperado: 200 sin afectar otra línea. requires: bearer_token,machine_credential,lab_brand,lab_item_id_leo,qa_writes_authorized"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L06e HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L06f Readback: el estudio ya no está",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?service_line=laboratory&brand={{lab_brand}}",
+            "description": "Readback: el estudio ya no está · fila L06 · escenario S08 · operationId=cartIndex (GET /cart) · reutiliza P90:CART-LEO-CONTINUITY. Esperado: 200 sin el ítem retirado. requires: bearer_token,machine_credential,lab_brand,lab_item_id_leo,qa_writes_authorized"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L06f HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L06f readback sin el ítem', function () { const d = pm.response.json().data; pm.expect(d.items.map(function (i) { return String(i.id); })).to.not.include(String(pm.variables.get('lab_item_id_leo'))); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L06x Leo no vacía el carrito completo (cart:write denegado)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart?brand={{lab_brand}}",
+            "description": "NEGATIVA_SEGURIDAD · Leo no vacía el carrito completo (cart:write denegado) · fila L06 · escenario S08 · operationId=cartClear (DELETE /cart) · reutiliza P90:cartClear. Esperado: 403 sin efecto. Si el control fallara vaciaría el carrito QA de Leo; sólo con leo_negative_writes_authorized=1. requires: bearer_token,machine_credential,lab_brand,leo_negative_writes_authorized"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L06x HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "S12/S14 Checkout médico y pagos negativos (L04, L05, L17)",
+      "item": [
+        {
+          "name": "LF-L05m Checkout médico: semántica T4 (assistant_can_pay=false)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/checkout/prepare?service_line=medical_services",
+            "description": "Checkout médico: semántica T4 (assistant_can_pay=false) · fila L04/L05 · escenario S12 · operationId=checkoutPrepare (GET /checkout/prepare) · reutiliza NEWMAN:B23. Esperado: 200 assistant_can_pay=false; continuidad según b24_enabled. requires: bearer_none,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L05m HTTP 200', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "pm.test('LF-L05m assistant_can_pay=false', function () { const b = pm.response.json(); pm.expect(b.data.assistant_can_pay).to.eql(false); pm.expect(b.data).to.not.have.property('payment_url'); });",
+                  "pm.test('LF-L05m semántica T4: can_continue_on_platform=true y can_continue_to_payment_platform=false (el usuario continúa en FAMEDIC; sin pasarela para el asistente)', function () { const b = pm.response.json(); pm.expect(b.data.can_continue_on_platform).to.eql(true); pm.expect(b.data.can_continue_to_payment_platform).to.eql(false); });",
+                  "pm.test('LF-L05m continuidad según bandera B24 (apagada: ausente; habilitada: liga first-party de continuidad, nunca de pago)', function () {",
+                  "  const b = pm.response.json();",
+                  "  if (pm.variables.get('b24_enabled') !== '1') { pm.expect(b.data).to.not.have.property('continuity_url'); return; }",
+                  "  pm.expect(b.data.continuity_url).to.match(/^https:\\/\\/[^/]+\\/checkout\\/continue\\/[A-Za-z0-9]+$/);",
+                  "  pm.expect(b.data.continuity_url).to.not.match(/pay|efevoo|stripe|payment-link/i);",
+                  "  pm.expect(b.data.continuity_expires_at).to.be.a('string');",
+                  "  pm.expect(b.data.assistant_can_pay).to.eql(false);",
+                  "  pm.collectionVariables.set('continuity_url', b.data.continuity_url);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L17a Leo no puede generar liga de pago",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_none}}"
+              }
+            ],
+            "url": "{{base_url}}/checkout/payment-link",
+            "description": "NEGATIVA_SEGURIDAD · Leo no puede generar liga de pago · fila L17 · escenario S14 · operationId=checkoutPaymentLink (POST /checkout/payment-link) · reutiliza NEWMAN:B25. Esperado: 403 sin liga, intento de pago ni checkout. requires: bearer_none,machine_credential",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_line\": \"medical_services\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L17a HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });",
+                  "pm.test('LF-L17a sin URL de pago', function () { const b = pm.response.json(); pm.expect(JSON.stringify(b)).to.not.match(/https?:\\/\\//); });",
+                  "pm.test('LF-L17a sin liga, intento de pago ni checkout en la respuesta', function () { const s = JSON.stringify(pm.response.json()); pm.expect(s).to.not.match(/\"(payment_link|payment_url|payment_link_id|payment_attempt_id|checkout_url|continuity_url)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L17b Leo no crea draft de checkout (pagos)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/checkout/draft",
+            "description": "NEGATIVA_SEGURIDAD · Leo no crea draft de checkout (pagos) · fila L17 · escenario S14 · operationId=checkoutDraft (POST /checkout/draft) · reutiliza P90:checkoutDraft. Esperado: 403 sin draft ni liga. requires: bearer_token,machine_credential,lab_brand,leo_negative_writes_authorized",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"{{lab_brand}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L17b HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });",
+                  "pm.test('LF-L17b sin url ni intento de pago', function () { pm.expect(JSON.stringify(pm.response.json())).to.not.match(/https?:\\/\\/|\"(payment_attempt_id|checkout_url|draft_id)\"\\s*:/); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Negativos de alcance (L16 diferido, L18, L20)",
+      "item": [
+        {
+          "name": "LF-L16a Cupón directo diferido: Leo denegado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/coupon?service_line=laboratory&brand={{lab_brand}}",
+            "description": "NEGATIVA_SEGURIDAD · Cupón directo diferido: Leo denegado · fila L16 · escenario X01 · operationId=cartCouponShow (GET /cart/coupon) · reutiliza P90:LEGACY-LEO-DENIED-cartCouponShow. Esperado: 403. requires: bearer_token,machine_credential,lab_brand"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L16a HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L16b Beneficio médico directo diferido: Leo denegado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/cart/medical-benefit?service_line=medical_services",
+            "description": "NEGATIVA_SEGURIDAD · Beneficio médico directo diferido: Leo denegado · fila L16 · escenario X01 · operationId=medicalServiceBenefitShow (GET /cart/medical-benefit) · reutiliza P90:LEGACY-LEO-DENIED-medicalServiceBenefitShow. Esperado: 403. requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L16b HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L18 Citas: Leo no opera citas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/laboratory-appointments",
+            "description": "NEGATIVA_SEGURIDAD · Citas: Leo no opera citas · fila L18 · escenario S13 · operationId=appointmentsIndex (GET /laboratory-appointments) · reutiliza P90:appointmentsIndex. Esperado: 403 (native-only). requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L18 HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L20a Métodos de pago: Leo denegado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/user/payment-methods",
+            "description": "NEGATIVA_SEGURIDAD · Métodos de pago: Leo denegado · fila L20 · escenario S14 · operationId=userPaymentMethods (GET /user/payment-methods) · reutiliza P90:userPaymentMethods. Esperado: 403. requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L20a HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L20b Direcciones: Leo denegado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/user/addresses",
+            "description": "NEGATIVA_SEGURIDAD · Direcciones: Leo denegado · fila L20 · escenario S16 · operationId=userAddressesIndex (GET /user/addresses) · reutiliza P90:userAddressesIndex. Esperado: 403. requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L20b HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "LF-L20c Contactos: Leo denegado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Consumer-Credential",
+                "value": "{{machine_credential}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/user/contacts",
+            "description": "NEGATIVA_SEGURIDAD · Contactos: Leo denegado · fila L20 · escenario S16 · operationId=userContactsIndex (GET /user/contacts) · reutiliza P90:userContactsIndex. Esperado: 403. requires: bearer_token,machine_credential"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('LF-L20c HTTP 403', function () { pm.expect(pm.response.code).to.be.oneOf([403]); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}
