@@ -1,0 +1,48 @@
+id,funcionalidad,escenario_original,estado_historico_qa_3fb5feb8,historico_inmutable,clasificacion,escenario_plan,batch,nota
+A01,Reconocimiento ATIX,Teléfono registrado y personalización permitida,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S01,B2,
+A02,Reconocimiento ATIX,Teléfono no registrado,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S02,B2,
+A03,Seguridad HMAC,Firma incorrecta,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S01,B2,Control HMAC de S01/S02
+A04,Seguridad HMAC,Timestamp fuera de ventana,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S01,B2,Control HMAC de S01/S02
+A05,Anti replay,Nonce repetido,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S01,B2,Anti-replay (timestamp/nonce)
+A06,Idempotencia ATIX,Misma intención con Idempotency-Key,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S01,B2,Idempotencia ATIX
+A07,Validación ATIX,Canal o audiencia no autorizados,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S02,B2,Validación ATIX sin enumeración
+A08,Solicitud OTP,Cuenta reconocida solicita OTP,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S03,B2,SMS sólo con autorización
+A09,Solicitud OTP,Teléfono desconocido solicita OTP,PASS,NOT_RUN,OBLIGATORIO_LANZAMIENTO,S03,B2,
+A10,Verificación OTP,OTP válido,PASS,NOT_RUN,OBLIGATORIO_LANZAMIENTO,S03,B2,
+A11,Verificación OTP,"OTP incorrecto, vencido o reutilizado",PASS,BLOCKED,OBLIGATORIO_LANZAMIENTO,S03,B2,
+A12,Ciclo de vida Bearer,Bearer vencido o revocado,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S03,B2,Ciclo de vida Bearer
+B01,Precio de estudio,Estudio con precio público mayor que FAMEDIC,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S04,B2,
+B02,Precio de paquete,Paquete con precio comparativo,PASS,BLOCKED,OBLIGATORIO_LANZAMIENTO,S05,B2,Criterio exacto B1-T6
+B03,Precio sin referencia pública,public_price no disponible,PASS,NOT_RUN,OBLIGATORIO_LANZAMIENTO,S04,B2,
+B04,Sin ahorro,Precios iguales,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S04,B2,
+B05,Dato de precio inconsistente,Precio público menor que FAMEDIC,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S04,B2,
+B06,Revalidación de precio,Precio cambió después de consulta,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S04,B2,Revalidación de precio antes de agregar
+B07,Planes de membresía,Consultar oferta individual,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S06,B2,
+B08,Estado de membresía,Usuario sin membresía,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S06,B2,
+B09,Estado de membresía,Membresía individual activa,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S06,B2,
+B10,Estado de membresía,Membresía patrocinada activa,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S06,B2,
+B11,Estado de membresía,Membresía expirada,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S06,B2,
+B12,Agregar membresía,Agregar Plan Básico al carrito médico,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S06,B2,
+B13,Duplicado de membresía,Agregar nuevamente el mismo plan,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S06,B2,Duplicado rechazado
+B14,Membresía activa,Agregar con membresía individual activa,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S06,B2,Activa rechazada
+B15,Membresía patrocinada,Agregar con membresía patrocinada,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S06,B2,
+B16,Retirar membresía,Retirar Plan Básico,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S06,B2,Retiro de membresía
+B17,Idempotencia membresía,Repetir la misma intención,PASS,FAIL,OBLIGATORIO_LANZAMIENTO,S16,B2,Replay idempotente
+B18,Concurrencia membresía,Dos altas simultáneas,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S16,B2,Concurrencia; fuera de Newman
+B19,Aislamiento médico laboratorio,Agregar membresía válida,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S07,B2,cart:laboratory:* (L06)
+B20,Aislamiento laboratorio médico,Agregar estudio de laboratorio válido,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S08,B2,La otra línea conserva ítems y totales
+B21,Retiro aislado,Retirar producto de una línea,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S08,B2,
+B22,Farmacia suspendida,Intento de nueva compra de Farmacia,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S15,B2,
+B23,Preparación de checkout,Carrito médico con membresía,FAIL,FAIL,OBLIGATORIO_LANZAMIENTO,S12,B2,Semántica T4
+B24,Continuidad a FAMEDIC,Continuar desde WhatsApp,FAIL,NOT_RUN,OBLIGATORIO_LANZAMIENTO,S12,B2,Sólo staging; nunca producción
+B25,Pago prohibido para Leo,Intentar generar payment link,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S14,B2,Sólo prueba negativa (B1-T5)
+B26,Activación posterior al pago,Carrito preparado pero no pagado,PASS,PASS,NO_APLICABLE,—,—,"Activación posterior al pago es first-party (FAMEDIC); Leo no paga ni activa. Se conserva como regresión FAMEDIC, sin certificación de la API de Leo"
+R01,Pedidos,Consultar pedido propio,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S09,B2,Contrato B1-T7
+R02,Resultados,Consultar resultado propio,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S10,B2,Step-up y liga segura; descarga directa 403
+R03,Facturas,Consultar PDF propio,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S11,B2,Liga PDF; XML a Atención a usuarios
+R04,Familiares,Consultar familiares propios,BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S09,B2,Contrato B1-T7
+R05,Citas y concierge,Estudio que requiere cita,PASS,NOT_RUN,OBLIGATORIO_LANZAMIENTO,S13,B2,Concierge sólo en el checkout first-party
+R06,Observabilidad,Trazabilidad de ejecución,PASS,PASS,OBLIGATORIO_LANZAMIENTO,S16,B2,Correlation ID y trazas
+R07,Errores contractuales,"Validación, ownership, rate limit y conflicto",BLOCKED,BLOCKED,OBLIGATORIO_LANZAMIENTO,S16,B2,Errores tipados (transversal)
+R08,UAT conversacional,"Conocimiento, tono, privacidad y escalamiento",NOT_RUN,NOT_RUN,OBLIGATORIO_LANZAMIENTO,UAT,B3,UAT conversacional en Batch 3
+X01,Cupones y créditos,Aplicación o retiro directo de cupón/saldo por Leo,—,—,DIFERIDO,—,Posterior a RC2,C6/L16: el usuario los ve y aplica en el checkout FAMEDIC; Leo sólo informa
