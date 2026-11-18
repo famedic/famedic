@@ -47,4 +47,4 @@ El contrato OpenAPI continúa siendo v1.2.3. Los `operationId` existentes se con
 2. Definir `base_url`, `token` y, para ATIX, las variables sensibles desde el gestor seguro del ambiente; no guardarlas en este archivo.
 3. Usar únicamente cuentas, cupones y teléfonos de prueba controlados.
 4. Ejecutar primero catálogo, planes y estado; después carrito médico y beneficios.
-5. Validar que `checkout/prepare` devuelve `can_continue_to_payment_platform=false` y no invocar payment links.
+5. Validar que `checkout/prepare` devuelve `assistant_can_pay=false`, `can_continue_on_platform=true` y `can_continue_to_payment_platform=false` (semántica de Batch 1 · T4 en la guía de consumo) y no invocar payment links.

@@ -2249,6 +2249,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/LeoOpaqueCheckoutPrepareResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LeoLaboratoryCheckoutPrepareResponse"
                     }
                   ]
                 }
@@ -2297,9 +2300,17 @@
             }
           }
         },
-        "x-continuity-state": "IMPLEMENTADO_LOCAL_APAGADO: continuidad médica Leo→FAMEDIC (B24) implementada y probada en LOCAL; flag akubica_connectors.continuity.medical_services apagado. Activación sujeta a autorización de Seguridad, deploy y certificación first-party.",
+        "x-continuity-state": "medical_services (B24/S12): implementado; la bandera akubica_connectors.continuity.medical_services sólo puede encenderse con APP_ENV=staging y la variable autorizada por Seguridad; en producción siempre apagada. laboratory (D-2, 2026-11-18): aprobado; IMPLEMENTACIÓN Batch 2 con las mismas reglas (sólo staging, nunca producción hasta certificación posterior).",
         "x-required-capability": "checkout:prepare",
-        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas."
+        "x-capability-policy": "Literal en PAT, registro, binding y delegación vigentes. Wildcard no concede pago. Leo no puede payments:*, legacy-benefits:* ni cart:write; capacidades médicas estrechas.",
+        "x-checkout-semantics": {
+          "source": "Plan de cierre v1.0, tabla 4; Batch 1 · T4; D-2",
+          "assistant_can_pay": "false siempre: Leo nunca ejecuta ni inicia el pago",
+          "can_continue_on_platform": "true en respuestas a Leo: el usuario puede continuar en FAMEDIC (first-party)",
+          "can_continue_to_payment_platform": "false en respuestas a Leo: no se entrega una pasarela directa al asistente (el DTO legacy nativo de laboratorio conserva true si hay ítems)",
+          "continuity_url": "liga first-party temporal de un uso al checkout; nunca es un payment link; ausente si la continuidad de la línea no está habilitada",
+          "payment_link": "POST /checkout/payment-link para Leo: siempre 403, sin liga ni cobro (prueba negativa B25/S14)"
+        }
       }
     },
     "/checkout/draft": {
@@ -7526,30 +7537,30 @@
           "assistant_can_pay": {
             "type": "boolean",
             "const": false,
-            "description": "Declaracion de capacidad del asistente: false. Leo no debe cobrar. No demuestra enforcement de las rutas legacy de payment-link; pendiente funcional."
+            "description": "Facultad del asistente (Leo) para ejecutar o iniciar un pago. Siempre false: Leo nunca paga, nunca genera ni recibe payment links y nunca recibe una pasarela. Es independiente de can_continue_on_platform (plan v1.0, tabla 4; Batch 1 · T4)."
           },
           "can_continue_on_platform": {
             "type": "boolean",
             "const": true,
-            "description": "Capacidad de navegar y continuar en FAMEDIC, true incluso con carrito vacio en el runtime actual. No significa listo para pagar: revisar requirements.has_items, totales y requisitos de plataforma."
+            "description": "El usuario puede continuar el flujo en FAMEDIC (first-party: web o app con su propia sesión). Siempre true en las respuestas dirigidas a Leo: la prohibición de pago del asistente no impide que el usuario continúe en FAMEDIC. No significa 'listo para pagar' (ver requirements.has_items y totales) y no autoriza ninguna operación de pago (plan v1.0, tabla 4; Batch 1 · T4)."
           },
           "can_continue_to_payment_platform": {
             "type": "boolean",
             "const": false,
-            "deprecated": true,
-            "description": "Campo legacy preservado, false en carrito medico. No equivale a can_continue_on_platform ni a assistant_can_pay."
+            "description": "Indica si se entrega al consumidor una pasarela o liga de pago directa. Siempre false en las respuestas dirigidas a Leo: no se entrega una pasarela al asistente. No equivale a can_continue_on_platform ni a assistant_can_pay (plan v1.0, tabla 4; Batch 1 · T4)."
           },
           "continuity_url": {
             "type": "string",
             "format": "uri",
-            "description": "B24: liga https de un solo uso (TTL ≤ 10 min) al checkout de membresía de FAMEDIC (/checkout/continue/{token} → /medical-attention/checkout). Ligada al usuario y al carrito médico; requiere sesión web del titular; no es payment link, no cobra y no activa membresías. Solo para consumidor Leo con carrito no vacío y solo con la continuidad habilitada (hoy apagada)."
+            "description": "B24 (S12): liga https first-party de un solo uso (TTL ≤ 10 min), /checkout/continue/{token} → checkout de membresía en FAMEDIC. Ligada al usuario y al carrito médico; requiere sesión web del titular (otra sesión ⇒ rechazo session_mismatch sin consumirla). No es payment link, no cobra y no activa membresías. Sólo para Leo con carrito no vacío y sólo con la continuidad médica habilitada, que únicamente puede encenderse con APP_ENV=staging y la variable autorizada por Seguridad; en producción permanece apagada. Si no está habilitada, el campo está ausente."
           },
           "continuity_expires_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Fin de vigencia de continuity_url (ISO-8601). Presente sólo junto con continuity_url."
           }
         },
-        "description": " Los flags no autorizan pagos. Leo tiene denegación efectiva de payment links; el DTO legacy es únicamente de consumidores nativos autorizados.",
+        "description": "Respuesta de preparación del carrito médico (membresía). Semántica de checkout congelada en Batch 1 · T4: assistant_can_pay=false, can_continue_on_platform=true, can_continue_to_payment_platform=false; continuity_url sólo bajo las reglas B24. Los flags no autorizan pagos.",
         "dependentRequired": {
           "continuity_url": [
             "continuity_expires_at"
@@ -9815,18 +9826,19 @@
           },
           "can_continue_to_payment_platform": {
             "type": "boolean",
-            "description": "Flag legacy: true exactamente si hay items. No verifica contacto, direccion o cita; no autoriza a Leo ni garantiza readiness de payment-link."
+            "description": "Consumidor nativo: flag legacy, true exactamente si hay ítems. No verifica contacto, dirección o cita y no garantiza readiness de payment-link. No aplica a Leo: en LeoLaboratoryCheckoutPrepareData es siempre false."
           },
           "assistant_can_pay": {
             "type": "boolean",
-            "const": false
+            "const": false,
+            "description": "Facultad del asistente (Leo) para ejecutar o iniciar un pago. Siempre false: Leo nunca paga, nunca genera ni recibe payment links y nunca recibe una pasarela. Es independiente de can_continue_on_platform (plan v1.0, tabla 4; Batch 1 · T4)."
           },
           "can_continue_on_platform": {
             "type": "boolean",
-            "description": "Navigation continuity only; follows has_items. Does not authorize a payment."
+            "description": "Consumidor nativo: continuidad de navegación; sigue requirements.has_items. No autoriza un pago."
           }
         },
-        "description": " Los flags no autorizan pagos. Leo tiene denegación efectiva de payment links; el DTO legacy es únicamente de consumidores nativos autorizados."
+        "description": "DTO legacy de preparación del carrito de laboratorio, exclusivo para consumidores nativos autorizados (incluye contactos, direcciones y métodos de pago). Nunca se entrega a Leo: Leo recibe LeoLaboratoryCheckoutPrepareData (Batch 2). Los flags no autorizan pagos al asistente."
       },
       "LaboratoryCheckoutPrepareResponse": {
         "type": "object",
@@ -10954,11 +10966,13 @@
           },
           "assistant_can_pay": {
             "type": "boolean",
-            "const": false
+            "const": false,
+            "description": "Facultad del asistente (Leo) para ejecutar o iniciar un pago. Siempre false: Leo nunca paga, nunca genera ni recibe payment links y nunca recibe una pasarela. Es independiente de can_continue_on_platform (plan v1.0, tabla 4; Batch 1 · T4)."
           },
           "can_continue_on_platform": {
             "type": "boolean",
-            "const": true
+            "const": true,
+            "description": "El usuario puede continuar el flujo en FAMEDIC (first-party: web o app con su propia sesión). Siempre true en las respuestas dirigidas a Leo: la prohibición de pago del asistente no impide que el usuario continúe en FAMEDIC. No significa 'listo para pagar' (ver requirements.has_items y totales) y no autoriza ninguna operación de pago (plan v1.0, tabla 4; Batch 1 · T4)."
           }
         }
       },
@@ -11039,15 +11053,18 @@
           },
           "assistant_can_pay": {
             "type": "boolean",
-            "const": false
+            "const": false,
+            "description": "Facultad del asistente (Leo) para ejecutar o iniciar un pago. Siempre false: Leo nunca paga, nunca genera ni recibe payment links y nunca recibe una pasarela. Es independiente de can_continue_on_platform (plan v1.0, tabla 4; Batch 1 · T4)."
           },
           "can_continue_on_platform": {
             "type": "boolean",
-            "const": true
+            "const": true,
+            "description": "El usuario puede continuar el flujo en FAMEDIC (first-party: web o app con su propia sesión). Siempre true en las respuestas dirigidas a Leo: la prohibición de pago del asistente no impide que el usuario continúe en FAMEDIC. No significa 'listo para pagar' (ver requirements.has_items y totales) y no autoriza ninguna operación de pago (plan v1.0, tabla 4; Batch 1 · T4)."
           },
           "can_continue_to_payment_platform": {
             "type": "boolean",
-            "const": false
+            "const": false,
+            "description": "Indica si se entrega al consumidor una pasarela o liga de pago directa. Siempre false en las respuestas dirigidas a Leo: no se entrega una pasarela al asistente. No equivale a can_continue_on_platform ni a assistant_can_pay (plan v1.0, tabla 4; Batch 1 · T4)."
           },
           "availability": {
             "type": "string",
@@ -11350,6 +11367,149 @@
               "data": {
                 "$ref": "#/components/schemas/LaboratoryPackage"
               }
+            }
+          }
+        ]
+      },
+      "LeoLaboratoryCheckoutPrepareData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Preparación del carrito de laboratorio dirigida a Leo (D-2; IMPLEMENTACIÓN: Batch 2, hoy Leo recibe 403 en la línea de laboratorio). Minimizada: sin contactos, direcciones ni métodos de pago. Precios y totales calculados en el servidor. La capacidad está ligada a la línea laboratory y a la marca.",
+        "x-implementation-status": "BATCH_2",
+        "required": [
+          "audience",
+          "service_line",
+          "brand",
+          "cart",
+          "requirements",
+          "warnings",
+          "assistant_can_pay",
+          "can_continue_on_platform",
+          "can_continue_to_payment_platform"
+        ],
+        "properties": {
+          "audience": {
+            "type": "string",
+            "const": "leo"
+          },
+          "service_line": {
+            "type": "string",
+            "const": "laboratory"
+          },
+          "brand": {
+            "$ref": "#/components/schemas/LaboratoryBrand"
+          },
+          "cart": {
+            "type": "object",
+            "required": [
+              "items",
+              "totals"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LaboratoryCartItem"
+                }
+              },
+              "totals": {
+                "$ref": "#/components/schemas/LaboratoryCheckoutTotals"
+              }
+            }
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/LaboratoryCheckoutRequirements"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckoutWarning"
+            }
+          },
+          "assistant_can_pay": {
+            "type": "boolean",
+            "const": false,
+            "description": "Facultad del asistente (Leo) para ejecutar o iniciar un pago. Siempre false: Leo nunca paga, nunca genera ni recibe payment links y nunca recibe una pasarela. Es independiente de can_continue_on_platform (plan v1.0, tabla 4; Batch 1 · T4)."
+          },
+          "can_continue_on_platform": {
+            "type": "boolean",
+            "const": true,
+            "description": "El usuario puede continuar el flujo en FAMEDIC (first-party: web o app con su propia sesión). Siempre true en las respuestas dirigidas a Leo: la prohibición de pago del asistente no impide que el usuario continúe en FAMEDIC. No significa 'listo para pagar' (ver requirements.has_items y totales) y no autoriza ninguna operación de pago (plan v1.0, tabla 4; Batch 1 · T4)."
+          },
+          "can_continue_to_payment_platform": {
+            "type": "boolean",
+            "const": false,
+            "description": "Indica si se entrega al consumidor una pasarela o liga de pago directa. Siempre false en las respuestas dirigidas a Leo: no se entrega una pasarela al asistente. No equivale a can_continue_on_platform ni a assistant_can_pay (plan v1.0, tabla 4; Batch 1 · T4)."
+          },
+          "continuity_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "D-2 (decisión de Eulalio Medina, 2026-11-18 11:15 CST): liga de continuidad first-party de un solo uso (TTL ≤ 10 min), /checkout/continue/{token} → checkout de laboratorio de la marca en FAMEDIC. Ligada al usuario, al carrito de laboratorio y a la marca; requiere sesión web del titular. No es payment link y no cobra. Mismas reglas que B24: sólo con la bandera de continuidad de laboratorio, que únicamente puede encenderse en APP_ENV=staging; apagada en producción; ausente si no está habilitada. IMPLEMENTACIÓN: Batch 2."
+          },
+          "continuity_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fin de vigencia de continuity_url (ISO-8601). Presente sólo junto con continuity_url."
+          }
+        }
+      },
+      "LeoLaboratoryCheckoutPrepareResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data"
+        ],
+        "additionalProperties": false,
+        "x-implementation-status": "BATCH_2",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/LeoLaboratoryCheckoutPrepareData"
+          }
+        },
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "audience": "leo",
+              "service_line": "laboratory",
+              "brand": "olab",
+              "cart": {
+                "items": [
+                  {
+                    "id": 7,
+                    "laboratory_test_id": 11,
+                    "name": "fixture-item",
+                    "price_cents": 13700,
+                    "currency": "MXN",
+                    "quantity": 1,
+                    "requires_appointment": false
+                  }
+                ],
+                "totals": {
+                  "currency": "MXN",
+                  "subtotal_cents": 22000,
+                  "discount_cents": 8300,
+                  "coupon_discount_cents": 0,
+                  "total_cents": 13700,
+                  "coupon": null
+                }
+              },
+              "requirements": {
+                "has_items": true,
+                "requires_contact": true,
+                "requires_address": true,
+                "requires_appointment": false,
+                "requires_invoice_data": false
+              },
+              "warnings": [],
+              "assistant_can_pay": false,
+              "can_continue_on_platform": true,
+              "can_continue_to_payment_platform": false
             }
           }
         ]

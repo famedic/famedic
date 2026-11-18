@@ -47,7 +47,23 @@ El valor puede representar un cupón o un saldo a favor según la configuración
 GET /checkout/prepare?service_line=medical_services
 ```
 
-Esta operación solo devuelve carrito, requisitos, warnings y `can_continue_to_payment_platform=false`. No crea pagos, payment links, activaciones ni llamadas a gateways. No usar `POST /checkout/payment-link` en esta entrega.
+Esta operación sólo devuelve carrito, requisitos, warnings, las banderas de checkout y, si la continuidad está habilitada, `continuity_url`. No crea pagos, payment links, activaciones ni llamadas a gateways. No usar `POST /checkout/payment-link` en esta entrega.
+
+Semántica congelada en Batch 1 · T4 (plan v1.0, tabla 4; D-2):
+
+| Campo | Valor para Leo | Significado |
+|---|---|---|
+| `assistant_can_pay` | `false` siempre | Leo nunca ejecuta ni inicia el pago. |
+| `can_continue_on_platform` | `true` | El usuario puede continuar en FAMEDIC (first-party, con su propia sesión). No significa "listo para pagar": revisar `requirements.has_items` y los totales. |
+| `can_continue_to_payment_platform` | `false` | No se entrega al asistente una pasarela ni una liga de pago directa. |
+| `continuity_url` | Opcional | Liga first-party temporal, de un uso, al checkout de FAMEDIC. **Nunca es un payment link.** Ausente si la continuidad de la línea no está habilitada. |
+
+La prohibición de pago del asistente no impide que el usuario continúe en FAMEDIC. Las tres banderas son independientes y ninguna autoriza un pago.
+
+- **Membresía (`medical_services`, B24/S12):** implementada. La continuidad sólo puede encenderse con `APP_ENV=staging` y la variable autorizada por Seguridad; en producción siempre está apagada.
+- **Laboratorio (`laboratory`, D-2, decisión de Eulalio Medina, 2026-11-18 11:15 CST):** la continuidad también aplica, con las mismas reglas (un uso, TTL ≤ 10 min, ligada a usuario, carrito y marca, sólo staging). Leo recibe `LeoLaboratoryCheckoutPrepareResponse`, minimizada, sin contactos, direcciones ni métodos de pago. **Implementación: Batch 2**; hoy Leo recibe 403 en la línea de laboratorio.
+- El DTO legacy `LaboratoryCheckoutPrepareResponse` es sólo para consumidores nativos. Ahí `can_continue_to_payment_platform` conserva su significado legacy (true si hay ítems).
+- `POST /checkout/payment-link` para Leo responde siempre 403, sin liga ni cobro.
 
 ## Reconocimiento pre-OTP y elevación
 
