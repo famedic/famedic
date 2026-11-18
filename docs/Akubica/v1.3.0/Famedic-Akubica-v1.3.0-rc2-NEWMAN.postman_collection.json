@@ -2,7 +2,7 @@
   "info": {
     "name": "FAMEDIC-Akubica RC2 — Newman ejecutable (A01–A12, B01–B26, R01–R08)",
     "_postman_id": "8b6f1e1c-rc2-newman-0001",
-    "description": "ARTEFACTO FUNCIONAL RC2 (único ejecutable). Colección ejecutable RC2. Sin secretos: credenciales, Bearer, HMAC y OTP se inyectan con --env-var en tiempo de ejecución. Bloquea hosts fuera de allowed_hosts y exige expected_release_sha. Los casos sin precondiciones se omiten (SKIPPED_PRECONDITION) y nunca cuentan como PASS. La colección rc2-90 (92 solicitudes) es un antecedente offline: su guard omite siempre todas las peticiones. Ver RC2-NEWMAN-LEEME.md.\n\nrev5 (IT-0026): B06b sin `quantity` y con `laboratory_test_id` entero; B25 con cuerpo válido (`brand`), credencial Leo y 403; A07, B22, R07a y R07a2 marcados como inválidos deliberados. Inventario de cuerpos: `RC2-INVENTARIO-CUERPOS.md`/`.csv`.",
+    "description": "ARTEFACTO FUNCIONAL RC2 (único ejecutable). Colección ejecutable RC2. Sin secretos: credenciales, Bearer, HMAC y OTP se inyectan con --env-var en tiempo de ejecución. Bloquea hosts fuera de allowed_hosts y exige expected_release_sha. Los casos sin precondiciones se omiten (SKIPPED_PRECONDITION) y nunca cuentan como PASS. La colección rc2-90 (92 solicitudes) es un antecedente offline: su guard omite siempre todas las peticiones. Ver RC2-NEWMAN-LEEME.md.\n\nrev5 (IT-0026): B06b sin `quantity` y con `laboratory_test_id` entero; B25 con cuerpo válido (`brand`), credencial Leo y 403; A07, B22, R07a y R07a2 marcados como inválidos deliberados. Inventario de cuerpos: `RC2-INVENTARIO-CUERPOS.md`/`.csv`.\n\n**rev6 (IT-0027):** B25 exige `leo_negative_writes_authorized` igual a `\"1\"` (comparación estricta), equivalente a LF-L17a. Sin cambios de credencial, cuerpo ni aserciones.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -1990,7 +1990,7 @@
               }
             ],
             "url": "{{base_url}}/checkout/payment-link",
-            "description": "PRUEBA NEGATIVA DE SEGURIDAD (Batch 1 · T5, escenario S14): se ejecuta sólo para comprobar HTTP 403 y la ausencia de liga o cobro. No es una capacidad de Leo ni un flujo de pago. Ausencia de cobro: la respuesta no trae URL ni identificadores de liga, intento de pago o checkout. El readback de que no se creó un intento de pago se hace en Batch 2 por consulta de sólo lectura del operador (Lalio), fuera de Newman. **Cuerpo (rev5):** válido según el requestBody de `checkoutPaymentLink` (`brand` requerida, `lab_brand`), para que el 403 provenga sólo de la autorización y no de la validación. Credencial siempre Leo (`machine_credential` + `bearer_none`), nunca native. Esperado 403 sin liga, intento de pago ni checkout; la comprobación externa de ausencia de efectos queda en Batch 2. requires: bearer_none,machine_credential,lab_brand",
+            "description": "PRUEBA NEGATIVA DE SEGURIDAD (Batch 1 · T5, escenario S14): se ejecuta sólo para comprobar HTTP 403 y la ausencia de liga o cobro. No es una capacidad de Leo ni un flujo de pago. Ausencia de cobro: la respuesta no trae URL ni identificadores de liga, intento de pago o checkout. El readback de que no se creó un intento de pago se hace en Batch 2 por consulta de sólo lectura del operador (Lalio), fuera de Newman. **Cuerpo (rev5):** válido según el requestBody de `checkoutPaymentLink` (`brand` requerida, `lab_brand`), para que el 403 provenga sólo de la autorización y no de la validación. Credencial siempre Leo (`machine_credential` + `bearer_none`), nunca native. Esperado 403 sin liga, intento de pago ni checkout; la comprobación externa de ausencia de efectos queda en Batch 2. **Bandera (rev6):** como el cuerpo es válido, un defecto de autorización ya podría tener efecto; por eso exige `leo_negative_writes_authorized` con valor exactamente `\"1\"` (igualdad estricta en el pre-request del request; ausente, vacío, `\"0\"`, `\" 1\"` o `\"true\"` omiten B25 antes del envío), igual que LF-L17a. requires: bearer_none,machine_credential,lab_brand,leo_negative_writes_authorized",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"brand\": \"{{lab_brand}}\"\n}",
@@ -2007,6 +2007,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "(function () { const f = pm.variables.get('leo_negative_writes_authorized'); if (f !== '1') { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> leo_negative_writes_authorized debe valer exactamente \"1\"'); pm.execution.skipRequest(); } })();",
                   "(function () { const b = pm.variables.get('lab_brand'); if (b && ['olab', 'swisslab', 'jenner', 'liacsa', 'azteca'].indexOf(b) === -1) { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> lab_brand no es una LaboratoryBrand válida'); pm.execution.skipRequest(); } })();"
                 ]
               }

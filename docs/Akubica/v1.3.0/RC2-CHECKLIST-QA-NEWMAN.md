@@ -21,7 +21,7 @@
 
 1. Ejecutar catálogo, precios, Plan Básico y estado de membresía.
 2. Ejecutar altas, duplicados, retiros, concurrencia, read-back y aislamiento de carritos.
-3. Ejecutar checkout prepare y los negativos de Leo para pago, cupones y saldo legacy. Payment link (B25/S14) sólo como prueba negativa de seguridad, con credencial Leo y cuerpo válido (`brand`; rev5): HTTP 403, sin liga ni cobro, y readback de sólo lectura sin intento de pago creado.
+3. Ejecutar checkout prepare y los negativos de Leo para pago, cupones y saldo legacy. Payment link (B25/S14) sólo como prueba negativa de seguridad, con credencial Leo y cuerpo válido (`brand`; rev5): HTTP 403, sin liga ni cobro, y readback de sólo lectura sin intento de pago creado. Desde rev6, B25 sólo corre con `leo_negative_writes_authorized=1` (valor exacto `"1"`; la plantilla trae `"0"`).
 4. Verificar que no se activa membresía antes de pago confirmado.
 5. Ejecutar solo los cuatro casos R30 desde el documento first-party separado, nunca como capacidad de Leo.
 
@@ -33,7 +33,7 @@
 4. Escrituras (L06 carrito de laboratorio, L13 solicitud de factura y negativos con efecto) sólo con su bandera y los fixtures INT-005. La solicitud de factura usa el id opaco que entrega la lectura mínima (LF-L13b → `tax_profile_ref`); no hay fixture entero para Leo (rev4).
 5. Las ligas seguras y la de continuidad no se abren desde Newman; su apertura es prueba de navegador.
 6. B21x (`rc2-NEWMAN`) exige `lab_brand_not_granted`, una marca válida sin `cart:laboratory:write` en el binding de Leo. El positivo autorizado de laboratorio es LF-L06b (L06/S07).
-7. Los cuerpos de las 69 + 48 solicitudes están clasificados en `RC2-INVENTARIO-CUERPOS.md`. Los INVALIDO_DELIBERADO (A07, B22, R07a, R07a2, LF-L13g y LF-L13x) no se corrigen, porque el rechazo es el objeto de la prueba. LF-L17a requiere `leo_negative_writes_authorized=1`.
+7. Los cuerpos de las 69 + 48 solicitudes están clasificados en `RC2-INVENTARIO-CUERPOS.md`. Los INVALIDO_DELIBERADO (A07, B22, R07a, R07a2, LF-L13g y LF-L13x) no se corrigen, porque el rechazo es el objeto de la prueba. LF-L17a y, desde rev6, B25 requieren `leo_negative_writes_authorized` con valor exacto `"1"`.
 
 ## Criterio de salida
 

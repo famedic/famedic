@@ -2,7 +2,7 @@
 
 Archivos: `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` y `Famedic-Akubica-v1.3.0-rc2-NEWMAN.environment.template.json` (plantilla **sin secretos**).
 
-## Artefactos funcionales y antecedente offline (Batch 1 · rev2; colección Leo agregada en rev3; B20/B21x conciliados en rev4; cuerpos conformes en rev5)
+## Artefactos funcionales y antecedente offline (Batch 1 · rev2; colección Leo agregada en rev3; B20/B21x conciliados en rev4; cuerpos conformes en rev5; bandera de B25 en rev6)
 
 | Colección | Solicitudes | Papel | Guarda |
 |---|---|---|---|
@@ -60,6 +60,20 @@ Revisión de los cuerpos de las 69 solicitudes contra el `requestBody` del OpenA
 
 No cambia ninguna aserción, credencial ni código esperado. B25 sigue en el grupo de credenciales de la tabla de precondiciones y ahora también requiere `lab_brand`.
 
+### B25 en rev6 (IT-0027): bandera `leo_negative_writes_authorized`
+
+Desde rev5 el cuerpo de B25 es válido, así que un defecto de autorización ya podría tener efecto (crear una liga o un intento de pago). Por eso, igual que LF-L17a, B25 sólo se envía con `leo_negative_writes_authorized` **exactamente igual a `"1"`**. La comprobación es una igualdad estricta en el pre-request del request (primera línea), no basta con que la variable exista o no esté vacía:
+
+```js
+(function () { const f = pm.variables.get('leo_negative_writes_authorized'); if (f !== '1') { console.log('SKIPPED_PRECONDITION ' + pm.info.requestName + ' -> leo_negative_writes_authorized debe valer exactamente "1"'); pm.execution.skipRequest(); } })();
+```
+
+- La variable también está en `requires:` de B25. La guarda de colección omite el request si la bandera está ausente o vacía, y la comprobación estricta lo omite con cualquier otro valor distinto de `"1"` (`"0"`, `" 1"`, `"1 "`, `"true"`, `"01"`, `"yes"` o el número 1).
+- Plantilla: nueva variable `leo_negative_writes_authorized` con valor `"0"`. Con la plantilla sin cambios, B25 se omite.
+- Equivalencia: en `…-rc2-LEO-FUNCIONAL`, la guarda de colección ya exige `pm.variables.get(v) !== '1'` para toda variable `*_authorized` de `requires:`, así que LF-L17a ya era estricta y no cambia.
+- No cambian la credencial Leo (`machine_credential` + `bearer_none`, nunca native), el cuerpo `{"brand": "{{lab_brand}}"}`, el código esperado 403 ni ninguna aserción. La comprobación externa de ausencia de efectos sigue en Batch 2.
+- La autoriza Eulalio, igual que en la colección de Leo.
+
 Ejecución bajo guardas: usar el comando de la sección "Ejecución (QA, solo con autorización)" con `allowed_hosts` y `expected_release_sha` del build verificado. **En Batch 1 no se ejecutó en QA.**
 
 ## Guardas
@@ -67,7 +81,7 @@ Ejecución bajo guardas: usar el comando de la sección "Ejecución (QA, solo co
 - Exige `expected_release_sha` (40 hex); cada aserción lleva el prefijo del SHA → evidencia ligada al release.
 - Casos sin precondiciones se **omiten** (`SKIPPED_PRECONDITION`) y nunca cuentan como PASS.
 - R01, R02a, R03a y R04 verifican el contrato Leo de Batch 1 · T7 (datos mínimos, sin descarga). Sólo corren con `leo_batch2_contract=1` sobre el build de Batch 2; si no, quedan en `SKIPPED_PRECONDITION`.
-- B25 es una **prueba negativa de seguridad** (Batch 1 · T5, S14): `POST /checkout/payment-link` con credencial Leo sólo para comprobar HTTP 403 y la ausencia de liga o cobro. Nunca se corre con credencial native de pagos.
+- B25 es una **prueba negativa de seguridad** (Batch 1 · T5, S14): `POST /checkout/payment-link` con credencial Leo sólo para comprobar HTTP 403 y la ausencia de liga o cobro. Nunca se corre con credencial native de pagos. Desde rev6 sólo se envía con `leo_negative_writes_authorized` igual a `"1"` (comparación estricta).
 - B18 (concurrencia), R05 (sesión FAMEDIC en navegador) y R08 (UAT conversacional) no son ejecutables en Newman; quedan marcados.
 
 ## Aserciones comunes
@@ -87,4 +101,4 @@ newman run Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json \
   --folder "Fase A (A01–A12)" --reporters cli,junit --reporter-junit-export newman-QA-faseA.xml
 unset ATIX_HMAC_SECRET
 ```
-No usar el reporter `json`: incluye los valores del entorno. A08–A11 requieren `sms_authorized=1` (autorización de Seguridad) y `otp_code` tecleado (`read -s`), nunca guardado.
+No usar el reporter `json`: incluye los valores del entorno. A08–A11 requieren `sms_authorized=1` (autorización de Seguridad) y `otp_code` tecleado (`read -s`), nunca guardado. B25 requiere `--env-var leo_negative_writes_authorized=1` (rev6), autorizado por Eulalio.

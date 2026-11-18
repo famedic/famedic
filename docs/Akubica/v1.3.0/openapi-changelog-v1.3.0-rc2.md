@@ -8,6 +8,14 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · rev6 (2026-11-18, bandera de B25)
+
+Sin cambios en el OpenAPI, R30, LEO-FUNCIONAL ni el código. Sólo `rc2-NEWMAN` y documentación:
+
+- **B25** exige `leo_negative_writes_authorized` con valor exactamente `"1"`: igualdad estricta en su pre-request y la variable en `requires:`. Con la bandera ausente, vacía, `"0"` o cualquier otro valor, B25 se omite antes del envío. Es la misma regla que LF-L17a, que no cambia.
+- Plantilla NEWMAN: nueva variable `leo_negative_writes_authorized` = `"0"`.
+- Sin cambios en la credencial Leo, el cuerpo `{"brand": …}`, el 403 esperado ni las aserciones. El inventario de cuerpos no cambia (B25 sigue CONFORME); sólo se agrega la comprobación a la columna de efectos del pre-request.
+
 ## Batch 1 · rev5 (2026-11-18, cuerpos de solicitud conformes e inventario)
 
 Sin cambios en el OpenAPI, R30 ni el código. Sólo colecciones y documentación:
