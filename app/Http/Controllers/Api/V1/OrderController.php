@@ -149,7 +149,13 @@ class OrderController extends Controller
 
         $order->load(['laboratoryPurchaseItems']);
 
+        // A1 (rev7 LeoOrderProduct.laboratory_test_id integer): the item persists only the catalog gda_id
+        // (laboratory_purchase_items has no laboratory_test_id). For Leo, a study later removed from the catalog
+        // (soft delete) is still resolved to its original laboratory_tests row: gda_id is unique including trashed
+        // rows, so the match is exact. Hard-deleted tests or a reassigned gda_id have no persisted source (see
+        // BATCH2-PREPARACION.md, bloqueo BLQ-A1-01). Native keeps its previous lookup.
         $testsByGdaId = LaboratoryTest::query()
+            ->when(LeoConsumer::is($request), fn ($query) => $query->withTrashed())
             ->where('brand', $order->brand)
             ->whereIn('gda_id', $order->laboratoryPurchaseItems->pluck('gda_id')->filter()->all())
             ->get()

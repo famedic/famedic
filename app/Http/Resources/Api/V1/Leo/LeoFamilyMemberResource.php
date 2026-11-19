@@ -18,7 +18,8 @@ class LeoFamilyMemberResource extends JsonResource
         return [
             'id' => app(LeoOpaqueIdentifiers::class)->forSubject((int) $this->customer_id, LeoOpaqueIdentifiers::FAMILY_MEMBER, (int) $this->id),
             'display_name' => trim((string) $this->name),
-            'relationship' => $this->kinship?->value,
+            // family_accounts.kinship is a NOT NULL enum (2024_12_17_165656 migration) cast to Kinship: always present.
+            'relationship' => $this->kinship->value,
             'is_main_profile' => false,
         ];
     }

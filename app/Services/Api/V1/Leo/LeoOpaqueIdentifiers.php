@@ -20,6 +20,9 @@ final class LeoOpaqueIdentifiers
 
     private const PREFIX = [self::FAMILY_MEMBER => 'fam', self::TAX_PROFILE => 'tax'];
 
+    /** Owning tables (both soft-deletable, both scoped by customer_id). */
+    private const SUBJECT_TABLE = [self::FAMILY_MEMBER => 'family_accounts', self::TAX_PROFILE => 'tax_profiles'];
+
     public function forSubject(int $customerId, string $subjectType, int $subjectId): string
     {
         $prefix = self::prefix($subjectType);
@@ -52,7 +55,7 @@ final class LeoOpaqueIdentifiers
         return $reference;
     }
 
-    /** Internal subject id for a reference issued to this customer, or null (unknown, malformed or foreign). */
+    /** Internal subject id for a reference issued to this customer, or null (unknown, malformed, foreign, deleted or transferred). */
     public function resolve(int $customerId, string $subjectType, string $reference): ?int
     {
         $prefix = self::prefix($subjectType);
@@ -65,7 +68,19 @@ final class LeoOpaqueIdentifiers
             ->where('subject_type', $subjectType)
             ->first(['subject_id']);
 
-        return $row === null ? null : (int) $row->subject_id;
+        if ($row === null) {
+            return null;
+        }
+
+        // The reference never replaces ownership: the subject must still exist (not soft-deleted) and still belong
+        // to this customer. A deleted or transferred subject is rejected like an unknown reference.
+        $owned = DB::table(self::SUBJECT_TABLE[$subjectType])
+            ->where('id', (int) $row->subject_id)
+            ->where('customer_id', $customerId)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        return $owned ? (int) $row->subject_id : null;
     }
 
     private function find(int $customerId, string $subjectType, int $subjectId): ?string
