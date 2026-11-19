@@ -6,7 +6,8 @@ namespace App\Domain\Akubica\Benefits;
 
 final class OpaqueReference
 {
-    private const TYPES = ['crt', 'bnf', 'app', 'cnf', 'ver', 'pur', 'rsv', 'pmt'];
+    // 'fam' / 'tax': Leo opaque ids for own family members and tax profiles (RC2 Batch 2 · A1, L08/L13b).
+    private const TYPES = ['crt', 'bnf', 'app', 'cnf', 'ver', 'pur', 'rsv', 'pmt', 'fam', 'tax'];
 
     public static function issue(string $type): string
     {

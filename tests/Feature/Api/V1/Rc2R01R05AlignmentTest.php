@@ -1,6 +1,8 @@
 <?php
 
-// RC2 R01-R05 (D5): authorization per route for leo vs native, ownership and results/invoices protection. LOCAL, MySQL 8.
+// RC2 R01-R05: authorization per route for leo vs native, ownership and results/invoices protection. LOCAL, MySQL 8.
+// Batch 2 · A1 (contract rev7 2b6672e6): D5 is superseded by rev7 L07/L09/L12/L13b/L18. The fourth column is now the
+// status leo gets WITH the literal grant: 200 (own data), 404 (unknown order 999999, ownership soft deny) or 403.
 use App\Enums\Gender;
 use App\Enums\LaboratoryBrand;
 use App\Models\Customer;
@@ -10,30 +12,31 @@ use Illuminate\Support\Str;
 use Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture;
 
 const RC2_R_ROUTES_V2 = [
-    // [method, uri, literal capability, leo reachable with literal grant]
-    ['GET', '/api/v1/orders', 'api:operation:api:v1:orders:index', true],
-    ['GET', '/api/v1/orders/results', 'api:operation:api:v1:orders:results:index', false],
-    ['GET', '/api/v1/orders/invoices', 'api:operation:api:v1:orders:invoices:index', false],
-    ['GET', '/api/v1/orders/999999/products', 'api:operation:api:v1:orders:products', false],
-    ['GET', '/api/v1/orders/999999/status', 'api:operation:api:v1:orders:status', false],
-    ['PUT', '/api/v1/orders/999999/cancel', 'api:operation:api:v1:orders:cancel', false],
-    ['GET', '/api/v1/orders/999999/results', 'api:operation:api:v1:orders:results', false],
-    ['GET', '/api/v1/orders/999999/results/download', 'api:operation:api:v1:orders:results:download', false],
-    ['POST', '/api/v1/orders/999999/results/step-up/request', 'api:operation:api:v1:orders:results:step-up:request', false],
-    ['POST', '/api/v1/orders/999999/results/step-up/verify', 'api:operation:api:v1:orders:results:step-up:verify', false],
-    ['POST', '/api/v1/orders/999999/results/secure-link', 'api:operation:api:v1:orders:results:secure-link', false],
-    ['GET', '/api/v1/orders/999999/invoices', 'api:operation:api:v1:orders:invoices', false],
-    ['GET', '/api/v1/orders/999999/invoices/1/download', 'api:operation:api:v1:orders:invoices:download', false],
-    ['POST', '/api/v1/orders/999999/invoices/1/step-up/request', 'api:operation:api:v1:orders:invoices:step-up:request', false],
-    ['POST', '/api/v1/orders/999999/invoices/1/step-up/verify', 'api:operation:api:v1:orders:invoices:step-up:verify', false],
-    ['POST', '/api/v1/orders/999999/invoices/1/secure-link', 'api:operation:api:v1:orders:invoices:secure-link', false],
-    ['GET', '/api/v1/orders/999999/invoice-request/status', 'api:operation:api:v1:orders:invoice-request:status', false],
-    ['POST', '/api/v1/orders/999999/invoice-request', 'api:operation:api:v1:orders:invoice-request:store', false],
-    ['GET', '/api/v1/user/family', 'api:operation:api:v1:user:family', true],
-    ['GET', '/api/v1/laboratory-appointments/requirements?brand=olab', 'api:operation:api:v1:laboratory-appointments:requirements', true],
-    ['GET', '/api/v1/laboratory-appointments', 'api:operation:api:v1:laboratory-appointments:index', true],
-    ['POST', '/api/v1/laboratory-appointments', 'api:operation:api:v1:laboratory-appointments:store', false],
-    ['DELETE', '/api/v1/laboratory-appointments/999999', 'api:operation:api:v1:laboratory-appointments:destroy', false],
+    // [method, uri, literal capability, leo status with the literal grant (rev7)]
+    ['GET', '/api/v1/orders', 'api:operation:api:v1:orders:index', 200],
+    ['GET', '/api/v1/orders/results', 'api:operation:api:v1:orders:results:index', 200],
+    ['GET', '/api/v1/orders/invoices', 'api:operation:api:v1:orders:invoices:index', 200],
+    ['GET', '/api/v1/orders/999999/products', 'api:operation:api:v1:orders:products', 404],
+    ['GET', '/api/v1/orders/999999/status', 'api:operation:api:v1:orders:status', 404],
+    ['PUT', '/api/v1/orders/999999/cancel', 'api:operation:api:v1:orders:cancel', 403],
+    ['GET', '/api/v1/orders/999999/results', 'api:operation:api:v1:orders:results', 404],
+    ['GET', '/api/v1/orders/999999/results/download', 'api:operation:api:v1:orders:results:download', 403],
+    ['POST', '/api/v1/orders/999999/results/step-up/request', 'api:operation:api:v1:orders:results:step-up:request', 403],
+    ['POST', '/api/v1/orders/999999/results/step-up/verify', 'api:operation:api:v1:orders:results:step-up:verify', 403],
+    ['POST', '/api/v1/orders/999999/results/secure-link', 'api:operation:api:v1:orders:results:secure-link', 403],
+    ['GET', '/api/v1/orders/999999/invoices', 'api:operation:api:v1:orders:invoices', 404],
+    ['GET', '/api/v1/orders/999999/invoices/1/download', 'api:operation:api:v1:orders:invoices:download', 403],
+    ['POST', '/api/v1/orders/999999/invoices/1/step-up/request', 'api:operation:api:v1:orders:invoices:step-up:request', 403],
+    ['POST', '/api/v1/orders/999999/invoices/1/step-up/verify', 'api:operation:api:v1:orders:invoices:step-up:verify', 403],
+    ['POST', '/api/v1/orders/999999/invoices/1/secure-link', 'api:operation:api:v1:orders:invoices:secure-link', 403],
+    ['GET', '/api/v1/orders/999999/invoice-request/status', 'api:operation:api:v1:orders:invoice-request:status', 403],
+    ['POST', '/api/v1/orders/999999/invoice-request', 'api:operation:api:v1:orders:invoice-request:store', 403],
+    ['GET', '/api/v1/user/family', 'api:operation:api:v1:user:family', 200],
+    ['GET', '/api/v1/user/tax-profiles', 'api:operation:api:v1:user:tax-profiles', 200],
+    ['GET', '/api/v1/laboratory-appointments/requirements?brand=olab', 'api:operation:api:v1:laboratory-appointments:requirements', 403],
+    ['GET', '/api/v1/laboratory-appointments', 'api:operation:api:v1:laboratory-appointments:index', 403],
+    ['POST', '/api/v1/laboratory-appointments', 'api:operation:api:v1:laboratory-appointments:store', 403],
+    ['DELETE', '/api/v1/laboratory-appointments/999999', 'api:operation:api:v1:laboratory-appointments:destroy', 403],
 ];
 
 function rc2rHeaders(array $issued): array
@@ -61,17 +64,18 @@ function rc2rPurchase(Customer $customer): LaboratoryPurchase
 
 beforeEach(fn () => SyntheticConsumerRegistryFixture::reset());
 
-test('R-A leo holding every literal grant reaches only R01/R04/R05 reads; results/invoices and native-only routes 403', function () {
+test('R-A leo holding every literal grant reaches exactly the rev7 reads; downloads, step-up, appointments and native-only routes 403', function () {
     $user = User::factory()->withRegularCustomer()->create();
     $leo = SyntheticConsumerRegistryFixture::issue($user, 'leo', array_column(RC2_R_ROUTES_V2, 2));
 
-    foreach (RC2_R_ROUTES_V2 as [$method, $uri, , $leoReachable]) {
+    foreach (RC2_R_ROUTES_V2 as [$method, $uri, , $expected]) {
         $response = $this->json($method, $uri, [], rc2rHeaders($leo));
-        if ($leoReachable) {
-            expect($response->status())->toBe(200, "$method $uri");
-        } else {
-            expect($response->status())->toBe(403, "$method $uri")
-                ->and($response->json('error.code'))->toBe('CONSUMER_NOT_AUTHORIZED');
+        expect($response->status())->toBe($expected, "$method $uri");
+        if ($expected === 403) {
+            expect($response->json('error.code'))->toBe('CONSUMER_NOT_AUTHORIZED', "$method $uri");
+        }
+        if ($expected === 404) {
+            expect($response->json('error.code'))->toBe('ORDER_NOT_FOUND', "$method $uri");
         }
     }
 });
@@ -99,16 +103,19 @@ test('R01 native (Bearer + machine) reads own order status; foreign order is sof
     expect($this->getJson("/api/v1/orders/{$foreign->id}/status", rc2rHeaders($native))->status())->toBeIn([403, 404]);
 });
 
-test('R02/R03 native keeps results/invoices metadata reads; leo with the same literal grants is denied', function () {
+test('R02/R03 native keeps results/invoices metadata reads; leo with the same literal grants gets the minimal rev7 metadata (L09/L12)', function () {
     $user = User::factory()->withRegularCustomer()->create();
     $native = SyntheticConsumerRegistryFixture::issue($user, 'native');
     $this->getJson('/api/v1/orders/results', rc2rHeaders($native))->assertOk();
     $this->getJson('/api/v1/orders/invoices', rc2rHeaders($native))->assertOk();
 
     $other = User::factory()->withRegularCustomer()->create();
-    $leo = SyntheticConsumerRegistryFixture::issue($other, 'leo', \App\Services\Api\V1\Auth\ConsumerCapabilityPolicy::LEO_DENIED_PROTECTED_READS);
-    foreach (['/api/v1/orders/results', '/api/v1/orders/invoices'] as $uri) {
-        $this->getJson($uri, rc2rHeaders($leo))->assertForbidden()->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
+    $leo = SyntheticConsumerRegistryFixture::issue($other, 'leo', [
+        'api:operation:api:v1:orders:results:index', 'api:operation:api:v1:orders:results',
+        'api:operation:api:v1:orders:invoices:index', 'api:operation:api:v1:orders:invoices',
+    ]);
+    foreach (['/api/v1/orders/results' => 'results', '/api/v1/orders/invoices' => 'invoices'] as $uri => $key) {
+        $this->getJson($uri, rc2rHeaders($leo))->assertOk()->assertJsonPath("data.{$key}", []);
     }
 });
 

@@ -8,6 +8,7 @@ use App\Http\Requests\Api\V1\Orders\CancelOrderRequest;
 use App\Http\Requests\Api\V1\Orders\ListOrderInvoicesRequest;
 use App\Http\Requests\Api\V1\Orders\ListOrderResultsRequest;
 use App\Http\Requests\Api\V1\Orders\ListOrdersRequest;
+use App\Http\Resources\Api\V1\Leo\LeoInvoiceMetadataResource;
 use App\Http\Resources\Api\V1\OrderInvoiceResource;
 use App\Http\Resources\Api\V1\OrderProductResource;
 use App\Http\Resources\Api\V1\OrderResource;
@@ -19,6 +20,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryTest;
 use App\Support\Api\V1\LaboratoryOrderResults;
 use App\Support\Api\V1\LaboratoryOrderStatus;
+use App\Support\Api\V1\LeoConsumer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -212,6 +214,11 @@ class OrderController extends Controller
 
         $order->load(['laboratoryPurchaseItems']);
 
+        // rev7 L09: Leo receives LeoResultMetadata only (no download_url, download or document content).
+        if (LeoConsumer::is($request)) {
+            return ApiResponse::success((new OrderResultsListResource($order))->resolve($request));
+        }
+
         return ApiResponse::success(
             LaboratoryOrderResults::buildDetailPayload($order),
         );
@@ -251,6 +258,16 @@ class OrderController extends Controller
         Request $request,
         bool $includeOrderStudyName = true,
     ): ?array {
+        // rev7 L12: Leo receives LeoInvoiceMetadata only (no download_url, download or study name).
+        if (LeoConsumer::is($request) && ($order->invoice || $order->invoiceRequest)) {
+            return (new LeoInvoiceMetadataResource(
+                $order,
+                $order,
+                $order->invoice ?: null,
+                $order->invoice ? null : $order->invoiceRequest,
+            ))->resolve($request);
+        }
+
         if ($order->invoice) {
             return (new OrderInvoiceResource(
                 $order,
