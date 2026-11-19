@@ -61,7 +61,7 @@ Semántica congelada en Batch 1 · T4 (plan v1.0, tabla 4; D-2):
 La prohibición de pago del asistente no impide que el usuario continúe en FAMEDIC. Las tres banderas son independientes y ninguna autoriza un pago.
 
 - **Membresía (`medical_services`, B24/S12):** implementada. La continuidad sólo puede encenderse con `APP_ENV=staging` y la variable autorizada por Seguridad; en producción siempre está apagada.
-- **Laboratorio (`laboratory`, D-2, decisión de Eulalio Medina, 2026-11-18 11:15 CST):** la continuidad también aplica, con las mismas reglas (un uso, TTL ≤ 10 min, ligada a usuario, carrito y marca, sólo staging). Leo recibe `LeoLaboratoryCheckoutPrepareResponse`, minimizada, sin contactos, direcciones ni métodos de pago. **Implementación: Batch 2**; hoy Leo recibe 403 en la línea de laboratorio.
+- **Laboratorio (`laboratory`, D-2, decisión de Eulalio Medina, 2026-11-18 11:15 CST):** la continuidad también aplica, con las mismas reglas. **D-2 ratificada por Producto:** first-party, de un uso, vigencia máxima de 10 minutos, ligada al usuario, al carrito, a la línea de servicio y a la marca. Se habilita inicialmente sólo en staging y no autoriza a Leo a pagar ni a crear payment links. Leo recibe `LeoLaboratoryCheckoutPrepareResponse`, minimizada, sin contactos, direcciones ni métodos de pago. **Implementación: Batch 2**; hoy Leo recibe 403 en la línea de laboratorio.
 - El DTO legacy `LaboratoryCheckoutPrepareResponse` es sólo para consumidores nativos. Ahí `can_continue_to_payment_platform` conserva su significado legacy (true si hay ítems).
 - `POST /checkout/payment-link` para Leo responde siempre 403, sin liga ni cobro. En Postman/Newman se conserva sólo como **prueba negativa de seguridad** (B25/S14, Batch 1 · T5): se ejecuta únicamente para comprobar HTTP 403 y la ausencia de liga o cobro (sin URL ni ids de liga o intento de pago en la respuesta; en Batch 2 hay readback de sólo lectura sin intento de pago creado).
 
@@ -77,7 +77,7 @@ El contrato queda congelado en el OpenAPI con esquemas explícitos (`additionalP
 | Step-up y `secure-link` de resultados | L10 | `OtpGrant`, `SecureLink` | Abrir o interpretar el PDF |
 | `GET /orders/invoices`, `/orders/{id}/invoices` | L12 | `LeoInvoicesIndexResponse`, `LeoOrderInvoicesResponse` | `download_url`, `download` y XML |
 | `GET`/`POST /orders/{id}/invoice-request` | L13 | `LeoInvoiceRequestStatusResponse`; cuerpo `LeoInvoiceRequestCreate` con `tax_profile_id` = id opaco recibido en `GET /user/tax-profiles` (rev4) | `download_url`; el id interno entero (sólo native, `NativeInvoiceRequestCreate`) |
-| `GET /user/tax-profiles` | L13b (D-1) | `LeoTaxProfilesResponse` (RFC enmascarado, últimos 3) | RFC completo, domicilio, CP, correo y CSF; las escrituras son 403 |
+| `GET /user/tax-profiles` | L13b (D-1, ratificada por Producto: sólo los datos fiscales mínimos y enmascarados necesarios para resumir y solicitar una factura) | `LeoTaxProfilesResponse` (RFC enmascarado, últimos 3) | RFC completo, domicilio, CP, correo y CSF; las escrituras son 403 |
 | Step-up y `secure-link` de factura | L14 | `OtpGrant`, `SecureLink` | XML (se canaliza a Atención a usuarios) |
 | Descargas directas de resultado y factura | L11, L15 | — | **Siempre 403 para Leo** |
 

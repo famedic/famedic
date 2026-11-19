@@ -5,6 +5,7 @@
 - [ ] Rubén confirma backup restaurable de la base QA.
 - [ ] Rubén confirma permisos mínimos y `log_bin_trust_function_creators=1` durante la migración.
 - [ ] Se registra el SHA exacto que será desplegado.
+- [ ] El sha256 de las colecciones y plantillas coincide con el manifiesto externo del paquete rev7, y `verificar-guardas-estatico.py` (soporte del paquete rev7) da `RESULTADO_ESTATICO OK`.
 - [ ] Seguridad aprueba secretos HMAC, máquina, OTP y Bearer mediante gestor seguro.
 - [ ] Akúbica entrega fixtures QA autorizados para estudios, membresías y usuario Leo.
 - [ ] B02 (S05): hay un paquete QA con nombre, marca, precio público, precio FAMEDIC y ahorro. `composition_status` es informativo y no se exige `validated` (criterio de Batch 1 · T6 en `RC2-B02-BLOQUEO-FUENTE-PAQUETES.md`).
@@ -12,7 +13,7 @@
 
 ## Fase A
 
-1. Usar la colección **funcional** `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` con `Famedic-Akubica-v1.3.0-rc2-NEWMAN.environment.template.json`, bajo sus guardas (`allowed_hosts`, bloqueo de producción, `expected_release_sha`; ver `RC2-NEWMAN-LEEME.md`). La rc2-90 es un antecedente offline y omite todas sus peticiones.
+1. Usar la colección **de certificación** `Famedic-Akubica-v1.3.0-rc2-NEWMAN.postman_collection.json` con `Famedic-Akubica-v1.3.0-rc2-NEWMAN.environment.template.json`, bajo sus guardas. Rev7: URL efectiva sólo HTTPS y en la lista cerrada de hosts QA, `allowed_hosts` sólo restringe, `expected_release_sha`, banderas con texto `"1"` exacto y `qa_writes_authorized=1` para las escrituras positivas (ver `RC2-NEWMAN-LEEME.md`). La rc2-90 es un antecedente offline y omite todas sus peticiones.
 2. Sustituir solo valores autorizados en el gestor de secretos; no guardar tokens en archivos.
 3. Ejecutar ATIX 202/401/409/422, OTP 202/200/422 y ciclo de vida Bearer.
 4. Guardar JSON y JUnit del mismo build; sanitizar antes de compartir.

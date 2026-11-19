@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "FAMEDIC RC2 R30 first-party — suplemento privado",
-    "version": "1.3.0-rc2-r30-review-01",
-    "description": "Suplemento first-party R30: cuatro operaciones web de FAMEDIC fuera de las 76 operaciones principales del contrato RC2 (recuento de Batch 1 · T1). Nunca son endpoints de cobro de Leo ni capacidad de Leo. Certificación pendiente (Batch 2 / first-party).\n\n[Histórico r30-review-01] Texto previo: \"Cuatro operaciones web fuera de las 74 principales. Nunca endpoints de cobro Leo. Implementado local, flags false; texto/autoridad/retención y certificación financiera pendientes.\" (\"74 principales\" era el conteo de ese paquete)."
+    "version": "1.3.0-rc2",
+    "description": "Suplemento first-party R30: cuatro operaciones web de FAMEDIC fuera de las 76 operaciones principales del contrato RC2 (recuento de Batch 1 · T1). Nunca son endpoints de cobro de Leo ni capacidad de Leo. Certificación pendiente (Batch 2 / first-party).\n\n[Histórico r30-review-01] Texto previo: \"Cuatro operaciones web fuera de las 74 principales. Nunca endpoints de cobro Leo. Implementado local, flags false; texto/autoridad/retención y certificación financiera pendientes.\" (\"74 principales\" era el conteo de ese paquete).\n\n[rev7] info.version normalizada a la versión final RC2 `1.3.0-rc2` (antes `1.3.0-rc2-r30-review-01`). Sin cambios en operaciones, rutas, esquemas ni permisos."
   },
   "servers": [
     {

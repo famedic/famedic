@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Famedic API — Integración Akubica",
-    "version": "1.3.0-rc2-review-package-02",
-    "description": "Contrato RC2 de la integración Akúbica/Leo, candidato de Batch 1 (plan de cierre v1.0) en estado ENTREGADO_PARA_ACEPTACION: no está aprobado ni certificado en staging (la certificación es de Batch 2). 76 operaciones principales en 64 paths (recuento verificado en Batch 1 · T1); R30 first-party queda en un suplemento separado de 4 operaciones. Capacidades de Leo según `RC2-MATRIZ-PERMISOS-LEO.md`: las marcadas `x-leo-implementation-status=BATCH_2` están aprobadas en el plan e implementa Batch 2; pagos y payment link siempre 403. La línea base OpenAPI 1.2.3 permanece intacta.\n\n[Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos] Texto previo: \"Paquete RC2 local de revisión técnica, no habilitado ni aprobado para staging. Conserva 74 operationId principales; R30 first-party permanece en suplemento separado. El transporte no está aprobado, las capacidades financieras de Leo permanecen denegadas y no existe autorización de distribución o activación. La línea base OpenAPI 1.2.3 permanece intacta. Revisión 02 (2026-11-16, rama local rc2/cierre-anexos): A10 marcadores OTP sin contexto, B24 continuidad médica (apagada), B22 PHARMACY_SUSPENDED, B21 retiro aislado, item_type en catálogo.\". El \"74 operationId principales\" es el conteo de ese paquete y lo sustituye el recuento 76.",
+    "version": "1.3.0-rc2",
+    "description": "Contrato RC2 de la integración Akúbica/Leo, versión final RC2 `1.3.0-rc2` (Batch 1 · rev7, plan de cierre v1.0). Producto aceptó el alcance contractual y funcional del candidato `92e17741`; rev7 sólo corrige metadatos y documentación y queda lista para verificación de cierre: no está congelada ni certificada en staging (la certificación es de Batch 2). El commit exacto de esta versión se identifica en el manifiesto externo del paquete de entrega rev7. info.version anterior: `1.3.0-rc2-review-package-02`. 76 operaciones principales en 64 paths (recuento verificado en Batch 1 · T1); R30 first-party queda en un suplemento separado de 4 operaciones. Capacidades de Leo según `RC2-MATRIZ-PERMISOS-LEO.md`: las marcadas `x-leo-implementation-status=BATCH_2` están aprobadas en el plan e implementa Batch 2; pagos y payment link siempre 403. La línea base OpenAPI 1.2.3 permanece intacta.\n\n[Histórico review-package-02, 2026-11-16, rama local rc2/cierre-anexos] Texto previo: \"Paquete RC2 local de revisión técnica, no habilitado ni aprobado para staging. Conserva 74 operationId principales; R30 first-party permanece en suplemento separado. El transporte no está aprobado, las capacidades financieras de Leo permanecen denegadas y no existe autorización de distribución o activación. La línea base OpenAPI 1.2.3 permanece intacta. Revisión 02 (2026-11-16, rama local rc2/cierre-anexos): A10 marcadores OTP sin contexto, B24 continuidad médica (apagada), B22 PHARMACY_SUSPENDED, B21 retiro aislado, item_type en catálogo.\". El \"74 operationId principales\" es el conteo de ese paquete y lo sustituye el recuento 76.",
     "contact": {
       "name": "Famedic — Equipo de desarrollo"
     },
@@ -5340,6 +5340,7 @@
           "Integrations"
         ],
         "operationId": "atixPhoneLookup",
+        "summary": "Reconocer contacto ATIX por teléfono (HMAC)",
         "security": [
           {
             "atixHmac": []
@@ -5441,6 +5442,7 @@
     "/cart/benefits": {
       "get": {
         "operationId": "opaqueBenefitsIndex",
+        "summary": "Listar beneficios opacos del carrito (propuesta, activación bloqueada)",
         "parameters": [
           {
             "name": "service_line",
@@ -5579,6 +5581,7 @@
     "/cart/benefits/applications": {
       "post": {
         "operationId": "opaqueBenefitsApply",
+        "summary": "Aplicar beneficio opaco al carrito (propuesta, activación bloqueada)",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -5733,6 +5736,7 @@
     "/cart/benefits/applications/{application_ref}/remove": {
       "post": {
         "operationId": "opaqueBenefitsRemove",
+        "summary": "Retirar beneficio opaco del carrito (propuesta, activación bloqueada)",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -5895,6 +5899,7 @@
     "/benefits/consent": {
       "get": {
         "operationId": "firstPartyConsentPage",
+        "summary": "Consultar página de consentimiento first-party (propuesta, activación bloqueada)",
         "tags": [
           "First-party consent — propuesta"
         ],
@@ -6067,6 +6072,7 @@
     "/benefits/consent/review": {
       "post": {
         "operationId": "firstPartyConsentReview",
+        "summary": "Revisar consentimiento first-party (propuesta, activación bloqueada)",
         "tags": [
           "First-party consent — propuesta"
         ],
@@ -6196,6 +6202,7 @@
     "/benefits/consent/confirm": {
       "post": {
         "operationId": "firstPartyConsentConfirm",
+        "summary": "Confirmar consentimiento first-party (propuesta, activación bloqueada)",
         "tags": [
           "First-party consent — propuesta"
         ],
@@ -6325,6 +6332,7 @@
     "/benefits/consent/{confirmation_ref}/revoke": {
       "post": {
         "operationId": "firstPartyConsentRevoke",
+        "summary": "Revocar consentimiento first-party (propuesta, activación bloqueada)",
         "tags": [
           "First-party consent — propuesta"
         ],

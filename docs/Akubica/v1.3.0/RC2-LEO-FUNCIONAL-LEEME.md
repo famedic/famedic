@@ -6,7 +6,7 @@ Archivos: `Famedic-Akubica-v1.3.0-rc2-LEO-FUNCIONAL.postman_collection.json` (48
 
 | Colección | Solicitudes | Papel |
 |---|---|---|
-| `…-rc2-NEWMAN` | 69 | Funcional A/B/R (A01–A12, B01–B26, R01–R08). Sin cambios en rev3; en rev4 sólo se alinean los cuerpos de B20/B21x y se explicita B21x (ver abajo) |
+| `…-rc2-NEWMAN` | 69 | **Certificación** A/B/R (A01–A12, B01–B26, R01–R08). Sin cambios en rev3; en rev4 sólo se alinean los cuerpos de B20/B21x y se explicita B21x (ver abajo) |
 | `…-rc2-LEO-FUNCIONAL` | 48 | **Funcional diferenciada de Leo**: flujos obligatorios de `RC2-MATRIZ-PERMISOS-LEO.md` que faltaban en la NEWMAN (step-up, ligas seguras, solicitud y estado de factura, lectura fiscal mínima D-1, pedidos, resultados, facturas, carrito y continuidad de laboratorio D-2) y los negativos de alcance de Leo |
 | `…-rc2-90` | 92 | Antecedente offline; su guard omite siempre las 92. **Sin cambios** |
 
@@ -26,15 +26,15 @@ Cada solicitud declara en su descripción la solicitud de origen (`reutiliza NEW
 
 Fallan cerradas: aserción `GUARDA …` en FAIL, la solicitud se omite (no sale tráfico) y la corrida termina con exit ≠ 0.
 
-1. `BASE_URL_HTTPS_REQUERIDA`: `base_url` debe ser https.
-2. Host exacto `staging.famedic.com.mx` o su alias exacto `famedic-otp.on-forge.com`. Lo demás se bloquea: `HOST_PRODUCCION_BLOQUEADO` (`*.famedic.com.mx`, `*.famedic.mx`) o `HOST_DESCONOCIDO_BLOQUEADO`. El host debe estar también en `allowed_hosts` (`HOST_NO_PERMITIDO`).
+1. `BASE_URL_HTTPS_REQUERIDA`: `base_url` debe ser https. **Rev7:** además se valida la URL efectiva, con las variables resueltas según la precedencia de Postman (`HTTPS_REQUERIDO`, `URL_INVALIDA`, `URL_CON_VARIABLES_SIN_RESOLVER`). Un `base_url` sustituido en el archivo de datos o como variable local queda bloqueado.
+2. Host exacto `staging.famedic.com.mx` o su alias exacto `famedic-otp.on-forge.com`. Lo demás se bloquea: `HOST_PRODUCCION_BLOQUEADO` (`*.famedic.com.mx`, `*.famedic.mx`) o `HOST_DESCONOCIDO_BLOQUEADO`. El host debe estar también en `allowed_hosts` (`HOST_NO_PERMITIDO`). Desde rev7 la comparación es exacta, sin pasar a minúsculas, y `allowed_hosts` no puede contener hosts fuera de la lista cerrada (`ALLOWED_HOSTS_FUERA_DE_LISTA_CERRADA`).
 3. `TARGET_ENV_STAGING_REQUERIDO`: `target_env=staging`, declarado por el operador. La plantilla lo trae vacío.
 4. `RELEASE_SHA_REQUERIDO`: `expected_release_sha` de 40 hex.
 5. Política: `URL_FUERA_DE_BASE_URL`, `FIRST_PARTY_PROHIBIDO` (`secure-downloads`, `checkout/continue`, `benefits/consent`, `medical-attention`), `PAGO_SOLO_COMO_NEGATIVA` (`checkout/payment-link` y `checkout/draft` sólo en solicitudes `NEGATIVA_SEGURIDAD` que esperan 403), `SOLO_CREDENCIAL_LEO` (sólo `{{machine_credential}}` y `Bearer {{bearer_token}}`/`{{bearer_none}}`) y `CREDENCIAL_NATIVE_PROHIBIDA`.
 
 ## Precondiciones (se omiten, nunca fallan ni cuentan como PASS)
 
-`SKIPPED_PRECONDITION` si falta `leo_batch2_contract=1` o cualquier variable de `requires:`. Las banderas `*_authorized`, `*_enabled` y `*_contract` deben valer exactamente `1`.
+`SKIPPED_PRECONDITION` si falta `leo_batch2_contract=1` o cualquier variable de `requires:`. Las banderas `*_authorized`, `*_enabled` y `*_contract` deben valer exactamente el texto `"1"`. Desde rev7 deben valerlo tanto en el valor efectivo como en el environment: no basta fijarlas en globals, en el archivo de datos ni como variable local. Matriz offline en el paquete rev7.
 
 | Bandera o variable | Quién la fija | Habilita |
 |---|---|---|
