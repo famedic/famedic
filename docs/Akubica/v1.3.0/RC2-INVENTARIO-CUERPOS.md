@@ -173,4 +173,4 @@ El CSV `RC2-INVENTARIO-CUERPOS.csv` trae además los errores de esquema completo
 | LEO | LF-L20b | GET | `/user/addresses` | — | — | — | **N/A** | Sin cuerpo de solicitud (GET). Esperado: 403. |
 | LEO | LF-L20c | GET | `/user/contacts` | — | — | — | **N/A** | Sin cuerpo de solicitud (GET). Esperado: 403. |
 
-En todas las filas, el script de colección aplica guardas de host y credencial, prerrequisitos y correlation ID, y no modifica el cuerpo.
+En todas las filas, el script de colección aplica guardas de host y credencial, prerrequisitos y correlation ID, y no modifica el cuerpo. Rev7: la guarda de colección también valida la URL efectiva y exige `qa_writes_authorized="1"` en las escrituras positivas de rc2-NEWMAN. No cambia ningún cuerpo ni ninguna clasificación de este inventario.

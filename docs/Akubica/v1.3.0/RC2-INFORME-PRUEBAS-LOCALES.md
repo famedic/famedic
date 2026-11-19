@@ -1,5 +1,7 @@
 # Informe de pruebas locales RC2
 
+> **Aclaración rev7 (`RC2-FE-DE-ERRATAS-REV7.md`, E-01):** este informe es evidencia histórica de la preparación local (`codex/rc2-local-20261110`) y se conserva sin reescribir. El resultado Pest "20 PASS / 137 assertions" **no se ha reproducido** y está pendiente de revalidación. La selección homogénea vigente (IT-0023) reporta 58 fallos y no constituye PASS. Nada de este informe es `STAGING_PASS`.
+
 ## Entorno
 
 Worktree aislado `codex/rc2-local-20261110`, base `9c060c81e6eda7871e2c902563e3c9e0daac74dc`. MySQL 8.0.46 en el contenedor exclusivo `rc2-local-mysql-20261110`, red `rc2-local-net-20261110` y base desechable `famedic_rc2_local_20261110_testing`. Las integraciones ActiveCampaign, Algolia, Vonage y pagos permanecieron desactivadas o simuladas.

@@ -153,6 +153,12 @@
       "enabled": true
     },
     {
+      "key": "qa_writes_authorized",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "lab_brand",
       "value": "",
       "type": "default",

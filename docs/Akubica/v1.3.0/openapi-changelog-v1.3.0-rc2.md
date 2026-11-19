@@ -8,6 +8,35 @@ OpenAPI 1.2.3 histórico permanece sin cambios. RC2 usa el contrato principal de
 
 Cambio sólo documental según el plan de cierre por batches v1.0: conteos recalculados directamente sobre los artefactos (OpenAPI RC2: 76 operaciones en 64 paths; suplemento R30: 4 operaciones; colección `Famedic-Akubica-v1.3.0-rc2-90.postman_collection.json`: 92 solicitudes) y referencias de rama actualizadas a `prep/akubica-technical-integration-rc11`. Sin cambios en el contrato, las colecciones ni el código.
 
+## Batch 1 · rev7 (2026-11-19, revisión correctiva para cierre)
+
+Revisión acotada a los cinco puntos que pidió Producto al aceptar el alcance de `92e17741`. No cambia rutas, esquemas, permisos ni semántica contractual. Se mantienen 76 operaciones principales (64 paths) y 4 R30.
+
+1. **Guardas de `rc2-NEWMAN`**, la colección de certificación:
+   - Se valida la URL efectiva, con las variables ya resueltas.
+   - Sólo HTTPS y la lista cerrada `staging.famedic.com.mx` / `famedic-otp.on-forge.com`. `allowed_hosts` sólo restringe.
+   - Las banderas `*_authorized`, `*_enabled` y `*_contract` deben ser el texto `"1"` exacto, en el valor efectivo y en el environment.
+   - Las 15 escrituras positivas exigen `qa_writes_authorized="1"`. Las negativas conservan su protección.
+   - La plantilla agrega `qa_writes_authorized` vacía.
+   - `LEO-FUNCIONAL` adopta la misma validación de URL efectiva y de banderas.
+   - Sin cambios en solicitudes, cuerpos, credenciales ni aserciones.
+2. **OpenAPI:**
+   - Se agregan los 8 `summary` que faltaban (`atixPhoneLookup`, `opaqueBenefitsIndex/Apply/Remove` y `firstPartyConsentPage/Review/Confirm/Revoke`).
+   - `info.version` pasa a `1.3.0-rc2`. Antes era `1.3.0-rc2-review-package-02`; en R30, `1.3.0-rc2-r30-review-01`.
+   - `info.description` refleja el estado de rev7.
+   - Redocly queda en 0 errores. Los 7 warnings intencionales se documentan en el paquete.
+3. **Trazabilidad:**
+   - Los registros "LOCAL_PASS — 20 Pest / 137 assertions" quedan como evidencia histórica no reproducida, pendiente de revalidación. La selección homogénea vigente reporta 58 fallos y no es PASS.
+   - La fila B22 queda normalizada.
+   - Se conservan exactamente los 46 escenarios y el diferido X01.
+4. **Documentación:**
+   - Candidato y base de comparación.
+   - Newman como colección de certificación.
+   - Changelog vigente.
+   - Anexos externos señalados como tales.
+   - Fe de erratas en `RC2-FE-DE-ERRATAS-REV7.md`.
+5. **D-1 y D-2** quedan incorporadas como ratificadas por Producto, sin campos, operaciones ni decisiones nuevas.
+
 ## Batch 1 · rev6 (2026-11-18, bandera de B25)
 
 Sin cambios en el OpenAPI, R30, LEO-FUNCIONAL ni el código. Sólo `rc2-NEWMAN` y documentación:

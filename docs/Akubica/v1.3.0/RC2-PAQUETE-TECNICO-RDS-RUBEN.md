@@ -28,7 +28,7 @@ Todas las claves foráneas y acciones son las definidas por la migración. No se
 8. `ob_source`: incrementa `coupons.opaque_revision` antes de cada actualización MySQL.
 9. `ob_assignment`: incrementa `coupon_user.opaque_revision` antes de cada actualización MySQL.
 
-El anexo `RC2-PREPARACION-QA/B-RDS-RUBEN/RC2-TRIGGERS-LITERAL.sql` contiene los nueve `CREATE TRIGGER` y sus `DROP TRIGGER IF EXISTS` extraídos de la rama de trabajo. La validación de integridad compara ese anexo con la sección `triggers()` de la migración; cualquier cambio en la migración exige regenerar el anexo.
+El anexo **externo** `RC2-PREPARACION-QA/B-RDS-RUBEN/RC2-TRIGGERS-LITERAL.sql` (en el repositorio, fuera de `docs/Akubica/v1.3.0/`; no se incluye en el paquete compacto) contiene los nueve `CREATE TRIGGER` y sus `DROP TRIGGER IF EXISTS` extraídos de la rama de trabajo. La validación de integridad compara ese anexo con la sección `triggers()` de la migración; cualquier cambio en la migración exige regenerar el anexo.
 
 ## Prerrequisitos y permisos
 
