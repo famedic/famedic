@@ -117,6 +117,46 @@ test('M07 leo reads the products of its own order with the rev7 LeoOrderProduct 
         ->and(array_intersect(a1Keys($json), A1_FORBIDDEN_KEYS))->toBe([]);
 });
 
+test('M07 a study later removed from the catalog (soft delete) keeps its original integer laboratory_test_id for leo', function () {
+    $leo = a1Leo();
+    $order = a1Order($leo['user']);
+    $test = createOlabTest(['gda_id' => 'A1-GDA-RETIRADO-'.bin2hex(random_bytes(4)), 'requires_appointment' => true]);
+    LaboratoryPurchaseItem::query()->create(['laboratory_purchase_id' => $order->id, 'gda_id' => $test->gda_id, 'name' => 'Estudio retirado', 'indications' => 'Ayuno', 'price_cents' => 35000]);
+    $test->delete();
+    expect($test->fresh()->trashed())->toBeTrue();
+
+    $json = $this->getJson("/api/v1/orders/{$order->id}/products", a1Headers($leo))->assertOk()->json();
+
+    a1ExpectSchema($json, 'LeoOrderProductsResponse');
+    expect($json['data']['products'])->toHaveCount(1)
+        ->and($json['data']['products'][0]['laboratory_test_id'])->toBe($test->id)
+        ->and($json['data']['products'][0]['requires_appointment'])->toBeTrue()
+        ->and($json['data']['products'][0]['name'])->toBe('Estudio retirado');
+
+    // Native keeps its previous lookup (response unchanged by A1).
+    $native = SyntheticConsumerRegistryFixture::issue($leo['user'], 'native');
+    expect($this->getJson("/api/v1/orders/{$order->id}/products", a1Headers($native))->assertOk()->json('data.products.0.laboratory_test_id'))->toBeNull();
+});
+
+test('BLQ-A1-01 characterization: a study with no persisted catalog row (hard delete) is still listed and its laboratory_test_id is null, which rev7 does not allow', function () {
+    // Real behavior, not a conformance PASS: laboratory_purchase_items persists only gda_id; once the laboratory_tests
+    // row is gone (force delete) or its gda_id is reassigned, there is no persisted source for the original id.
+    // The product is not suppressed and no id is invented. Open material blocker BLQ-A1-01 (see BATCH2-PREPARACION.md).
+    $leo = a1Leo();
+    $order = a1Order($leo['user']);
+    $test = createOlabTest(['gda_id' => 'A1-GDA-BORRADO-'.bin2hex(random_bytes(4))]);
+    LaboratoryPurchaseItem::query()->create(['laboratory_purchase_id' => $order->id, 'gda_id' => $test->gda_id, 'name' => 'Estudio sin catálogo', 'indications' => 'Ayuno', 'price_cents' => 35000]);
+    $test->forceDelete();
+
+    $json = $this->getJson("/api/v1/orders/{$order->id}/products", a1Headers($leo))->assertOk()->json();
+
+    expect($json['data']['products'])->toHaveCount(1)
+        ->and($json['data']['products'][0]['name'])->toBe('Estudio sin catálogo')
+        ->and($json['data']['products'][0]['laboratory_test_id'])->toBeNull()
+        ->and(Rev7Schema::errors($json, 'LeoOrderProductsResponse'))->not->toBe([])
+        ->and(implode(' ', Rev7Schema::errors($json, 'LeoOrderProductsResponse')))->toContain('laboratory_test_id');
+});
+
 test('M07 a foreign order is soft-denied with 404 ORDER_NOT_FOUND for status and products', function () {
     $foreign = a1Order(User::factory()->withRegularCustomer()->create());
     $leo = a1Leo();
@@ -179,9 +219,38 @@ test('M08 leo family uses the rev7 LeoFamilyMember shape without birth date, gen
     a1ExpectSchema($json, 'LeoFamilyResponse');
     $row = $json['data']['family'][0];
     expect($row)->toBe(['id' => $row['id'], 'display_name' => 'Ana', 'relationship' => 'child', 'is_main_profile' => false])
-        ->and($row['id'])->toBeString()->not->toBe((string) $member->id)->not->toContain((string) $member->id)
+        // IT-0032: the former `not->toContain((string) $member->id)` was non-deterministic (a 1-digit id appears by chance in
+        // ~half of the random references). Derivation is now checked exactly: valid random format, not the id nor its
+        // plain/base64/base64url encodings, and it resolves only to this member for this customer.
+        ->and($row['id'])->toBeString()->not->toBe((string) $member->id)
+        ->and(\App\Domain\Akubica\Benefits\OpaqueReference::valid($row['id'], 'fam'))->toBeTrue()
+        ->and(preg_match('/^fam_\d+$/', $row['id']))->toBe(0)
+        ->and($row['id'])->not->toBe('fam_'.base64_encode((string) $member->id))
+        ->and($row['id'])->not->toBe('fam_'.rtrim(strtr(base64_encode((string) $member->id), '+/', '-_'), '='))
+        ->and(app(\App\Services\Api\V1\Leo\LeoOpaqueIdentifiers::class)->resolve((int) $leo['user']->customer->id, \App\Services\Api\V1\Leo\LeoOpaqueIdentifiers::FAMILY_MEMBER, $row['id']))->toBe((int) $member->id)
         ->and(array_intersect(a1Keys($json), A1_FORBIDDEN_KEYS))->toBe([])
         ->and(json_encode($json))->not->toContain('2015-03-04')->not->toContain('Sintetica');
+});
+
+test('M08 relationship always comes from the persisted kinship: every Kinship case maps to a string, and an absent kinship cannot be stored', function () {
+    $leo = a1Leo();
+    foreach (Kinship::cases() as $i => $kinship) {
+        a1Family($leo['user'], ['name' => 'Fam'.$i, 'kinship' => $kinship]);
+    }
+
+    $json = $this->getJson('/api/v1/user/family', a1Headers($leo))->assertOk()->json();
+    a1ExpectSchema($json, 'LeoFamilyResponse');
+    expect(collect($json['data']['family'])->pluck('relationship')->sort()->values()->all())
+        ->toBe(collect(Kinship::cases())->map->value->sort()->values()->all());
+
+    // family_accounts.kinship is a NOT NULL enum (2024_12_17_165656): null and empty values are rejected by the database,
+    // so a member without relationship cannot exist and no relationship is ever invented.
+    $row = ['customer_id' => $leo['user']->customer->id, 'name' => 'Sin', 'paternal_lastname' => 'Parentesco', 'maternal_lastname' => 'Prueba', 'created_at' => now(), 'updated_at' => now()];
+    foreach ([null, ''] as $bad) {
+        expect(fn () => \Illuminate\Support\Facades\DB::table('family_accounts')->insert($row + ['kinship' => $bad]))
+            ->toThrow(\Illuminate\Database\QueryException::class);
+    }
+    expect(FamilyAccount::query()->where('customer_id', $leo['user']->customer->id)->count())->toBe(count(Kinship::cases()));
 });
 
 test('M08 opaque family ids are stable per customer, random, and never resolve for another customer', function () {
