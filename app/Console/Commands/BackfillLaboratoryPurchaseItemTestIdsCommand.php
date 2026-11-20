@@ -12,8 +12,10 @@ use Illuminate\Support\Facades\DB;
  *
  * - Idempotent and batched: only rows WHERE laboratory_test_id IS NULL are read, and each write repeats that
  *   condition, so an already persisted id is never overwritten and a second run changes nothing new.
- * - Writes ONLY the RESOLUBLE class (unequivocal match, see LaboratoryPurchaseItemTestResolver). AMBIGUO and
- *   SIN_FUENTE stay null (BLOCKED): no invented id, no 0, no product removed.
+ * - Writes ONLY the RESOLUBLE class with a candidate id. AJ-BLQ-A1-01-A (IT-0035): no rule emits RESOLUBLE any more
+ *   (dates plus catalog matches are not proof), so today the command writes nothing and works as a measurement:
+ *   AMBIGUO (incl. TIMESTAMPS_NO_CONCLUYENTES) and SIN_FUENTE stay null (BLOCKED): no invented id, no 0, no product
+ *   removed.
  * - --dry-run classifies without writing. Output is counts by class and reason only (no names or personal data);
  *   --report writes item_id,class,reason,candidate_id (internal ids only).
  * - Writes do not touch updated_at or any other column.
@@ -28,7 +30,7 @@ class BackfillLaboratoryPurchaseItemTestIdsCommand extends Command
         {--report= : Optional CSV path with item_id,class,reason,candidate_id (internal ids only)}
         {--force : Skip the production confirmation}';
 
-    protected $description = 'BLQ-A1-01: backfill laboratory_purchase_items.laboratory_test_id only where the original study is unequivocal';
+    protected $description = 'BLQ-A1-01: classify legacy laboratory_purchase_items without laboratory_test_id; writes only an independently proven id (none today)';
 
     public function handle(LaboratoryPurchaseItemTestResolver $resolver): int
     {
@@ -63,7 +65,7 @@ class BackfillLaboratoryPurchaseItemTestIdsCommand extends Command
                     if ($report) {
                         fputcsv($report, [$row->id, $result['class'], $result['reason'], $result['laboratory_test_id'] ?? '']);
                     }
-                    if (! $dryRun && $result['class'] === LaboratoryPurchaseItemTestResolver::RESOLUBLE) {
+                    if (! $dryRun && $result['class'] === LaboratoryPurchaseItemTestResolver::RESOLUBLE && $result['laboratory_test_id'] !== null) {
                         $written += DB::table('laboratory_purchase_items')
                             ->where('id', $row->id)
                             ->whereNull('laboratory_test_id')

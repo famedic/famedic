@@ -1,8 +1,9 @@
 <?php
 
-// BLQ-A1-01 (IT-0033): persistence of laboratory_purchase_items.laboratory_test_id, its protection against later
-// catalog deletion / gda_id reassignment, the Leo read order (persisted id first, unequivocal fallback only), native
-// unchanged, and the idempotent batched backfill with dry-run. LOCAL only.
+// BLQ-A1-01 (IT-0033, adjusted IT-0035 AJ-BLQ-A1-01-A): persistence of laboratory_purchase_items.laboratory_test_id,
+// its protection against later catalog deletion / gda_id reassignment, the Leo read (persisted id only; no id derived
+// from dates plus catalog matches), native unchanged, and the idempotent batched backfill (writes nothing without an
+// independent proof). LOCAL only.
 
 use App\Actions\Laboratories\CreateGDAQuotationAction;
 use App\Actions\Laboratories\FulfillLaboratoryCartOrderAction;
@@ -172,7 +173,7 @@ test('leo: the persisted id is returned after soft and hard catalog deletion; th
         ->and($byName[$hard->name]['requires_appointment'])->toBeFalse();
 });
 
-test('gda_id reassignment: the persisted id wins; a legacy row is NOT inferred from the current gda_id; an unchanged catalog row is', function () {
+test('gda_id reassignment: the persisted id wins; a legacy row is NOT inferred from the current gda_id nor from an unchanged catalog row (AJ-BLQ-A1-01-A)', function () {
     $leo = SyntheticConsumerRegistryFixture::issue(User::factory()->withRegularCustomer()->create(), 'leo', BLQ_CAPS);
     $this->travelTo(now()->subDays(10));
     $original = blqTest(['name' => 'RM original']);
@@ -194,7 +195,8 @@ test('gda_id reassignment: the persisted id wins; a legacy row is NOT inferred f
     expect($products)->toHaveCount(3)
         ->and($ids[0])->toBe($original->id)
         ->and($ids[1])->toBeNull()                                 // AMBIGUO: candidate created after the purchase
-        ->and($ids[2])->toBe($stable->id)                          // RESOLUBLE: unequivocal
+        ->and($ids[2])->toBeNull()                                 // AJ-BLQ-A1-01-A: dates + name are not proof
+        ->and($ids)->not->toContain($stable->id)
         ->and($ids)->not->toContain($impostor->id)
         ->and($ids)->not->toContain(0);
 
@@ -202,7 +204,7 @@ test('gda_id reassignment: the persisted id wins; a legacy row is NOT inferred f
     $legacy = LaboratoryPurchaseItem::query()->where('laboratory_purchase_id', $order->id)->whereNull('laboratory_test_id')->orderBy('id')->get();
     $candidates = $resolver->candidates($legacy->map(fn ($i) => ['brand' => 'olab', 'gda_id' => $i->gda_id]));
     expect($resolver->classify($legacy[0], 'olab', $candidates))->toBe(['class' => R::AMBIGUO, 'reason' => 'CATALOGO_CREADO_DESPUES_DEL_PEDIDO', 'laboratory_test_id' => null])
-        ->and($resolver->classify($legacy[1], 'olab', $candidates)['class'])->toBe(R::RESOLUBLE);
+        ->and($resolver->classify($legacy[1], 'olab', $candidates))->toBe(['class' => R::AMBIGUO, 'reason' => 'TIMESTAMPS_NO_CONCLUYENTES', 'laboratory_test_id' => null]);
 });
 
 test('native keeps its previous lookup: it ignores the persisted id (current catalog by brand + gda_id, trashed excluded)', function () {
@@ -222,7 +224,7 @@ test('native keeps its previous lookup: it ignores the persisted id (current cat
         ->and($products['Retirado']['laboratory_test_id'])->toBeNull();
 });
 
-test('backfill: dry-run writes nothing; the run writes only RESOLUBLE; a repeat is idempotent and never overwrites; products are conserved', function () {
+test('backfill: dry-run writes nothing; the run writes 0 (former RESOLUBLE is AMBIGUO, AJ-BLQ-A1-01-A); a repeat is idempotent and never overwrites; products are conserved', function () {
     $this->travelTo(now()->subDays(20));
     $resoluble = blqTest(['name' => 'Resoluble']);
     $modified = blqTest(['name' => 'Modificado']);
@@ -268,7 +270,8 @@ test('backfill: dry-run writes nothing; the run writes only RESOLUBLE; a repeat 
     expect($exit)->toBe(0)
         ->and(blqItemsSnapshot())->toBe($before)
         ->and($dryOutput)->toContain('DRY-RUN')->toContain('escritos=0')->toContain('lotes=3')
-        ->and($class('resoluble'))->toBe([R::RESOLUBLE, 'CATALOGO_SIN_CAMBIOS_DESDE_EL_PEDIDO'])
+        ->and($class('resoluble'))->toBe([R::AMBIGUO, 'TIMESTAMPS_NO_CONCLUYENTES'])
+        ->and($dryOutput)->toContain('RESOLUBLE=0')
         ->and($class('modified'))->toBe([R::AMBIGUO, 'CATALOGO_MODIFICADO_DESPUES_DEL_PEDIDO'])
         ->and($class('soft'))->toBe([R::AMBIGUO, 'CATALOGO_MODIFICADO_DESPUES_DEL_PEDIDO'])
         ->and($class('hard'))->toBe([R::SIN_FUENTE, 'SIN_CANDIDATO_EN_CATALOGO'])
@@ -280,25 +283,53 @@ test('backfill: dry-run writes nothing; the run writes only RESOLUBLE; a repeat 
     Artisan::call('laboratory:backfill-purchase-item-test-ids', ['--batch' => 3]);
     $first = Artisan::output();
     $after = collect(blqItemsSnapshot())->keyBy('id');
-    expect($first)->toContain('escritos=1')
-        ->and($after[$items['resoluble']->id]['laboratory_test_id'])->toBe($resoluble->id)
+    expect($first)->toContain('escritos=0')->toContain('RESOLUBLE=0')
+        ->and($after[$items['resoluble']->id]['laboratory_test_id'])->toBeNull()
         ->and($after[$items['persisted']->id]['laboratory_test_id'])->toBe($persisted->id)
-        ->and(collect(['modified', 'soft', 'hard', 'reassigned', 'renamed', 'nogda'])->map(fn ($k) => $after[$items[$k]->id]['laboratory_test_id'])->unique()->all())->toBe([null])
-        ->and($after->pluck('laboratory_test_id'))->not->toContain($impostor->id)->not->toContain(0)
+        ->and(collect(['resoluble', 'modified', 'soft', 'hard', 'reassigned', 'renamed', 'nogda'])->map(fn ($k) => $after[$items[$k]->id]['laboratory_test_id'])->unique()->all())->toBe([null])
+        ->and($after->pluck('laboratory_test_id'))->not->toContain($impostor->id)->not->toContain($resoluble->id)->not->toContain(0)
         ->and($after)->toHaveCount(count($before));
-    // only laboratory_test_id of the RESOLUBLE row changed (updated_at and every other column untouched)
+    // nothing changed at all: every row (incl. updated_at) is identical to the snapshot before the run
     foreach ($before as $row) {
-        $now = $after[$row['id']];
-        if ($row['id'] === $items['resoluble']->id) {
-            $row['laboratory_test_id'] = $resoluble->id;
-        }
-        expect($now)->toBe($row);
+        expect($after[$row['id']])->toBe($row);
     }
 
     $snapshot = blqItemsSnapshot();
     Artisan::call('laboratory:backfill-purchase-item-test-ids', ['--batch' => 2]);
-    expect(Artisan::output())->toContain('escritos=0')->toContain('YA_PERSISTIDO (no se tocan)=2')
+    expect(Artisan::output())->toContain('escritos=0')->toContain('YA_PERSISTIDO (no se tocan)=1')
         ->and(blqItemsSnapshot())->toBe($snapshot)
         ->and($order->laboratoryPurchaseItems()->count())->toBe(8);
     @unlink($report);
+});
+
+test('AJ-BLQ-A1-01-A: leo never derives an id from dates plus catalog matches; the legacy product stays listed with null (rev7 not met, BLOCKED) and the persisted one keeps its id', function () {
+    $leo = SyntheticConsumerRegistryFixture::issue(User::factory()->withRegularCustomer()->create(), 'leo', BLQ_CAPS);
+    $this->travelTo(now()->subDays(30));
+    $untouched = blqTest(['name' => 'Catalogo intacto', 'requires_appointment' => true]);
+    $persistedTest = blqTest(['name' => 'Con id persistido', 'requires_appointment' => true]);
+    $this->travelTo(now()->addDays(10));
+    $order = createAkubicaLaboratoryPurchase($leo['user']);
+    $legacy = blqLegacyItem($order, $untouched->gda_id, 'Catalogo intacto');   // same brand, gda_id, name; catalog never touched
+    $persisted = blqItem($order, $persistedTest);
+    $this->travelBack();
+    $persistedTest->update(['name' => 'Renombrado despues', 'gda_id' => $persistedTest->gda_id.'-NUEVO']);
+
+    $before = blqItemsSnapshot();
+    $json = blqProducts($this, $leo, $order);
+    $byItem = collect($json['data']['products'])->keyBy('id');
+
+    expect($json['data']['products'])->toHaveCount(2)
+        ->and($byItem[$legacy->id]['laboratory_test_id'])->toBeNull()
+        ->and($byItem[$legacy->id]['requires_appointment'])->toBeFalse()   // no source: existing behaviour, not a real false
+        ->and($byItem[$persisted->id]['laboratory_test_id'])->toBe($persistedTest->id)
+        ->and($byItem[$persisted->id]['requires_appointment'])->toBeTrue()
+        ->and(implode(' ', Rev7Schema::errors($json, 'LeoOrderProductsResponse')))->toContain('laboratory_test_id')
+        ->and(blqItemsSnapshot())->toBe($before);                           // the read writes nothing
+
+    $resolver = app(R::class);
+    $row = LaboratoryPurchaseItem::query()->find($legacy->id);
+    expect($resolver->classify($row, 'olab', $resolver->candidates([['brand' => 'olab', 'gda_id' => $row->gda_id]])))
+        ->toBe(['class' => R::AMBIGUO, 'reason' => 'TIMESTAMPS_NO_CONCLUYENTES', 'laboratory_test_id' => null])
+        ->and($resolver->classify(LaboratoryPurchaseItem::query()->find($persisted->id), 'olab', collect()))
+        ->toBe(['class' => R::YA_PERSISTIDO, 'reason' => 'ID_PERSISTIDO', 'laboratory_test_id' => $persistedTest->id]);
 });

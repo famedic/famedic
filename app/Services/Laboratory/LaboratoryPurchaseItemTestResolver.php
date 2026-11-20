@@ -7,23 +7,24 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * BLQ-A1-01: resolves the original laboratory_tests.id of an order product.
+ * BLQ-A1-01: classifies the original laboratory_tests.id of an order product.
  *
- * 1. A persisted laboratory_purchase_items.laboratory_test_id is the source of truth (YA_PERSISTIDO).
- * 2. For rows without it (created before the column existed) a candidate is accepted ONLY when the match is
- *    demonstrably unequivocal (RESOLUBLE). The current gda_id alone is not proof: gda_ids are reassigned in place
- *    (e.g. migration 2026_05_16_120000) and a freed gda_id can later belong to a different study. Criterion:
- *      - exactly one laboratory_tests row (soft-deleted rows included) with the order brand and the item gda_id;
- *      - item.created_at, test.created_at and test.updated_at are all present;
- *      - test.created_at <= item.created_at and test.updated_at <= item.created_at, i.e. the catalog row has not
- *        been modified at all (no gda_id change, no soft delete, no edit) since the product was bought, so the
- *        gda_id it carries now is the one it carried then;
- *      - the item name (copied from the catalog at purchase time) equals the catalog name.
- *    Anything that cannot be demonstrated is AMBIGUO; no candidate at all is SIN_FUENTE. Neither yields an id.
+ * 1. A persisted laboratory_purchase_items.laboratory_test_id is the source of truth (YA_PERSISTIDO) and is the ONLY
+ *    way an id is returned.
+ * 2. AJ-BLQ-A1-01-A (IT-0035): rows without a persisted id are never resolved from dates plus catalog matches. The
+ *    schema does not enforce updated_at (no ON UPDATE, no catalog audit), the repository already writes
+ *    laboratory_tests through the query builder without touching updated_at, and catalog history before 2025-10-09
+ *    is not traceable, so "catalog row unchanged since the purchase" cannot be demonstrated. Such a row is
+ *    AMBIGUO / TIMESTAMPS_NO_CONCLUYENTES (BLOCKED). The remaining reasons are kept only to measure the history:
+ *      - SIN_FUENTE: no gda_id, no order brand, or no catalog row (soft-deleted rows included) for brand + gda_id;
+ *      - AMBIGUO: several candidates, missing timestamps, candidate created/modified after the purchase, deleted
+ *        before it, different name, or (all of those passing) TIMESTAMPS_NO_CONCLUYENTES.
+ *    No rule emits RESOLUBLE: it is reserved for an independent, verifiable source that does not exist today.
  */
 final class LaboratoryPurchaseItemTestResolver
 {
     public const YA_PERSISTIDO = 'YA_PERSISTIDO';
+    /** Reserved (AJ-BLQ-A1-01-A): no current rule emits it; only an independent verifiable source could. */
     public const RESOLUBLE = 'RESOLUBLE';
     public const AMBIGUO = 'AMBIGUO';
     public const SIN_FUENTE = 'SIN_FUENTE';
@@ -99,7 +100,8 @@ final class LaboratoryPurchaseItemTestResolver
             return $this->none(self::AMBIGUO, 'NOMBRE_DISTINTO');
         }
 
-        return ['class' => self::RESOLUBLE, 'reason' => 'CATALOGO_SIN_CAMBIOS_DESDE_EL_PEDIDO', 'laboratory_test_id' => (int) $test->id];
+        // AJ-BLQ-A1-01-A: matching dates and name are not proof of the historical study; no id is derived.
+        return $this->none(self::AMBIGUO, 'TIMESTAMPS_NO_CONCLUYENTES');
     }
 
     /** @return array{class: string, reason: string, laboratory_test_id: null} */

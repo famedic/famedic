@@ -18,7 +18,6 @@ use App\Http\Responses\ApiResponse;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryTest;
-use App\Services\Laboratory\LaboratoryPurchaseItemTestResolver;
 use App\Support\Api\V1\LaboratoryOrderResults;
 use App\Support\Api\V1\LaboratoryOrderStatus;
 use App\Support\Api\V1\LeoConsumer;
@@ -151,16 +150,12 @@ class OrderController extends Controller
         $order->load(['laboratoryPurchaseItems']);
 
         if (LeoConsumer::is($request)) {
-            // BLQ-A1-01 (IT-0033): Leo uses the persisted laboratory_purchase_items.laboratory_test_id first. Rows
-            // without it get an id only when LaboratoryPurchaseItemTestResolver proves an unequivocal match (catalog
-            // row unchanged since the purchase); otherwise null is returned as-is (no invented id, no 0, the product
-            // is not hidden). This replaces the IT-0032 gda_id + withTrashed lookup, which a gda_id reassignment can defeat.
-            $resolver = app(LaboratoryPurchaseItemTestResolver::class);
-            $brand = $order->brand instanceof \BackedEnum ? $order->brand->value : $order->brand;
+            // BLQ-A1-01: Leo returns ONLY the persisted laboratory_purchase_items.laboratory_test_id. AJ-BLQ-A1-01-A
+            // (IT-0035): rows without it are not resolved from dates plus catalog matches (not verifiable); they keep
+            // the existing unresolved behaviour (product listed, laboratory_test_id null, requires_appointment without
+            // source), which rev7 does not allow and is reported as BLOCKED, never as conforming.
             $items = $order->laboratoryPurchaseItems;
-            $candidates = $resolver->candidates($items->whereNull('laboratory_test_id')
-                ->map(fn ($item) => ['brand' => $brand, 'gda_id' => $item->gda_id]));
-            $resolved = $items->mapWithKeys(fn ($item) => [$item->id => $resolver->classify($item, $brand, $candidates)['laboratory_test_id']]);
+            $resolved = $items->mapWithKeys(fn ($item) => [$item->id => $item->laboratory_test_id !== null ? (int) $item->laboratory_test_id : null]);
             $tests = LaboratoryTest::query()->withTrashed()
                 ->whereIn('id', $resolved->filter()->values()->all())
                 ->get()
