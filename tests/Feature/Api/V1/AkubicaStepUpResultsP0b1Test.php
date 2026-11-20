@@ -34,7 +34,8 @@ function stepUpCustomerToken(array $userAttrs = []): array
         'phone_verified_at' => now(),
     ], $userAttrs));
 
-    $newToken = $user->createToken('akubica-test');
+    // IT-0035 (harness): registered native token with the literal capabilities of the routes used here.
+    $newToken = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, 'native', \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor('native', ['api.v1.orders.results.step-up.request', 'api.v1.orders.results.step-up.verify', 'api.v1.orders.results.download']))['token'];
 
     return [$user, $newToken->plainTextToken, (int) $newToken->accessToken->id];
 }

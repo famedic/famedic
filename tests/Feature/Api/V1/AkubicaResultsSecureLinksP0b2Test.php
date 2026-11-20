@@ -33,7 +33,8 @@ function secureLinkCustomerToken(array $userAttrs = []): array
         'phone_verified_at' => now(),
     ], $userAttrs));
 
-    $newToken = $user->createToken('akubica-test');
+    // IT-0035 (harness): registered native token with the literal capabilities of the routes used here.
+    $newToken = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, 'native', \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor('native', ['api.v1.orders.results.secure-link', 'api.v1.orders.results.download']))['token'];
 
     return [$user, $newToken->plainTextToken, (int) $newToken->accessToken->id];
 }
@@ -321,7 +322,8 @@ test('p0b2 grant of another user cannot issue link', function () {
 test('p0b2 grant of another PAT cannot issue link', function () {
     enableAkubicaSecureLinksResultsFlags();
     [$user, $tokenA, $tokenIdA] = secureLinkCustomerToken();
-    $other = $user->createToken('other-pat');
+    // IT-0035 (harness): second REGISTERED PAT of the same user (real consumer + capabilities); the grant stays bound to tokenIdA.
+    $other = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, 'native', \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor('native', ['api.v1.orders.results.secure-link', 'api.v1.orders.results.download']))['token'];
     $path = 'results/p0b2-otherpat.pdf';
     storeFakePdf($path);
     $order = createAkubicaLaboratoryPurchase($user, ['results' => $path]);

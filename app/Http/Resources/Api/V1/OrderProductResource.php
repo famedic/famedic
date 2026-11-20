@@ -14,6 +14,8 @@ class OrderProductResource extends JsonResource
         $resource,
         protected LaboratoryPurchase $order,
         protected ?LaboratoryTest $laboratoryTest = null,
+        // BLQ-A1-01 (Leo only): the persisted original id, which survives a hard-deleted catalog row. Native passes null.
+        protected ?int $laboratoryTestId = null,
     ) {
         parent::__construct($resource);
     }
@@ -22,7 +24,7 @@ class OrderProductResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'laboratory_test_id' => $this->laboratoryTest?->id,
+            'laboratory_test_id' => $this->laboratoryTestId ?? $this->laboratoryTest?->id,
             'name' => $this->name,
             'brand' => $this->order->brand?->value ?? $this->order->brand,
             'price_cents' => (int) $this->price_cents,

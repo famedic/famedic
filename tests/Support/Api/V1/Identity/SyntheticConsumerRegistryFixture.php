@@ -42,27 +42,7 @@ final class SyntheticConsumerRegistryFixture
         if (! app()->environment('testing') || ! ($safeSqlite || $safeLegacyMysql || $safeRc2Mysql)) {
             throw new \LogicException('Unsafe fixture environment');
         }
-        $defaultCaps=$caps===null;
-        $caps ??= [
-            PaymentLinkAccessPolicy::CAPABILITY,
-            'cart:read',
-            'memberships:read',
-            'cart:membership:write',
-            'checkout:prepare',
-            'legacy-benefits:read',
-            'legacy-benefits:write',
-            'api:operation:api:v1:orders:index',
-            'api:operation:api:v1:orders:results:index',
-            'api:operation:api:v1:orders:results',
-            'api:operation:api:v1:orders:invoices:index',
-            'api:operation:api:v1:orders:invoices',
-            'api:operation:api:v1:user:family',
-            'api:operation:api:v1:laboratory-appointments:requirements',
-            'api:operation:api:v1:laboratory-appointments:index',
-        ];
-        if($defaultCaps && $kind==='native')$caps=array_merge($caps,['cart:write','payments:draft',
-            // RC2: native-only literal route capabilities (OpenAPI x-consumer-allowlist [native]); never granted to leo by this fixture.
-            'api:operation:api:v1:orders:products','api:operation:api:v1:orders:status','api:operation:api:v1:orders:cancel']);
+        $caps ??= self::defaultCapabilities($kind);
         $issuer = User::factory()->create();
         $administrator = Administrator::create(['user_id' => $issuer->id]);
         $administrator->givePermissionTo(Permission::firstOrCreate(['name' => 'api-consumers.manage', 'guard_name' => 'web']));
@@ -80,6 +60,51 @@ final class SyntheticConsumerRegistryFixture
         self::$actors[$user->id] = \App\Services\Api\V1\Auth\ConsumerRequestScope::actorKey((int) $user->customer->id, $context);
 
         return compact('user', 'consumer', 'channel', 'credential', 'delegation', 'binding', 'token', 'machine', 'issuer');
+    }
+
+    /** Default capability set of issue() when no explicit list is given (unchanged since IT-0031). */
+    public static function defaultCapabilities(string $kind = 'native'): array
+    {
+        $caps = [
+            PaymentLinkAccessPolicy::CAPABILITY,
+            'cart:read',
+            'memberships:read',
+            'cart:membership:write',
+            'checkout:prepare',
+            'legacy-benefits:read',
+            'legacy-benefits:write',
+            'api:operation:api:v1:orders:index',
+            'api:operation:api:v1:orders:results:index',
+            'api:operation:api:v1:orders:results',
+            'api:operation:api:v1:orders:invoices:index',
+            'api:operation:api:v1:orders:invoices',
+            'api:operation:api:v1:user:family',
+            'api:operation:api:v1:laboratory-appointments:requirements',
+            'api:operation:api:v1:laboratory-appointments:index',
+        ];
+        if ($kind === 'native') {
+            $caps = array_merge($caps,['cart:write','payments:draft',
+            // RC2: native-only literal route capabilities (OpenAPI x-consumer-allowlist [native]); never granted to leo by this fixture.
+            'api:operation:api:v1:orders:products','api:operation:api:v1:orders:status','api:operation:api:v1:orders:cancel']);
+        }
+
+        return $caps;
+    }
+
+    /**
+     * IT-0035 (harness, OBS-PEST-ARNES): default set plus the LITERAL capability each named route requires, derived
+     * with the application's own rules: AuthorizeRegisteredConsumer::ROUTES for registered routes, otherwise
+     * AuthorizeNativeConsumerOperation's 'api:operation:'.route-name-with-colons. Nothing is wildcarded; Leo denials
+     * in ConsumerCapabilityPolicy still apply because the policy, not this list, decides.
+     */
+    public static function capabilitiesFor(string $kind, array $routeNames): array
+    {
+        $caps = self::defaultCapabilities($kind);
+        foreach ($routeNames as $name) {
+            $caps[] = \App\Http\Middleware\Api\V1\AuthorizeRegisteredConsumer::ROUTES[$name] ?? 'api:operation:'.str_replace('.', ':', $name);
+        }
+
+        return array_values(array_unique($caps));
     }
 
     public static function headers(string $userToken): array

@@ -20,6 +20,10 @@ final class AuthorizeRegisteredConsumer
         'api.v1.checkout.prepare' => 'checkout:prepare',
         'api.v1.checkout.draft' => 'payments:draft',
         'api.v1.orders.index' => 'api:operation:api:v1:orders:index',
+        // RC2 Batch 2 · A1 (rev7 L07, L13b): literal grants, same capability names as the native-only gate.
+        'api.v1.orders.status' => 'api:operation:api:v1:orders:status',
+        'api.v1.orders.products' => 'api:operation:api:v1:orders:products',
+        'api.v1.user.tax-profiles' => 'api:operation:api:v1:user:tax-profiles',
         'api.v1.orders.results.index' => 'api:operation:api:v1:orders:results:index',
         'api.v1.orders.results' => 'api:operation:api:v1:orders:results',
         'api.v1.orders.invoices.index' => 'api:operation:api:v1:orders:invoices:index',

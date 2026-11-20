@@ -8,6 +8,7 @@ use App\Http\Requests\Api\V1\Orders\CancelOrderRequest;
 use App\Http\Requests\Api\V1\Orders\ListOrderInvoicesRequest;
 use App\Http\Requests\Api\V1\Orders\ListOrderResultsRequest;
 use App\Http\Requests\Api\V1\Orders\ListOrdersRequest;
+use App\Http\Resources\Api\V1\Leo\LeoInvoiceMetadataResource;
 use App\Http\Resources\Api\V1\OrderInvoiceResource;
 use App\Http\Resources\Api\V1\OrderProductResource;
 use App\Http\Resources\Api\V1\OrderResource;
@@ -19,6 +20,7 @@ use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryTest;
 use App\Support\Api\V1\LaboratoryOrderResults;
 use App\Support\Api\V1\LaboratoryOrderStatus;
+use App\Support\Api\V1\LeoConsumer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -147,20 +149,44 @@ class OrderController extends Controller
 
         $order->load(['laboratoryPurchaseItems']);
 
-        $testsByGdaId = LaboratoryTest::query()
-            ->where('brand', $order->brand)
-            ->whereIn('gda_id', $order->laboratoryPurchaseItems->pluck('gda_id')->filter()->all())
-            ->get()
-            ->keyBy(fn (LaboratoryTest $test) => (string) $test->gda_id);
+        if (LeoConsumer::is($request)) {
+            // BLQ-A1-01: Leo returns ONLY the persisted laboratory_purchase_items.laboratory_test_id. AJ-BLQ-A1-01-A
+            // (IT-0035): rows without it are not resolved from dates plus catalog matches (not verifiable); they keep
+            // the existing unresolved behaviour (product listed, laboratory_test_id null, requires_appointment without
+            // source), which rev7 does not allow and is reported as BLOCKED, never as conforming.
+            $items = $order->laboratoryPurchaseItems;
+            $resolved = $items->mapWithKeys(fn ($item) => [$item->id => $item->laboratory_test_id !== null ? (int) $item->laboratory_test_id : null]);
+            $tests = LaboratoryTest::query()->withTrashed()
+                ->whereIn('id', $resolved->filter()->values()->all())
+                ->get()
+                ->keyBy('id');
 
-        $products = $order->laboratoryPurchaseItems
-            ->map(fn ($item) => (new OrderProductResource(
-                $item,
-                $order,
-                $testsByGdaId->get((string) $item->gda_id),
-            ))->resolve($request))
-            ->values()
-            ->all();
+            $products = $items
+                ->map(fn ($item) => (new OrderProductResource(
+                    $item,
+                    $order,
+                    $resolved[$item->id] !== null ? $tests->get($resolved[$item->id]) : null,
+                    $resolved[$item->id],
+                ))->resolve($request))
+                ->values()
+                ->all();
+        } else {
+            // Native: unchanged lookup (current catalog by brand + gda_id, soft-deleted rows excluded).
+            $testsByGdaId = LaboratoryTest::query()
+                ->where('brand', $order->brand)
+                ->whereIn('gda_id', $order->laboratoryPurchaseItems->pluck('gda_id')->filter()->all())
+                ->get()
+                ->keyBy(fn (LaboratoryTest $test) => (string) $test->gda_id);
+
+            $products = $order->laboratoryPurchaseItems
+                ->map(fn ($item) => (new OrderProductResource(
+                    $item,
+                    $order,
+                    $testsByGdaId->get((string) $item->gda_id),
+                ))->resolve($request))
+                ->values()
+                ->all();
+        }
 
         return ApiResponse::success([
             'order_id' => $order->id,
@@ -212,6 +238,11 @@ class OrderController extends Controller
 
         $order->load(['laboratoryPurchaseItems']);
 
+        // rev7 L09: Leo receives LeoResultMetadata only (no download_url, download or document content).
+        if (LeoConsumer::is($request)) {
+            return ApiResponse::success((new OrderResultsListResource($order))->resolve($request));
+        }
+
         return ApiResponse::success(
             LaboratoryOrderResults::buildDetailPayload($order),
         );
@@ -251,6 +282,16 @@ class OrderController extends Controller
         Request $request,
         bool $includeOrderStudyName = true,
     ): ?array {
+        // rev7 L12: Leo receives LeoInvoiceMetadata only (no download_url, download or study name).
+        if (LeoConsumer::is($request) && ($order->invoice || $order->invoiceRequest)) {
+            return (new LeoInvoiceMetadataResource(
+                $order,
+                $order,
+                $order->invoice ?: null,
+                $order->invoice ? null : $order->invoiceRequest,
+            ))->resolve($request);
+        }
+
         if ($order->invoice) {
             return (new OrderInvoiceResource(
                 $order,

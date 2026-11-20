@@ -56,7 +56,8 @@ function apptAuditCustomerToken(array $userAttrs = []): array
         'email' => 'appt.audit.'.$phoneSeq.'@ejemplo.com',
     ], $userAttrs));
 
-    $newToken = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user,'native')['token'];
+    // IT-0035 (harness): registered native token with the literal capabilities of the routes used here.
+    $newToken = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, 'native', \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor('native', ['api.v1.laboratory-appointments.store', 'api.v1.laboratory-appointments.destroy']))['token'];
 
     return [$user, $newToken->plainTextToken, (int) $newToken->accessToken->id];
 }

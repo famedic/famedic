@@ -58,7 +58,8 @@ function docAuditCustomerToken(array $userAttrs = []): array
         'email' => 'doc.audit@ejemplo.com',
     ], $userAttrs));
 
-    $newToken = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user,'native')['token'];
+    // IT-0035 (harness): registered native token with the literal capabilities of the routes used here.
+    $newToken = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, 'native', \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor('native', ['api.v1.orders.results.secure-link', 'api.v1.orders.invoices.secure-link', 'api.v1.orders.results.download', 'api.v1.orders.invoices.download']))['token'];
 
     return [$user, $newToken->plainTextToken, (int) $newToken->accessToken->id];
 }

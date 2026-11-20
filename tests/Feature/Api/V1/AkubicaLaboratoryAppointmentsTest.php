@@ -9,6 +9,18 @@ use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\User;
 
+/**
+ * IT-0035 (harness): native token registered through the real consumer registry (consumer + channel + delegation +
+ * binding) with the literal capabilities of the routes this suite calls. Ownership stays the token's own customer.
+ */
+function appointmentsRegisteredCustomerToken(?User $user = null): array
+{
+    $user ??= User::factory()->withRegularCustomer()->create();
+    $issued = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, 'native', \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor('native', ['api.v1.laboratory-appointments.store', 'api.v1.laboratory-appointments.destroy']));
+
+    return [$user, $issued['token']->plainTextToken];
+}
+
 function setupAppointmentRequiredCart(User $user): array
 {
     $test = createOlabTest(['requires_appointment' => true]);
@@ -80,7 +92,7 @@ test('GET /laboratory-appointments with user without customer returns 403 FORBID
 // ── Requirements ──────────────────────────────────────────────────────
 
 test('GET /laboratory-appointments/requirements with empty cart returns warning EMPTY_CART', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = appointmentsRegisteredCustomerToken();
 
     $this->getJson('/api/v1/laboratory-appointments/requirements?brand=olab', authHeaders($token))
         ->assertOk()
@@ -90,7 +102,7 @@ test('GET /laboratory-appointments/requirements with empty cart returns warning 
 });
 
 test('GET /laboratory-appointments/requirements with cart without appointment studies returns requires_appointment false', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     addOlabCartItem($user, createOlabTest(['requires_appointment' => false]));
 
     $this->getJson('/api/v1/laboratory-appointments/requirements?brand=olab', authHeaders($token))
@@ -101,7 +113,7 @@ test('GET /laboratory-appointments/requirements with cart without appointment st
 });
 
 test('GET /laboratory-appointments/requirements with appointment study returns requires_appointment true', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     setupAppointmentRequiredCart($user);
 
     $this->getJson('/api/v1/laboratory-appointments/requirements?brand=olab', authHeaders($token))
@@ -114,7 +126,7 @@ test('GET /laboratory-appointments/requirements with appointment study returns r
 });
 
 test('GET /laboratory-appointments/requirements with existing appointment returns has_appointment true', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     setupAppointmentRequiredCart($user);
 
     LaboratoryAppointment::factory()->create([
@@ -132,7 +144,7 @@ test('GET /laboratory-appointments/requirements with existing appointment return
 // ── List ──────────────────────────────────────────────────────────────
 
 test('GET /laboratory-appointments with no appointments returns empty array', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = appointmentsRegisteredCustomerToken();
 
     $this->getJson('/api/v1/laboratory-appointments', authHeaders($token))
         ->assertOk()
@@ -141,7 +153,7 @@ test('GET /laboratory-appointments with no appointments returns empty array', fu
 });
 
 test('GET /laboratory-appointments returns appointments with expected structure', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     [$contact, $address] = setupAppointmentRequiredCart($user);
 
     LaboratoryCheckoutDraft::query()->create([
@@ -170,8 +182,8 @@ test('GET /laboratory-appointments returns appointments with expected structure'
 });
 
 test('GET /laboratory-appointments only returns appointments of authenticated customer', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = appointmentsRegisteredCustomerToken();
+    [$other] = appointmentsRegisteredCustomerToken();
 
     LaboratoryAppointment::factory()->create([
         'customer_id' => $owner->customer->id,
@@ -189,7 +201,7 @@ test('GET /laboratory-appointments only returns appointments of authenticated cu
 });
 
 test('GET /laboratory-appointments filters by brand', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
 
     LaboratoryAppointment::factory()->create([
         'customer_id' => $user->customer->id,
@@ -208,7 +220,7 @@ test('GET /laboratory-appointments filters by brand', function () {
 });
 
 test('GET /laboratory-appointments filters by status pending', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
 
     LaboratoryAppointment::factory()->create([
         'customer_id' => $user->customer->id,
@@ -231,7 +243,7 @@ test('GET /laboratory-appointments filters by status pending', function () {
 // ── Store ─────────────────────────────────────────────────────────────
 
 test('POST /laboratory-appointments with empty cart returns 409 EMPTY_CART', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     [$contact, $address] = setupAppointmentRequiredCart($user);
 
     LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->delete();
@@ -246,7 +258,7 @@ test('POST /laboratory-appointments with empty cart returns 409 EMPTY_CART', fun
 });
 
 test('POST /laboratory-appointments when appointment not required returns 409 APPOINTMENT_NOT_REQUIRED', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     [$contact, $address] = setupAppointmentRequiredCart($user);
 
     LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->delete();
@@ -262,8 +274,8 @@ test('POST /laboratory-appointments when appointment not required returns 409 AP
 });
 
 test('POST /laboratory-appointments with foreign contact returns 404 CONTACT_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = appointmentsRegisteredCustomerToken();
+    [$other] = appointmentsRegisteredCustomerToken();
 
     setupAppointmentRequiredCart($owner);
     [$otherContact, $otherAddress] = setupAppointmentRequiredCart($other);
@@ -278,8 +290,8 @@ test('POST /laboratory-appointments with foreign contact returns 404 CONTACT_NOT
 });
 
 test('POST /laboratory-appointments with foreign address returns 404 ADDRESS_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = appointmentsRegisteredCustomerToken();
+    [$other] = appointmentsRegisteredCustomerToken();
 
     [$contact] = setupAppointmentRequiredCart($owner);
     [, $otherAddress] = setupAppointmentRequiredCart($other);
@@ -294,7 +306,7 @@ test('POST /laboratory-appointments with foreign address returns 404 ADDRESS_NOT
 });
 
 test('POST /laboratory-appointments with past scheduled_at returns 422 VALIDATION_ERROR', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     [$contact, $address] = setupAppointmentRequiredCart($user);
 
     $this->postJson(
@@ -309,7 +321,7 @@ test('POST /laboratory-appointments with past scheduled_at returns 422 VALIDATIO
 });
 
 test('POST /laboratory-appointments with valid payload returns 201', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     [$contact, $address] = setupAppointmentRequiredCart($user);
 
     $this->postJson(
@@ -326,7 +338,7 @@ test('POST /laboratory-appointments with valid payload returns 201', function ()
 });
 
 test('POST /laboratory-appointments duplicate pending returns 409 APPOINTMENT_ALREADY_EXISTS', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     [$contact, $address] = setupAppointmentRequiredCart($user);
 
     $payload = validAppointmentPayload($contact->id, $address->id);
@@ -339,7 +351,7 @@ test('POST /laboratory-appointments duplicate pending returns 409 APPOINTMENT_AL
 });
 
 test('POST /laboratory-appointments valid allows payment link afterwards', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     [$contact, $address] = setupAppointmentRequiredCart($user);
 
     $this->postJson(
@@ -356,7 +368,7 @@ test('POST /laboratory-appointments valid allows payment link afterwards', funct
 // ── Destroy ───────────────────────────────────────────────────────────
 
 test('DELETE /laboratory-appointments/{id} deletes own appointment', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
 
     $appointment = LaboratoryAppointment::factory()->create([
         'customer_id' => $user->customer->id,
@@ -371,8 +383,8 @@ test('DELETE /laboratory-appointments/{id} deletes own appointment', function ()
 });
 
 test('DELETE /laboratory-appointments/{id} for another customer returns 404 APPOINTMENT_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = appointmentsRegisteredCustomerToken();
+    [$other] = appointmentsRegisteredCustomerToken();
 
     $appointment = LaboratoryAppointment::factory()->create([
         'customer_id' => $other->customer->id,
@@ -385,7 +397,7 @@ test('DELETE /laboratory-appointments/{id} for another customer returns 404 APPO
 });
 
 test('DELETE /laboratory-appointments/{id} when not exists returns 404 APPOINTMENT_NOT_FOUND', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = appointmentsRegisteredCustomerToken();
 
     $this->deleteJson('/api/v1/laboratory-appointments/999999', [], authHeaders($token))
         ->assertNotFound()
@@ -393,7 +405,7 @@ test('DELETE /laboratory-appointments/{id} when not exists returns 404 APPOINTME
 });
 
 test('DELETE required appointment blocks payment link again with APPOINTMENT_REQUIRED', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     [$contact, $address] = setupAppointmentRequiredCart($user);
 
     $this->postJson(
@@ -417,7 +429,7 @@ test('DELETE required appointment blocks payment link again with APPOINTMENT_REQ
 // ── Regresión ─────────────────────────────────────────────────────────
 
 test('POST /checkout/payment-link blocks when appointment required and missing', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = appointmentsRegisteredCustomerToken();
     [$contact, $address] = setupAppointmentRequiredCart($user);
 
     LaboratoryCheckoutDraft::query()->create([
@@ -433,7 +445,7 @@ test('POST /checkout/payment-link blocks when appointment required and missing',
 });
 
 test('GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = appointmentsRegisteredCustomerToken();
 
     $this->getJson('/api/v1/catalog/medications/1', authHeaders($token))
         ->assertStatus(503)
@@ -441,7 +453,7 @@ test('GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE', func
 });
 
 test('PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = appointmentsRegisteredCustomerToken();
 
     $this->putJson('/api/v1/orders/1/cancel', [], authHeaders($token))
         ->assertStatus(503)
