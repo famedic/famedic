@@ -16,11 +16,11 @@ use Laravel\Sanctum\PersonalAccessToken;
 /** Internal enrollment only. No default Gate grant, HTTP endpoint or CLI issuer. */
 final class ConsumerTokenBindingWriter
 {
-    public function bind(User $operator, PersonalAccessToken $token, ApiConsumerDelegation $delegation, array $capabilities, Carbon $expiresAt): ApiConsumerTokenBinding
+    public function bind(User $operator, PersonalAccessToken $token, ApiConsumerDelegation $delegation, array $capabilities, Carbon $expiresAt, array $laboratoryBrands = []): ApiConsumerTokenBinding
     {
         Gate::forUser($operator)->authorize('manageApiConsumerRegistry');
 
-        return DB::transaction(function () use ($token, $delegation, $capabilities, $expiresAt) {
+        return DB::transaction(function () use ($token, $delegation, $capabilities, $expiresAt, $laboratoryBrands) {
             $pat = $token->newQuery()->lockForUpdate()->findOrFail($token->getKey());
             $grant = ApiConsumerDelegation::query()->lockForUpdate()->findOrFail($delegation->getKey());
             $consumer = ApiConsumer::query()->lockForUpdate()->findOrFail($grant->consumer_id);
@@ -45,12 +45,17 @@ final class ConsumerTokenBindingWriter
                 || ! is_array($pat->abilities) || array_diff($caps, $pat->abilities)) {
                 throw new \DomainException('Invalid binding grants');
             }
+            // RC2 Batch 2 · A2 (rev7 L06): the laboratory brand grant only accompanies a cart:laboratory:* capability.
+            $brands = ConsumerRegistryState::laboratoryBrands($laboratoryBrands === [] ? null : $laboratoryBrands);
+            if ($brands !== [] && array_intersect(['cart:laboratory:read', 'cart:laboratory:write'], $caps) === []) {
+                throw new \DomainException('Invalid binding grants');
+            }
             if (ApiConsumerTokenBinding::query()->where('personal_access_token_id', $pat->getKey())->exists()) {
                 throw new \DomainException('Binding already exists');
             }
 
             return ApiConsumerTokenBinding::forceCreate(['personal_access_token_id' => $pat->getKey(), 'consumer_id' => $consumer->id, 'channel_id' => $channel->id,
-                'delegation_id' => $grant->id, 'capabilities' => $caps, 'enabled' => true, 'expires_at' => $expiresAt]);
+                'delegation_id' => $grant->id, 'capabilities' => $caps, 'laboratory_brands' => $brands === [] ? null : $brands, 'enabled' => true, 'expires_at' => $expiresAt]);
         });
     }
 }

@@ -46,6 +46,7 @@ final class EloquentConsumerBindingRepository implements ConsumerBindingReposito
 
         return new ConsumerAuthorizationContext((string) $consumer->id, $consumer->kind, (string) $channel->id, (string) $delegation->id,
             (int) $user->id, $tokenId, $grants, ConsumerRegistryState::capabilities($delegation->capabilities), $expires,
-            ConsumerRegistryState::active($consumer), ConsumerRegistryState::active($channel), ConsumerRegistryState::active($delegation), ConsumerRegistryState::active($binding));
+            ConsumerRegistryState::active($consumer), ConsumerRegistryState::active($channel), ConsumerRegistryState::active($delegation), ConsumerRegistryState::active($binding),
+            ConsumerRegistryState::laboratoryBrands($binding->laboratory_brands));
     }
 }

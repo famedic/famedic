@@ -35,7 +35,9 @@ class CartController extends Controller
 
     public function index(GetCartRequest $request): JsonResponse
     {
-        if (\App\Services\Api\V1\Benefits\OpaqueCartContinuity::enabled() && \App\Services\Api\V1\Benefits\OpaqueCartContinuity::leo($request)) {
+        // RC2 Batch 2 · A2: an authorized Leo laboratory request never takes the medical opaque-continuity path.
+        if (! $request->attributes->has(\App\Http\Middleware\Api\V1\AuthorizeRegisteredConsumer::LEO_LABORATORY_BRAND)
+            && \App\Services\Api\V1\Benefits\OpaqueCartContinuity::enabled() && \App\Services\Api\V1\Benefits\OpaqueCartContinuity::leo($request)) {
             return app(\App\Services\Api\V1\Benefits\OpaqueCartContinuity::class)->response($request, false);
         }
 

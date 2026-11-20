@@ -7,5 +7,5 @@ final class ApiConsumerTokenBinding extends \Illuminate\Database\Eloquent\Model
 {
     protected $guarded = ['*'];
 
-    protected $casts = ['capabilities' => 'array', 'enabled' => 'boolean', 'expires_at' => 'immutable_datetime', 'revoked_at' => 'immutable_datetime'];
+    protected $casts = ['capabilities' => 'array', 'laboratory_brands' => 'array', 'enabled' => 'boolean', 'expires_at' => 'immutable_datetime', 'revoked_at' => 'immutable_datetime'];
 }

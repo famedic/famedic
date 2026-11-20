@@ -23,7 +23,7 @@ final class SyntheticConsumerRegistryFixture
         self::$actors = [];
     }
 
-    public static function issue(User $user, string $kind = 'native', ?array $caps = null): array
+    public static function issue(User $user, string $kind = 'native', ?array $caps = null, array $laboratoryBrands = []): array
     {
         $safeSqlite = config('database.default') === 'sqlite'
             && config('database.connections.sqlite.database') === ':memory:';
@@ -54,7 +54,7 @@ final class SyntheticConsumerRegistryFixture
         $delegation = ApiConsumerDelegation::forceCreate(['consumer_id' => $consumer->id, 'channel_id' => $channel->id, 'user_id' => $user->id, 'customer_id' => $user->customer->id, 'capabilities' => $caps, 'enabled' => true, 'expires_at' => now()->addHour()]);
         $token = $user->createToken('synthetic-delegated-user', $caps, now()->addHour());
         // Trusted synthetic enrollment authority, never a production Gate grant.
-        $binding = app(ConsumerTokenBindingWriter::class)->bind($issuer, $token->accessToken, $delegation, $caps, now()->addMinutes(30));
+        $binding = app(ConsumerTokenBindingWriter::class)->bind($issuer, $token->accessToken, $delegation, $caps, now()->addMinutes(30), $laboratoryBrands);
         self::$transport[hash('sha256', $token->plainTextToken)] = $machine->plainTextToken;
         $context = app(\App\Contracts\Api\V1\Auth\ConsumerBindingRepository::class)->findByTokenId((int) $token->accessToken->id);
         self::$actors[$user->id] = \App\Services\Api\V1\Auth\ConsumerRequestScope::actorKey((int) $user->customer->id, $context);
