@@ -10,6 +10,18 @@ use App\Models\TaxProfile;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * IT-0035 (harness): native token registered through the real consumer registry (consumer + channel + delegation +
+ * binding) with the literal capabilities of the routes this suite calls. Ownership stays the token's own customer.
+ */
+function taxProfilesRegisteredCustomerToken(?User $user = null): array
+{
+    $user ??= User::factory()->withRegularCustomer()->create();
+    $issued = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, 'native', \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor('native', ['api.v1.user.tax-profiles', 'api.v1.user.tax-profiles.store', 'api.v1.user.tax-profiles.update', 'api.v1.user.tax-profiles.destroy', 'api.v1.orders.invoice-request.store', 'api.v1.orders.invoice-request.status']));
+
+    return [$user, $issued['token']->plainTextToken];
+}
+
 function validTaxProfilePayload(array $overrides = []): array
 {
     return array_merge([
@@ -118,7 +130,7 @@ test('PUT /user/tax-profiles/{id} with user without customer returns 403 FORBIDD
 // ── Tax profiles ──────────────────────────────────────────────────────
 
 test('GET /user/tax-profiles still works after Sprint 12', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     createAkubicaTaxProfile($user);
 
     $this->getJson('/api/v1/user/tax-profiles', authHeaders($token))
@@ -128,7 +140,7 @@ test('GET /user/tax-profiles still works after Sprint 12', function () {
 });
 
 test('POST /user/tax-profiles with valid payload returns 201', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = taxProfilesRegisteredCustomerToken();
 
     $this->postJson('/api/v1/user/tax-profiles', validTaxProfilePayload(), authHeaders($token))
         ->assertCreated()
@@ -140,7 +152,7 @@ test('POST /user/tax-profiles with valid payload returns 201', function () {
 });
 
 test('POST /user/tax-profiles with invalid payload returns 422 VALIDATION_ERROR', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = taxProfilesRegisteredCustomerToken();
 
     $this->postJson('/api/v1/user/tax-profiles', [
         'rfc' => 'INVALID',
@@ -151,7 +163,7 @@ test('POST /user/tax-profiles with invalid payload returns 422 VALIDATION_ERROR'
 });
 
 test('PUT /user/tax-profiles/{id} updates own profile', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $profile = createAkubicaTaxProfile($user);
 
     $this->putJson(
@@ -167,8 +179,8 @@ test('PUT /user/tax-profiles/{id} updates own profile', function () {
 });
 
 test('PUT /user/tax-profiles/{id} for another customer returns 404 TAX_PROFILE_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = taxProfilesRegisteredCustomerToken();
+    [$other] = taxProfilesRegisteredCustomerToken();
 
     $otherProfile = createAkubicaTaxProfile($other, ['rfc' => 'XEXX010101000']);
 
@@ -182,7 +194,7 @@ test('PUT /user/tax-profiles/{id} for another customer returns 404 TAX_PROFILE_N
 });
 
 test('DELETE /user/tax-profiles/{id} deletes own profile', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $profile = createAkubicaTaxProfile($user);
 
     $this->deleteJson("/api/v1/user/tax-profiles/{$profile->id}", [], authHeaders($token))
@@ -193,8 +205,8 @@ test('DELETE /user/tax-profiles/{id} deletes own profile', function () {
 });
 
 test('DELETE /user/tax-profiles/{id} for another customer returns 404 TAX_PROFILE_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = taxProfilesRegisteredCustomerToken();
+    [$other] = taxProfilesRegisteredCustomerToken();
 
     $otherProfile = createAkubicaTaxProfile($other, ['rfc' => 'XEXX010101000']);
 
@@ -204,7 +216,7 @@ test('DELETE /user/tax-profiles/{id} for another customer returns 404 TAX_PROFIL
 });
 
 test('DELETE /user/tax-profiles/{id} when not exists returns 404 TAX_PROFILE_NOT_FOUND', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = taxProfilesRegisteredCustomerToken();
 
     $this->deleteJson('/api/v1/user/tax-profiles/999999', [], authHeaders($token))
         ->assertNotFound()
@@ -214,7 +226,7 @@ test('DELETE /user/tax-profiles/{id} when not exists returns 404 TAX_PROFILE_NOT
 // ── Invoice request ───────────────────────────────────────────────────
 
 test('POST /orders/{id}/invoice-request for nonexistent order returns 404 ORDER_NOT_FOUND', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $profile = createAkubicaTaxProfile($user);
 
     $this->postJson(
@@ -227,8 +239,8 @@ test('POST /orders/{id}/invoice-request for nonexistent order returns 404 ORDER_
 });
 
 test('POST /orders/{id}/invoice-request for another customer order returns 404 ORDER_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = taxProfilesRegisteredCustomerToken();
+    [$other] = taxProfilesRegisteredCustomerToken();
 
     $otherOrder = createInvoiceableAkubicaOrder($other);
     $ownerProfile = createAkubicaTaxProfile($owner);
@@ -243,8 +255,8 @@ test('POST /orders/{id}/invoice-request for another customer order returns 404 O
 });
 
 test('POST /orders/{id}/invoice-request with foreign tax profile returns 404 TAX_PROFILE_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = taxProfilesRegisteredCustomerToken();
+    [$other] = taxProfilesRegisteredCustomerToken();
 
     $order = createInvoiceableAkubicaOrder($owner);
     $otherProfile = createAkubicaTaxProfile($other, ['rfc' => 'XEXX010101000']);
@@ -259,7 +271,7 @@ test('POST /orders/{id}/invoice-request with foreign tax profile returns 404 TAX
 });
 
 test('POST /orders/{id}/invoice-request for non-invoiceable order returns 409 ORDER_NOT_INVOICEABLE', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $profile = createAkubicaTaxProfile($user);
 
     $order = createInvoiceableAkubicaOrder($user, [
@@ -277,7 +289,7 @@ test('POST /orders/{id}/invoice-request for non-invoiceable order returns 409 OR
 });
 
 test('POST /orders/{id}/invoice-request with valid payload returns 201', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $profile = createAkubicaTaxProfile($user);
     $order = createInvoiceableAkubicaOrder($user);
 
@@ -301,7 +313,7 @@ test('POST /orders/{id}/invoice-request with valid payload returns 201', functio
 });
 
 test('POST /orders/{id}/invoice-request duplicate returns 409 INVOICE_REQUEST_ALREADY_EXISTS', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $profile = createAkubicaTaxProfile($user);
     $order = createInvoiceableAkubicaOrder($user);
 
@@ -317,7 +329,7 @@ test('POST /orders/{id}/invoice-request duplicate returns 409 INVOICE_REQUEST_AL
 });
 
 test('POST /orders/{id}/invoice-request when invoice already exists returns 409 INVOICE_ALREADY_EXISTS', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $profile = createAkubicaTaxProfile($user);
     $order = createInvoiceableAkubicaOrder($user);
 
@@ -333,7 +345,7 @@ test('POST /orders/{id}/invoice-request when invoice already exists returns 409 
 });
 
 test('GET /orders/{id}/invoice-request/status without request returns not_requested', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $order = createInvoiceableAkubicaOrder($user);
 
     $this->getJson("/api/v1/orders/{$order->id}/invoice-request/status", authHeaders($token))
@@ -345,7 +357,7 @@ test('GET /orders/{id}/invoice-request/status without request returns not_reques
 });
 
 test('GET /orders/{id}/invoice-request/status with pending request returns pending', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $order = createInvoiceableAkubicaOrder($user);
     $request = sprint12InvoiceRequest($order);
 
@@ -357,7 +369,7 @@ test('GET /orders/{id}/invoice-request/status with pending request returns pendi
 });
 
 test('GET /orders/{id}/invoice-request/status with issued invoice returns issued', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $order = createInvoiceableAkubicaOrder($user);
     $invoice = sprint12Invoice($order);
 
@@ -370,8 +382,8 @@ test('GET /orders/{id}/invoice-request/status with issued invoice returns issued
 });
 
 test('GET /orders/{id}/invoice-request/status for another customer order returns 404 ORDER_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = taxProfilesRegisteredCustomerToken();
+    [$other] = taxProfilesRegisteredCustomerToken();
 
     $otherOrder = createInvoiceableAkubicaOrder($other);
 
@@ -383,7 +395,7 @@ test('GET /orders/{id}/invoice-request/status for another customer order returns
 // ── Regresión ─────────────────────────────────────────────────────────
 
 test('GET /orders/{id}/invoices still works after Sprint 12', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $order = createInvoiceableAkubicaOrder($user);
     $invoice = sprint12Invoice($order);
 
@@ -395,7 +407,7 @@ test('GET /orders/{id}/invoices still works after Sprint 12', function () {
 });
 
 test('GET /orders/invoices still works after Sprint 12', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $order = createInvoiceableAkubicaOrder($user);
     sprint12Invoice($order);
 
@@ -405,7 +417,7 @@ test('GET /orders/invoices still works after Sprint 12', function () {
 });
 
 test('POST /checkout/payment-link still works after Sprint 12', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     addOlabCartItem($user, createOlabTest(['requires_appointment' => false]));
 
     $contact = \App\Models\Contact::factory()->for($user->customer)->create([
@@ -427,7 +439,7 @@ test('POST /checkout/payment-link still works after Sprint 12', function () {
 });
 
 test('GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = taxProfilesRegisteredCustomerToken();
 
     $this->getJson('/api/v1/catalog/medications/1', authHeaders($token))
         ->assertStatus(503)
@@ -435,7 +447,7 @@ test('GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE', func
 });
 
 test('PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
     $order = createInvoiceableAkubicaOrder($user);
 
     $this->putJson("/api/v1/orders/{$order->id}/cancel", [], authHeaders($token))

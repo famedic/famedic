@@ -37,6 +37,12 @@ function eulU01Identities(): array
         'primary' => ['email' => 'akubica-uat-primary@example.invalid', 'phone' => '8110000001', 'country' => 'MX'],
         'foreign' => ['email' => 'akubica-uat-foreign@example.invalid', 'phone' => '8110000002', 'country' => 'MX'],
         'disposable' => ['email' => 'akubica-uat-disposable@example.invalid', 'phone' => '8110000003', 'country' => 'MX'],
+        // IT-0035 (OBS-FIXTURES-UAT-50): the planner/materializer require the complete 7-identity set of
+        // config/akubica_uat.php (membership_* roles, R04/R05). Synthetic .invalid identities, same rules as the rest.
+        'membership_none' => ['email' => 'akubica-uat-membership-none@example.invalid', 'phone' => '8110000004', 'country' => 'MX'],
+        'membership_regular' => ['email' => 'akubica-uat-membership-regular@example.invalid', 'phone' => '8110000005', 'country' => 'MX'],
+        'membership_institutional' => ['email' => 'akubica-uat-membership-institutional@example.invalid', 'phone' => '8110000006', 'country' => 'MX'],
+        'membership_expired' => ['email' => 'akubica-uat-membership-expired@example.invalid', 'phone' => '8110000007', 'country' => 'MX'],
     ];
 }
 
@@ -257,8 +263,13 @@ test('apply materializes expected top level records through manifest ids', funct
     eulU01Apply($this);
     $ids = eulU01Ids();
 
-    expect(User::query()->whereIn('id', array_values($ids['users']))->count())->toBe(2)
-        ->and(Customer::query()->whereIn('id', array_values($ids['customers']))->count())->toBe(2)
+    // IT-0035: primary/foreign keep their exact expectation; the 4 membership_* roles (now configured) are asserted separately.
+    $membershipRoles = ['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'];
+    expect(User::query()->whereIn('id', array_values(\Illuminate\Support\Arr::only($ids['users'], ['primary', 'foreign'])))->count())->toBe(2)
+        ->and(Customer::query()->whereIn('id', array_values(\Illuminate\Support\Arr::only($ids['customers'], ['primary', 'foreign'])))->count())->toBe(2)
+        ->and(User::query()->whereIn('id', array_values(\Illuminate\Support\Arr::only($ids['users'], $membershipRoles)))->count())->toBe(4)
+        ->and(Customer::query()->whereIn('id', array_values(\Illuminate\Support\Arr::only($ids['customers'], $membershipRoles)))->count())->toBe(4)
+        ->and(count($ids['users']))->toBe(6)
         ->and(LaboratoryPurchase::query()->whereIn('id', array_values($ids['purchases']))->count())->toBe(5)
         ->and(Coupon::query()->whereIn('id', array_values($ids['coupons']))->count())->toBe(3)
         ->and(LaboratoryTest::query()->whereIn('id', array_values($ids['tests']))->count())->toBe(2)

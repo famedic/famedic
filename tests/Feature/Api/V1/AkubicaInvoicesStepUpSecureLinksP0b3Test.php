@@ -42,7 +42,8 @@ function invoiceStepUpCustomerToken(array $userAttrs = []): array
         'phone_verified_at' => now(),
     ], $userAttrs));
 
-    $newToken = $user->createToken('akubica-test');
+    // IT-0035 (harness): registered native token with the literal capabilities of the routes used here.
+    $newToken = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, 'native', \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor('native', ['api.v1.orders.invoices.step-up.request', 'api.v1.orders.invoices.step-up.verify', 'api.v1.orders.invoices.secure-link', 'api.v1.orders.invoices.download', 'api.v1.orders.results.secure-link']))['token'];
 
     return [$user, $newToken->plainTextToken, (int) $newToken->accessToken->id];
 }
@@ -508,7 +509,8 @@ test('p0b3 other user or PAT cannot use invoice grant', function () {
     $order = createAkubicaLaboratoryPurchase($user);
     $invoice = createAkubicaLaboratoryInvoice($order);
     $grant = createInvoiceStepUpGrant($user, $invoice->id, $tokenIdA2, ['meta_order_id' => $order->id]);
-    $otherPat = $user->createToken('other')->plainTextToken;
+    // IT-0035 (harness): second REGISTERED PAT of the same user (real consumer + capabilities); the grant stays bound to tokenIdA2.
+    $otherPat = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, 'native', \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor('native', ['api.v1.orders.invoices.step-up.request', 'api.v1.orders.invoices.step-up.verify', 'api.v1.orders.invoices.secure-link', 'api.v1.orders.invoices.download', 'api.v1.orders.results.secure-link']))['token']->plainTextToken;
 
     $this->postJson(
         "/api/v1/orders/{$order->id}/invoices/{$invoice->id}/secure-link",
