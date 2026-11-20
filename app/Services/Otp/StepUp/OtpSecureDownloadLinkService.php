@@ -44,6 +44,11 @@ class OtpSecureDownloadLinkService
         return (bool) config('otp.p0a.flags.secure_links_invoices_enabled', false);
     }
 
+    /** rev7 SecureLink: new links have a contractual TTL of 60 minutes and at most 3 authorized opens. */
+    public const CONTRACT_TTL_MINUTES = 60;
+
+    public const CONTRACT_MAX_OPENS = 3;
+
     public function ttlMinutes(): int
     {
         return (int) config('otp.p0a.secure_links.ttl_minutes', 60);
@@ -87,6 +92,7 @@ class OtpSecureDownloadLinkService
         LaboratoryPurchase $order,
         string $grantPublicId,
         ?int $personalAccessTokenId,
+        bool $contractLimits = false,
     ): array {
         if (! self::isResultsEnabled()) {
             throw new SecureDownloadLinkException(
@@ -126,7 +132,7 @@ class OtpSecureDownloadLinkService
             );
         }
 
-        return $this->persistLink($user, $grant, $purpose, $resourceType, $resourceId, $personalAccessTokenId);
+        return $this->persistLink($user, $grant, $purpose, $resourceType, $resourceId, $personalAccessTokenId, $contractLimits);
     }
 
     /**
@@ -153,6 +159,7 @@ class OtpSecureDownloadLinkService
         Invoice $invoice,
         string $grantPublicId,
         ?int $personalAccessTokenId,
+        bool $contractLimits = false,
     ): array {
         if (! self::isInvoicesEnabled()) {
             throw new SecureDownloadLinkException(
@@ -191,7 +198,7 @@ class OtpSecureDownloadLinkService
             );
         }
 
-        return $this->persistLink($user, $grant, $purpose, $resourceType, $resourceId, $personalAccessTokenId);
+        return $this->persistLink($user, $grant, $purpose, $resourceType, $resourceId, $personalAccessTokenId, $contractLimits);
     }
 
     /**
@@ -360,12 +367,19 @@ class OtpSecureDownloadLinkService
         string $resourceType,
         int $resourceId,
         ?int $personalAccessTokenId,
+        bool $contractLimits = false,
     ): array {
         $plainToken = $this->generateOpaqueToken();
         $tokenHash = $this->hashToken($plainToken);
         $now = now();
         $ttl = max(1, $this->ttlMinutes());
         $maxOpens = max(1, $this->maxOpens());
+        if ($contractLimits) {
+            // RC2 Batch 2 · A3 (Leo): never above the rev7 contract (60 min, 3 opens); a stricter environment setting
+            // still wins. Reuse within those limits is allowed (not single-use).
+            $ttl = min($ttl, self::CONTRACT_TTL_MINUTES);
+            $maxOpens = min($maxOpens, self::CONTRACT_MAX_OPENS);
+        }
 
         $link = OtpSecureDownloadLink::query()->create([
             'public_id' => (string) Str::uuid(),

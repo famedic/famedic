@@ -11,6 +11,7 @@ use App\Services\Audit\Business\BillingInvoiceRequestedAuditHint;
 use App\Services\Audit\Business\BusinessAuditChannel;
 use App\Support\Api\V1\AkubicaCorrelationId;
 use App\Support\Api\V1\LaboratoryInvoiceSupport;
+use App\Support\Api\V1\LeoConsumer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -36,10 +37,16 @@ class OrderInvoiceRequestController extends Controller
 
         $taxProfile = $invoiceSupport->findOwnedTaxProfile(
             $customer->id,
-            (int) $request->validated('tax_profile_id'),
+            $request->taxProfileId(),
         );
 
         if (! $taxProfile) {
+            if (LeoConsumer::is($request)) {
+                // rev7 L13: an unusable reference is a validation error for Leo, never a 404 that reveals existence.
+                return ApiResponse::error('VALIDATION_ERROR', 'Los datos enviados no son válidos.', 422,
+                    ['tax_profile_id' => ['El perfil fiscal no es válido.']]);
+            }
+
             return ApiResponse::error(
                 'TAX_PROFILE_NOT_FOUND',
                 'El perfil fiscal no fue encontrado.',
@@ -61,6 +68,8 @@ class OrderInvoiceRequestController extends Controller
                 subjectCustomerId: (int) $customer->id,
                 correlationId: AkubicaCorrelationId::fromRequest($request),
             ),
+            // Leo never writes tax profiles (rev7 L20): its cfdi_use applies to this request only.
+            updateProfileCfdiUse: ! LeoConsumer::is($request),
         );
 
         if (isset($result['error'])) {
@@ -88,6 +97,11 @@ class OrderInvoiceRequestController extends Controller
             };
         }
 
+        if (LeoConsumer::is($request)) {
+            // rev7: Leo receives exactly LeoInvoiceRequestStatusResponse (no internal tax profile id, no download fields).
+            return ApiResponse::success(self::leoStatus($invoiceSupport->buildStatusPayload($order->refresh())), status: 201);
+        }
+
         return ApiResponse::success([
             'invoice_request' => (new InvoiceRequestResource(
                 $result['invoice_request'],
@@ -112,8 +126,24 @@ class OrderInvoiceRequestController extends Controller
             );
         }
 
-        return ApiResponse::success(
-            $invoiceSupport->buildStatusPayload($order),
-        );
+        $payload = $invoiceSupport->buildStatusPayload($order);
+
+        return ApiResponse::success(LeoConsumer::is($request) ? self::leoStatus($payload) : $payload);
+    }
+
+    /**
+     * rev7 LeoInvoiceRequestStatus: the native status payload without `download_url` (PDF only through a secure
+     * link after step-up; XML outside Leo's API).
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private static function leoStatus(array $payload): array
+    {
+        if (is_array($payload['invoice'] ?? null)) {
+            $payload['invoice'] = array_intersect_key($payload['invoice'], array_flip(['id', 'status', 'issued_at']));
+        }
+
+        return array_intersect_key($payload, array_flip(['order_id', 'invoice_status', 'invoice_request', 'invoice']));
     }
 }

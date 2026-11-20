@@ -11,7 +11,7 @@ namespace Tests\Support\Api\V1\Contract;
 final class Rev7Schema
 {
     private const KNOWN = ['type', 'required', 'properties', 'additionalProperties', 'items', '$ref', 'const', 'enum',
-        'minimum', 'minLength', 'pattern', 'format', 'description', 'examples', 'example', 'anyOf'];
+        'minimum', 'minLength', 'pattern', 'format', 'description', 'examples', 'example', 'anyOf', 'oneOf', 'maximum'];
 
     private static ?array $schemas = null;
 
@@ -60,6 +60,20 @@ final class Rev7Schema
 
             return;
         }
+        if (isset($s['oneOf'])) {
+            // oneOf (A3, LeoInvoiceRequestStatus): exactly one branch must validate with no errors.
+            $valid = 0;
+            foreach ($s['oneOf'] as $branch) {
+                $branchErrors = [];
+                self::check($v, $branch, $path, $branchErrors);
+                $valid += $branchErrors === [] ? 1 : 0;
+            }
+            if ($valid !== 1) {
+                $errors[] = "{$path}: oneOf";
+            }
+
+            return;
+        }
         if (isset($s['type']) && ! self::typeOk($v, (array) $s['type'])) {
             $errors[] = "{$path}: tipo ".get_debug_type($v).' no es '.implode('|', (array) $s['type']);
 
@@ -74,6 +88,9 @@ final class Rev7Schema
         if (isset($s['minimum']) && is_int($v) && $v < $s['minimum']) {
             $errors[] = "{$path}: minimum";
         }
+        if (isset($s['maximum']) && is_int($v) && $v > $s['maximum']) {
+            $errors[] = "{$path}: maximum";
+        }
         if (isset($s['minLength']) && is_string($v) && mb_strlen($v) < $s['minLength']) {
             $errors[] = "{$path}: minLength";
         }
@@ -82,6 +99,12 @@ final class Rev7Schema
         }
         if (($s['format'] ?? null) === 'date-time' && is_string($v) && \DateTimeImmutable::createFromFormat(\DateTimeInterface::ATOM, $v) === false) {
             $errors[] = "{$path}: date-time";
+        }
+        if (($s['format'] ?? null) === 'uuid' && is_string($v) && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $v) !== 1) {
+            $errors[] = "{$path}: uuid";
+        }
+        if (($s['format'] ?? null) === 'uri' && is_string($v) && filter_var($v, FILTER_VALIDATE_URL) === false) {
+            $errors[] = "{$path}: uri";
         }
         if (is_array($v) && array_is_list($v) && isset($s['items'])) {
             foreach ($v as $i => $item) {

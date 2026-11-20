@@ -29,6 +29,16 @@ final class AuthorizeRegisteredConsumer
         'api.v1.orders.invoices.index' => 'api:operation:api:v1:orders:invoices:index',
         'api.v1.orders.invoices' => 'api:operation:api:v1:orders:invoices',
         'api.v1.user.family' => 'api:operation:api:v1:user:family',
+        // RC2 Batch 2 · A3 (rev7 L10, L13, L14): step-up, secure links and invoice request; same literal names as the
+        // native-only gate, so native keeps its capability. Downloads stay out of this list (native-only, Leo 403).
+        'api.v1.orders.results.step-up.request' => 'api:operation:api:v1:orders:results:step-up:request',
+        'api.v1.orders.results.step-up.verify' => 'api:operation:api:v1:orders:results:step-up:verify',
+        'api.v1.orders.results.secure-link' => 'api:operation:api:v1:orders:results:secure-link',
+        'api.v1.orders.invoices.step-up.request' => 'api:operation:api:v1:orders:invoices:step-up:request',
+        'api.v1.orders.invoices.step-up.verify' => 'api:operation:api:v1:orders:invoices:step-up:verify',
+        'api.v1.orders.invoices.secure-link' => 'api:operation:api:v1:orders:invoices:secure-link',
+        'api.v1.orders.invoice-request.status' => 'api:operation:api:v1:orders:invoice-request:status',
+        'api.v1.orders.invoice-request.store' => 'api:operation:api:v1:orders:invoice-request:store',
         'api.v1.laboratory-appointments.requirements' => 'api:operation:api:v1:laboratory-appointments:requirements',
         'api.v1.laboratory-appointments.index' => 'api:operation:api:v1:laboratory-appointments:index',
         'api.v1.cart.medical-benefit.show' => 'legacy-benefits:read',
@@ -37,6 +47,18 @@ final class AuthorizeRegisteredConsumer
         'api.v1.cart.coupon.show' => 'legacy-benefits:read',
         'api.v1.cart.coupon.apply' => 'legacy-benefits:write',
         'api.v1.cart.coupon.remove' => 'legacy-benefits:write',
+    ];
+
+    /**
+     * RC2 Batch 2 · A3: rev7 request bodies with additionalProperties=false, enforced for Leo before any effect
+     * (empty step-up request, SecureLinkIssueRequest, LeoInvoiceRequestCreate). Native validation is unchanged.
+     */
+    public const LEO_A3_BODY_KEYS = [
+        'api.v1.orders.results.step-up.request' => [],
+        'api.v1.orders.invoices.step-up.request' => [],
+        'api.v1.orders.results.secure-link' => ['grant_id'],
+        'api.v1.orders.invoices.secure-link' => ['grant_id'],
+        'api.v1.orders.invoice-request.store' => ['tax_profile_id', 'cfdi_use'],
     ];
 
     /** Request attribute set only after a Leo laboratory request passed capability, brand and ownership checks. */
@@ -83,6 +105,13 @@ final class AuthorizeRegisteredConsumer
             $cart = \App\Models\MedicalServiceCart::query()->where('customer_id', $user->customer?->id)->where('status', 'active')->first();
             if (($request->isMethod('GET') && $request->query('service_line') !== 'medical_services') || ($cart?->benefits()->exists() && ! ($request->isMethod('GET') && in_array($request->route()?->getName(), ['api.v1.cart.index', 'api.v1.checkout.prepare'], true) && \App\Services\Api\V1\Benefits\OpaqueCartContinuity::enabled()))) {
                 return ApiResponse::error('CONSUMER_NOT_AUTHORIZED', 'Operación no autorizada.', 403);
+            }
+        }
+        if ($identity->context?->consumerKind === 'leo' && array_key_exists($request->route()?->getName(), self::LEO_A3_BODY_KEYS)) {
+            $unknown = array_diff(array_keys($request->all()), self::LEO_A3_BODY_KEYS[$request->route()->getName()]);
+            if ($unknown !== []) {
+                return ApiResponse::error('VALIDATION_ERROR', 'Los datos enviados no son válidos.', 422,
+                    array_fill_keys(array_values($unknown), ['El campo no está permitido.']));
             }
         }
         if ($operation === 'cart:membership:write' && $request->isMethod('DELETE')) {
