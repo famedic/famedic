@@ -34,6 +34,17 @@ class CheckoutController extends Controller
         CartCouponSupport $cartCouponSupport,
     ): JsonResponse {
 
+        // RC2 Batch 2 · A2 (rev7 L06 / D-2): Leo laboratory preparation, minimized and without payment.
+        // continuity_url/continuity_expires_at stay absent: laboratory continuity depends on A4 (not implemented).
+        $leoLaboratoryBrand = $request->attributes->get(\App\Http\Middleware\Api\V1\AuthorizeRegisteredConsumer::LEO_LABORATORY_BRAND);
+        if (is_string($leoLaboratoryBrand)) {
+            return ApiResponse::success($checkoutPreparation->prepareForLeo(
+                $request->user()->customer,
+                LaboratoryBrand::from($leoLaboratoryBrand),
+                $request,
+                $cartCouponSupport,
+            ));
+        }
         if (\App\Services\Api\V1\Benefits\OpaqueCartContinuity::enabled() && \App\Services\Api\V1\Benefits\OpaqueCartContinuity::leo($request)) {
             return app(\App\Services\Api\V1\Benefits\OpaqueCartContinuity::class)->response($request, true);
         }

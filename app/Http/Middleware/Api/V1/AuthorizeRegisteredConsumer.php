@@ -39,6 +39,9 @@ final class AuthorizeRegisteredConsumer
         'api.v1.cart.coupon.remove' => 'legacy-benefits:write',
     ];
 
+    /** Request attribute set only after a Leo laboratory request passed capability, brand and ownership checks. */
+    public const LEO_LABORATORY_BRAND = 'rc2.leo_laboratory_brand';
+
     public function __construct(private BearerPatAuthenticator $authentication, private ConsumerIdentityResolver $identities, private ConsumerCapabilityPolicy $policy) {}
 
     public function handle(Request $request, Closure $next): mixed
@@ -56,6 +59,13 @@ final class AuthorizeRegisteredConsumer
             return \App\Support\Api\V1\PharmacySuspension::response();
         }
         $identity = $this->identities->resolve($request, $user, $user->currentAccessToken());
+        // RC2 Batch 2 · A2 (rev7 L06): Leo laboratory cart, bound to line laboratory and to a granted brand.
+        $laboratory = $identity->context?->consumerKind === 'leo' ? self::leoLaboratoryRequest($request) : null;
+        if ($laboratory !== null) {
+            $denied = $this->leoLaboratoryDenial($request, $user, $identity, $laboratory);
+
+            return $denied ?? $this->proceed($request, $next, $user, $identity);
+        }
         $operation = self::ROUTES[$request->route()?->getName()] ?? null;
         // Generic native cart writes require their own literal grant; medical-only grants stay narrow.
         if ($operation === 'cart:membership:write' && $identity->context?->consumerKind === 'native' && in_array('cart:write', $user->currentAccessToken()->abilities ?? [], true)) {
@@ -88,6 +98,12 @@ final class AuthorizeRegisteredConsumer
             }
             $request->query->set('service_line', 'medical_services');
         }
+
+        return $this->proceed($request, $next, $user, $identity);
+    }
+
+    private function proceed(Request $request, Closure $next, \App\Models\User $user, mixed $identity): mixed
+    {
         \App\Services\Api\V1\Auth\ConsumerRequestScope::bind($request, $identity->context);
         $previous = $request->getUserResolver();
         $request->setUserResolver(static fn ($guard = null) => $user);
@@ -97,5 +113,71 @@ final class AuthorizeRegisteredConsumer
             $request->setUserResolver($previous);
             \App\Services\Api\V1\Auth\ConsumerRequestScope::clear($request);
         }
+    }
+
+    /**
+     * Leo laboratory requests (rev7 L06). Native requests never reach this branch and keep their behaviour.
+     *
+     * @return array{brand: mixed, operations: list<string>}|null
+     */
+    private static function leoLaboratoryRequest(Request $request): ?array
+    {
+        $name = $request->route()?->getName();
+        if ($request->isMethod('GET') && $request->query('service_line') === 'laboratory'
+            && in_array($name, ['api.v1.cart.index', 'api.v1.cart.totals', 'api.v1.checkout.prepare'], true)) {
+            return ['brand' => $request->query('brand'),
+                'operations' => $name === 'api.v1.checkout.prepare' ? ['checkout:prepare', 'cart:laboratory:read'] : ['cart:laboratory:read']];
+        }
+        if ($name === 'api.v1.cart.items.store' && $request->isMethod('POST') && $request->input('item_type') === null
+            && in_array($request->input('service_line'), [null, 'laboratory'], true)
+            && ($request->has('brand') || $request->has('laboratory_test_id'))) {
+            return ['brand' => $request->input('brand'), 'operations' => ['cart:laboratory:write']];
+        }
+        if ($name === 'api.v1.cart.items.destroy' && $request->isMethod('DELETE')
+            && ($request->query('service_line') === 'laboratory' || ($request->query('service_line') === null && $request->query('brand') !== null))) {
+            return ['brand' => $request->query('brand'), 'operations' => ['cart:laboratory:write']];
+        }
+
+        return null;
+    }
+
+    /** Authorization before validation; every refusal happens before any cart effect. */
+    private function leoLaboratoryDenial(Request $request, \App\Models\User $user, mixed $identity, array $laboratory): ?\Illuminate\Http\JsonResponse
+    {
+        $forbidden = fn () => ApiResponse::error('CONSUMER_NOT_AUTHORIZED', 'Operación no autorizada.', 403);
+        foreach ($laboratory['operations'] as $operation) {
+            if ($this->policy->denial($user, $user->currentAccessToken(), $identity, $operation, now()->timestamp) !== null) {
+                return $forbidden();
+            }
+        }
+        $brand = $laboratory['brand'];
+        if (! is_string($brand) || \App\Enums\LaboratoryBrand::tryFrom($brand) === null) {
+            return ApiResponse::error('VALIDATION_ERROR', 'Los datos enviados no son válidos.', 422, ['brand' => ['La marca de laboratorio no es válida.']]);
+        }
+        // The binding grants the laboratory capability only for the brands it lists (fail closed).
+        if (! $identity->context->grantsLaboratoryBrand($brand)) {
+            return $forbidden();
+        }
+        if ($request->isMethod('POST')) {
+            // LaboratoryCartItemCreateLegacy: additionalProperties false; prices are always computed by the server.
+            $unknown = array_diff(array_keys($request->all()), ['laboratory_test_id', 'brand']);
+            if ($unknown !== []) {
+                return ApiResponse::error('VALIDATION_ERROR', 'Los datos enviados no son válidos.', 422,
+                    array_fill_keys(array_values($unknown), ['El campo no está permitido.']));
+            }
+        }
+        if ($request->isMethod('DELETE')) {
+            // Only an own laboratory item of the same brand; foreign, missing or other-brand items are refused alike.
+            // An own item already removed still passes, so an idempotent retry replays and a plain retry gets 404.
+            $item = \App\Models\LaboratoryCartItem::withTrashed()->with('laboratoryTest')->find($request->route('cart_item_id'));
+            if (! $item || (int) $item->customer_id !== (int) $user->customer->id || $item->laboratoryTest?->brand?->value !== $brand) {
+                return $forbidden();
+            }
+        }
+        // The legacy runtime selects the laboratory cart by brand; the line discriminator was verified above.
+        $request->query->remove('service_line');
+        $request->attributes->set(self::LEO_LABORATORY_BRAND, $brand);
+
+        return null;
     }
 }

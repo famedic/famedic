@@ -301,6 +301,35 @@ class CheckoutPreparation
         return PaymentMethodResource::collection($tokens)->resolve(new Request);
     }
 
+    /**
+     * RC2 Batch 2 · A2 (rev7 LeoLaboratoryCheckoutPrepareData): no contacts, addresses or payment methods;
+     * server-computed prices; Leo never pays. Coupons and balance are handled in the FAMEDIC checkout.
+     */
+    public function prepareForLeo(
+        Customer $customer,
+        LaboratoryBrand $brand,
+        Request $request,
+        CartCouponSupport $cartCouponSupport,
+    ): array {
+        $items = $this->cartItems($customer, $brand);
+        $draft = $cartCouponSupport->draftForBrand($customer, $brand);
+
+        return [
+            'audience' => 'leo',
+            'service_line' => 'laboratory',
+            'brand' => $brand->value,
+            'cart' => [
+                'items' => CartItemResource::collection($items)->resolve($request),
+                'totals' => $cartCouponSupport->totalsFromItems($items, $draft?->coupon),
+            ],
+            'requirements' => $this->buildRequirements($customer, $brand, $items),
+            'warnings' => $this->buildWarnings($customer, $brand, $items),
+            'assistant_can_pay' => false,
+            'can_continue_on_platform' => true,
+            'can_continue_to_payment_platform' => false,
+        ];
+    }
+
     public function prepare(
         Customer $customer,
         LaboratoryBrand $brand,

@@ -22,7 +22,14 @@ final readonly class ConsumerAuthorizationContext
         public bool $channelActive,
         public bool $delegationActive,
         public bool $bindingActive,
+        // RC2 Batch 2 · A2 (rev7 L06): laboratory brands granted by the token binding. Empty = no laboratory access.
+        public array $laboratoryBrands = [],
     ) {}
+
+    public function grantsLaboratoryBrand(string $brand): bool
+    {
+        return in_array($brand, $this->laboratoryBrands, true);
+    }
 
     public function matches(User $user, PersonalAccessToken $token, int $now): bool
     {

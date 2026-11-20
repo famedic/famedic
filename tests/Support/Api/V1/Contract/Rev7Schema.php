@@ -11,7 +11,7 @@ namespace Tests\Support\Api\V1\Contract;
 final class Rev7Schema
 {
     private const KNOWN = ['type', 'required', 'properties', 'additionalProperties', 'items', '$ref', 'const', 'enum',
-        'minimum', 'minLength', 'pattern', 'format', 'description', 'examples', 'example'];
+        'minimum', 'minLength', 'pattern', 'format', 'description', 'examples', 'example', 'anyOf'];
 
     private static ?array $schemas = null;
 
@@ -37,12 +37,26 @@ final class Rev7Schema
     private static function check(mixed $v, array $s, string $path, array &$errors): void
     {
         foreach (array_keys($s) as $keyword) {
-            if (! in_array($keyword, self::KNOWN, true)) {
+            // x-* vendor annotations (e.g. x-implementation-status) carry no validation semantics.
+            if (! in_array($keyword, self::KNOWN, true) && ! str_starts_with((string) $keyword, 'x-')) {
                 throw new \LogicException("Unsupported schema keyword {$keyword} at {$path}");
             }
         }
         if (isset($s['$ref'])) {
             self::check($v, self::component(substr($s['$ref'], strlen('#/components/schemas/'))), $path, $errors);
+
+            return;
+        }
+        if (isset($s['anyOf'])) {
+            // anyOf: at least one branch must validate with no errors.
+            foreach ($s['anyOf'] as $branch) {
+                $branchErrors = [];
+                self::check($v, $branch, $path, $branchErrors);
+                if ($branchErrors === []) {
+                    return;
+                }
+            }
+            $errors[] = "{$path}: anyOf";
 
             return;
         }
