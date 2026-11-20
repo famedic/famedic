@@ -47,7 +47,8 @@ function a1OrderWithProduct(User $user): LaboratoryPurchase
 {
     $order = a1Order($user);
     $test = createOlabTest(['gda_id' => 'A1-GDA-'.bin2hex(random_bytes(4))]);
-    LaboratoryPurchaseItem::query()->create(['laboratory_purchase_id' => $order->id, 'gda_id' => $test->gda_id, 'name' => 'Química sanguínea', 'indications' => 'Ayuno', 'price_cents' => 35000]);
+    // IT-0033: every confirmed write path now persists laboratory_test_id (BLQ-A1-01).
+    LaboratoryPurchaseItem::query()->create(['laboratory_purchase_id' => $order->id, 'gda_id' => $test->gda_id, 'laboratory_test_id' => $test->id, 'name' => 'Química sanguínea', 'indications' => 'Ayuno', 'price_cents' => 35000]);
 
     return $order;
 }
@@ -117,11 +118,12 @@ test('M07 leo reads the products of its own order with the rev7 LeoOrderProduct 
         ->and(array_intersect(a1Keys($json), A1_FORBIDDEN_KEYS))->toBe([]);
 });
 
-test('M07 a study later removed from the catalog (soft delete) keeps its original integer laboratory_test_id for leo', function () {
+test('M07 a study later removed from the catalog (soft delete) keeps its persisted original integer laboratory_test_id for leo', function () {
+    // IT-0033: the source is the persisted laboratory_purchase_items.laboratory_test_id, not the current gda_id.
     $leo = a1Leo();
     $order = a1Order($leo['user']);
     $test = createOlabTest(['gda_id' => 'A1-GDA-RETIRADO-'.bin2hex(random_bytes(4)), 'requires_appointment' => true]);
-    LaboratoryPurchaseItem::query()->create(['laboratory_purchase_id' => $order->id, 'gda_id' => $test->gda_id, 'name' => 'Estudio retirado', 'indications' => 'Ayuno', 'price_cents' => 35000]);
+    LaboratoryPurchaseItem::query()->create(['laboratory_purchase_id' => $order->id, 'gda_id' => $test->gda_id, 'laboratory_test_id' => $test->id, 'name' => 'Estudio retirado', 'indications' => 'Ayuno', 'price_cents' => 35000]);
     $test->delete();
     expect($test->fresh()->trashed())->toBeTrue();
 
@@ -138,10 +140,10 @@ test('M07 a study later removed from the catalog (soft delete) keeps its origina
     expect($this->getJson("/api/v1/orders/{$order->id}/products", a1Headers($native))->assertOk()->json('data.products.0.laboratory_test_id'))->toBeNull();
 });
 
-test('BLQ-A1-01 characterization: a study with no persisted catalog row (hard delete) is still listed and its laboratory_test_id is null, which rev7 does not allow', function () {
-    // Real behavior, not a conformance PASS: laboratory_purchase_items persists only gda_id; once the laboratory_tests
-    // row is gone (force delete) or its gda_id is reassigned, there is no persisted source for the original id.
-    // The product is not suppressed and no id is invented. Open material blocker BLQ-A1-01 (see BATCH2-PREPARACION.md).
+test('BLQ-A1-01 characterization: a legacy product (no persisted id) whose catalog row was hard-deleted is still listed with laboratory_test_id null, which rev7 does not allow', function () {
+    // Real behavior, not a conformance PASS: rows written before laboratory_test_id existed and without an
+    // unequivocal catalog match have no verifiable source (SIN_FUENTE / AMBIGUO). The product is not suppressed,
+    // no id is invented and 0 is not used. The historical case stays BLOCKED (decision pending, see BATCH2-PREPARACION.md).
     $leo = a1Leo();
     $order = a1Order($leo['user']);
     $test = createOlabTest(['gda_id' => 'A1-GDA-BORRADO-'.bin2hex(random_bytes(4))]);
