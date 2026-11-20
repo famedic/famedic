@@ -21,7 +21,23 @@ class LaboratoryPurchaseItem extends Model
     {
         return [
             'feature_list' => 'array',
+            'laboratory_test_id' => 'integer',
         ];
+    }
+
+    /**
+     * BLQ-A1-01: laboratory_test_id is a historical snapshot of the study that was bought. It may be set once
+     * (null → id) but never changed or cleared through Eloquent (create/fill/update/save/mass assignment).
+     * Raw query-builder writes bypass model events; the only one that touches the column is the backfill
+     * command, which writes exclusively WHERE laboratory_test_id IS NULL.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (self $item): void {
+            if ($item->getOriginal('laboratory_test_id') !== null && $item->isDirty('laboratory_test_id')) {
+                throw new \LogicException('laboratory_purchase_items.laboratory_test_id is a historical reference and cannot be changed once persisted.');
+            }
+        });
     }
 
     protected function formattedPrice(): Attribute

@@ -18,6 +18,7 @@ use App\Http\Responses\ApiResponse;
 use App\Models\Customer;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryTest;
+use App\Services\Laboratory\LaboratoryPurchaseItemTestResolver;
 use App\Support\Api\V1\LaboratoryOrderResults;
 use App\Support\Api\V1\LaboratoryOrderStatus;
 use App\Support\Api\V1\LeoConsumer;
@@ -149,26 +150,48 @@ class OrderController extends Controller
 
         $order->load(['laboratoryPurchaseItems']);
 
-        // A1 (rev7 LeoOrderProduct.laboratory_test_id integer): the item persists only the catalog gda_id
-        // (laboratory_purchase_items has no laboratory_test_id). For Leo, a study later removed from the catalog
-        // (soft delete) is still resolved to its original laboratory_tests row: gda_id is unique including trashed
-        // rows, so the match is exact. Hard-deleted tests or a reassigned gda_id have no persisted source (see
-        // BATCH2-PREPARACION.md, bloqueo BLQ-A1-01). Native keeps its previous lookup.
-        $testsByGdaId = LaboratoryTest::query()
-            ->when(LeoConsumer::is($request), fn ($query) => $query->withTrashed())
-            ->where('brand', $order->brand)
-            ->whereIn('gda_id', $order->laboratoryPurchaseItems->pluck('gda_id')->filter()->all())
-            ->get()
-            ->keyBy(fn (LaboratoryTest $test) => (string) $test->gda_id);
+        if (LeoConsumer::is($request)) {
+            // BLQ-A1-01 (IT-0033): Leo uses the persisted laboratory_purchase_items.laboratory_test_id first. Rows
+            // without it get an id only when LaboratoryPurchaseItemTestResolver proves an unequivocal match (catalog
+            // row unchanged since the purchase); otherwise null is returned as-is (no invented id, no 0, the product
+            // is not hidden). This replaces the IT-0032 gda_id + withTrashed lookup, which a gda_id reassignment can defeat.
+            $resolver = app(LaboratoryPurchaseItemTestResolver::class);
+            $brand = $order->brand instanceof \BackedEnum ? $order->brand->value : $order->brand;
+            $items = $order->laboratoryPurchaseItems;
+            $candidates = $resolver->candidates($items->whereNull('laboratory_test_id')
+                ->map(fn ($item) => ['brand' => $brand, 'gda_id' => $item->gda_id]));
+            $resolved = $items->mapWithKeys(fn ($item) => [$item->id => $resolver->classify($item, $brand, $candidates)['laboratory_test_id']]);
+            $tests = LaboratoryTest::query()->withTrashed()
+                ->whereIn('id', $resolved->filter()->values()->all())
+                ->get()
+                ->keyBy('id');
 
-        $products = $order->laboratoryPurchaseItems
-            ->map(fn ($item) => (new OrderProductResource(
-                $item,
-                $order,
-                $testsByGdaId->get((string) $item->gda_id),
-            ))->resolve($request))
-            ->values()
-            ->all();
+            $products = $items
+                ->map(fn ($item) => (new OrderProductResource(
+                    $item,
+                    $order,
+                    $resolved[$item->id] !== null ? $tests->get($resolved[$item->id]) : null,
+                    $resolved[$item->id],
+                ))->resolve($request))
+                ->values()
+                ->all();
+        } else {
+            // Native: unchanged lookup (current catalog by brand + gda_id, soft-deleted rows excluded).
+            $testsByGdaId = LaboratoryTest::query()
+                ->where('brand', $order->brand)
+                ->whereIn('gda_id', $order->laboratoryPurchaseItems->pluck('gda_id')->filter()->all())
+                ->get()
+                ->keyBy(fn (LaboratoryTest $test) => (string) $test->gda_id);
+
+            $products = $order->laboratoryPurchaseItems
+                ->map(fn ($item) => (new OrderProductResource(
+                    $item,
+                    $order,
+                    $testsByGdaId->get((string) $item->gda_id),
+                ))->resolve($request))
+                ->values()
+                ->all();
+        }
 
         return ApiResponse::success([
             'order_id' => $order->id,

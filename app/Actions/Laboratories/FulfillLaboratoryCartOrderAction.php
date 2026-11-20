@@ -208,6 +208,8 @@ class FulfillLaboratoryCartOrderAction
                     'description' => $laboratoryCartItem->laboratoryTest->description,
                     'feature_list' => $laboratoryCartItem->laboratoryTest->feature_list,
                     'gda_id' => $laboratoryCartItem->laboratoryTest->gda_id,
+                    // BLQ-A1-01: persist the original catalog id; it survives later catalog deletion or gda_id reassignment.
+                    'laboratory_test_id' => $laboratoryCartItem->laboratoryTest->id,
                     'indications' => $laboratoryCartItem->laboratoryTest->indications,
                     'price_cents' => $laboratoryCartItem->laboratoryTest->famedic_price_cents,
                 ])

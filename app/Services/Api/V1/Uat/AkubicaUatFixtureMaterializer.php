@@ -1736,6 +1736,8 @@ class AkubicaUatFixtureMaterializer
         $attributes = [
             'laboratory_purchase_id' => $purchase->id,
             'gda_id' => $test->gda_id,
+            // BLQ-A1-01: original catalog id (the model refuses to rewrite a different persisted id).
+            'laboratory_test_id' => $test->id,
             'name' => $test->name,
             'indications' => $test->indications ?: '[UAT] indicaciones sinteticas',
             'price_cents' => $test->famedic_price_cents,
