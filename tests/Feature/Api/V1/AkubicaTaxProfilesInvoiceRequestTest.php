@@ -109,22 +109,66 @@ test('POST /orders/{id}/invoice-request without token returns 401 UNAUTHENTICATE
         ->assertJsonPath('error.code', 'UNAUTHENTICATED');
 });
 
-test('POST /user/tax-profiles with user without customer returns 403 FORBIDDEN', function () {
-    $user = User::factory()->create();
-    $token = $user->createToken('akubica-test')->plainTextToken;
+/*
+ * IT-0037 (TaxProfiles, see 05-batch2-preparacion/BATCH2-TAXPROFILES-403-RESOLUCION.md).
+ * rev7: POST/PUT /user/tax-profiles are native-only, 403 = components/responses/Forbidden (ApiErrorResponse; error.code is
+ * a free string, not enumerated). With the consumer transport enabled+certified (runtime config), the native gate
+ * (AuthorizeNativeConsumerOperation) answers before the controller: a user without customer cannot hold a registered
+ * native delegation (api_consumer_delegations.customer_id FK, cascadeOnDelete) and gets 403 CONSUMER_NOT_AUTHORIZED.
+ * The controller's 403 FORBIDDEN only applies when the transport gate is not active; that context is asserted separately.
+ */
+function assertRev7ForbiddenEnvelope($response, string $code): void
+{
+    $response->assertForbidden()
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('error.code', $code)
+        ->assertJsonPath('error.retryable', false)
+        ->assertJsonStructure(['success', 'error' => ['code', 'message', 'retryable', 'correlation_id']]);
+    expect($response->json('error.correlation_id'))->toBe($response->headers->get('X-Correlation-ID'));
+}
 
-    $this->postJson('/api/v1/user/tax-profiles', validTaxProfilePayload(), authHeaders($token))
-        ->assertForbidden()
-        ->assertJsonPath('error.code', 'FORBIDDEN');
+test('POST /user/tax-profiles: registered native consumer whose customer was removed returns 403 CONSUMER_NOT_AUTHORIZED without writes', function () {
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
+    $user->customer->delete(); // cascades the delegation; the user no longer has a customer
+    $user->refresh();
+    expect($user->customer)->toBeNull();
+    $before = TaxProfile::query()->count();
+
+    assertRev7ForbiddenEnvelope($this->postJson('/api/v1/user/tax-profiles', validTaxProfilePayload(), authHeaders($token)), 'CONSUMER_NOT_AUTHORIZED');
+    expect(TaxProfile::query()->count())->toBe($before);
 });
 
-test('PUT /user/tax-profiles/{id} with user without customer returns 403 FORBIDDEN', function () {
+test('PUT /user/tax-profiles/{id}: registered native consumer whose customer was removed returns 403 CONSUMER_NOT_AUTHORIZED without writes', function () {
+    [$owner] = taxProfilesRegisteredCustomerToken();
+    $profile = createAkubicaTaxProfile($owner);
+    [$user, $token] = taxProfilesRegisteredCustomerToken();
+    $user->customer->delete();
+    $user->refresh();
+    $snapshot = $profile->fresh()->getAttributes();
+
+    assertRev7ForbiddenEnvelope($this->putJson('/api/v1/user/tax-profiles/'.$profile->id, validTaxProfilePayload(['business_name' => 'OTRO']), authHeaders($token)), 'CONSUMER_NOT_AUTHORIZED');
+    expect($profile->fresh()->getAttributes())->toBe($snapshot);
+});
+
+test('POST and PUT /user/tax-profiles: user without customer and unregistered PAT returns 403 CONSUMER_NOT_AUTHORIZED with certified transport', function () {
+    expect(config('akubica_connectors.transport.enabled'))->toBeTrue()
+        ->and(config('akubica_connectors.transport.certified'))->toBeTrue();
     $user = User::factory()->create();
     $token = $user->createToken('akubica-test')->plainTextToken;
 
-    $this->putJson('/api/v1/user/tax-profiles/1', validTaxProfilePayload(), authHeaders($token))
-        ->assertForbidden()
-        ->assertJsonPath('error.code', 'FORBIDDEN');
+    assertRev7ForbiddenEnvelope($this->postJson('/api/v1/user/tax-profiles', validTaxProfilePayload(), authHeaders($token)), 'CONSUMER_NOT_AUTHORIZED');
+    assertRev7ForbiddenEnvelope($this->putJson('/api/v1/user/tax-profiles/1', validTaxProfilePayload(), authHeaders($token)), 'CONSUMER_NOT_AUTHORIZED');
+    expect(TaxProfile::query()->count())->toBe(0);
+});
+
+test('POST and PUT /user/tax-profiles: user without customer returns 403 FORBIDDEN from the controller when the transport gate is not active', function () {
+    config(['akubica_connectors.transport.certified' => false]);
+    $user = User::factory()->create();
+    $token = $user->createToken('akubica-test')->plainTextToken;
+
+    assertRev7ForbiddenEnvelope($this->postJson('/api/v1/user/tax-profiles', validTaxProfilePayload(), authHeaders($token)), 'FORBIDDEN');
+    assertRev7ForbiddenEnvelope($this->putJson('/api/v1/user/tax-profiles/1', validTaxProfilePayload(), authHeaders($token)), 'FORBIDDEN');
+    expect(TaxProfile::query()->count())->toBe(0);
 });
 
 // ── Tax profiles ──────────────────────────────────────────────────────
