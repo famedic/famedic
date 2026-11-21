@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\Api\V1\Leo\LeoOpaqueIdentifiers;
 use App\Services\Otp\Delivery\FakeOtpDeliveryProvider;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\Support\Api\V1\Contract\Rev7Schema;
@@ -161,15 +162,29 @@ test('M10 a leo link is reusable within its TTL and expires after 60 minutes (no
     $this->get('/api/v1/secure-downloads/'.$token)->assertStatus(410)->assertJsonPath('error.code', 'SECURE_LINK_EXPIRED');
 });
 
-test('M10 a stricter environment setting still wins for leo, and native keeps the configured limits', function () {
+test('M10 leo links follow rev7 whatever the environment: TTL exactly 60 min, max_opens at most 3; native keeps the configured limits', function () {
     a3Enable();
+    // Environment stricter than the contract: TTL stays the contractual 60 min; a lower max_opens (<= 3) still applies.
     config()->set('otp.p0a.secure_links.ttl_minutes', 5);
     config()->set('otp.p0a.secure_links.max_opens', 1);
     $leo = a3Leo();
     $order = a3OrderWithResults($leo['user']);
     $grant = a3StepUp($this, $leo, "/api/v1/orders/{$order->id}/results");
     $link = $this->postJson("/api/v1/orders/{$order->id}/results/secure-link", ['grant_id' => $grant], a3H($leo))->assertCreated()->json('data');
-    expect($link['max_opens'])->toBe(1)->and(Carbon::parse($link['expires_at'])->equalTo(now()->addMinutes(5)))->toBeTrue();
+    a3Schema($link, 'SecureLink');
+    expect($link['max_opens'])->toBe(1)->and(Carbon::parse($link['expires_at'])->equalTo(now()->addMinutes(60)))->toBeTrue();
+    $token = a3Token($link['url']);
+    $this->get('/api/v1/secure-downloads/'.$token)->assertOk();
+    $this->get('/api/v1/secure-downloads/'.$token)->assertStatus(410)->assertJsonPath('error.code', 'SECURE_LINK_CONSUMED');
+
+    // Environment looser than the contract: TTL 60 min and max_opens 3 for leo.
+    config()->set('otp.p0a.secure_links.ttl_minutes', 1440);
+    config()->set('otp.p0a.secure_links.max_opens', 100);
+    $order2 = a3OrderWithResults($leo['user']);
+    Carbon::setTestNow(now()->addMinutes(2));
+    $grant2 = a3StepUp($this, $leo, "/api/v1/orders/{$order2->id}/results");
+    $link2 = $this->postJson("/api/v1/orders/{$order2->id}/results/secure-link", ['grant_id' => $grant2], a3H($leo))->assertCreated()->json('data');
+    expect($link2['max_opens'])->toBe(3)->and(Carbon::parse($link2['expires_at'])->equalTo(now()->addMinutes(60)))->toBeTrue();
 
     // Native regression: the configured value is not capped (code default 5 opens).
     config()->set('otp.p0a.secure_links.ttl_minutes', 60);
@@ -182,6 +197,30 @@ test('M10 a stricter environment setting still wins for leo, and native keeps th
 });
 
 // ── M12 · L14: invoices step-up and secure link (PDF only) ───────────
+
+test('M10/M12 the leo secure-link throttle is keyed per user and answers 429 before the controller (results and invoices)', function () {
+    a3Enable();
+    $leo = a3Leo();
+    $order = a3OrderWithResults($leo['user']);
+    $grant = a3StepUp($this, $leo, "/api/v1/orders/{$order->id}/results");
+    $key = sha1((string) $leo['user']->id);
+    RateLimiter::clear($key);
+    foreach (range(1, 60) as $_) {
+        RateLimiter::hit($key, 60);
+    }
+
+    $this->postJson("/api/v1/orders/{$order->id}/results/secure-link", ['grant_id' => $grant], a3H($leo))->assertStatus(429);
+    $this->postJson("/api/v1/orders/{$order->id}/invoices/1/secure-link", ['grant_id' => $grant], a3H($leo))->assertStatus(429);
+    expect(OtpSecureDownloadLink::query()->count())->toBe(0);
+
+    // Authorization still comes first: without the literal capability the answer is 403, not 429.
+    $bare = a3Leo($leo['user'], [A3_RES_REQ]);
+    $this->postJson("/api/v1/orders/{$order->id}/results/secure-link", ['grant_id' => $grant], a3H($bare))
+        ->assertStatus(403)->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
+
+    RateLimiter::clear($key);
+    $this->postJson("/api/v1/orders/{$order->id}/results/secure-link", ['grant_id' => $grant], a3H($leo))->assertCreated();
+});
 
 test('M12 leo completes the invoice step-up and gets a PDF secure link with the rev7 shapes', function () {
     a3Enable();

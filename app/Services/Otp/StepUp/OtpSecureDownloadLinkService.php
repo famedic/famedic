@@ -375,9 +375,10 @@ class OtpSecureDownloadLinkService
         $ttl = max(1, $this->ttlMinutes());
         $maxOpens = max(1, $this->maxOpens());
         if ($contractLimits) {
-            // RC2 Batch 2 · A3 (Leo): never above the rev7 contract (60 min, 3 opens); a stricter environment setting
-            // still wins. Reuse within those limits is allowed (not single-use).
-            $ttl = min($ttl, self::CONTRACT_TTL_MINUTES);
+            // RC2 Batch 2 · A3 (Leo), rev7 SecureLink: expires_at "corresponde a 60 minutos desde la emisión" (exact TTL)
+            // and max_opens has "maximum: 3" (an upper bound, so a stricter environment value still applies).
+            // Reuse within those limits is allowed (not single-use).
+            $ttl = self::CONTRACT_TTL_MINUTES;
             $maxOpens = min($maxOpens, self::CONTRACT_MAX_OPENS);
         }
 
