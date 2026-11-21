@@ -114,17 +114,21 @@ class AkubicaCheckoutLinkController extends Controller
         if ($failure !== null || ! $link->laboratory_brand) {
             return redirect()->route('login')->with('error', $failure ?? 'El carrito de laboratorio ya no está disponible.');
         }
-        if (! $link->claim()) {
-            return redirect()->route('login')->with('error', 'La liga de checkout ya fue utilizada.');
-        }
+        $redirectParameters = [
+            'laboratory_brand' => $link->laboratory_brand->value,
+        ];
         $draft = \App\Models\LaboratoryCheckoutDraft::query()
             ->where('customer_id', $link->customer_id)
             ->where('laboratory_brand', $link->laboratory_brand)
             ->first();
-        return redirect()->route('laboratory.checkout', [
-            'laboratory_brand' => $link->laboratory_brand->value,
-            ...($draft ? $checkoutPreparation->checkoutRedirectQuery($draft) : []),
-        ]);
+        if ($draft) {
+            $redirectParameters += $checkoutPreparation->checkoutRedirectQuery($draft);
+        }
+        $destination = route('laboratory.checkout', $redirectParameters);
+        if (! $link->claim()) {
+            return redirect()->route('login')->with('error', 'La liga de checkout ya fue utilizada.');
+        }
+        return redirect($destination);
     }
 
     /**

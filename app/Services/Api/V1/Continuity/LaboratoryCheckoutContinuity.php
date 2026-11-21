@@ -89,6 +89,11 @@ final class LaboratoryCheckoutContinuity
 
     public function bindingFailure(AkubicaCheckoutLink $link): ?string
     {
+        if (($link->metadata['purpose'] ?? null) !== self::PURPOSE
+            || ($link->metadata['service_line'] ?? null) !== 'laboratory') {
+            return 'La liga de checkout no es válida.';
+        }
+
         $customer = $link->customer;
         $brand = $link->laboratory_brand;
         $cartId = $link->metadata['laboratory_cart_id'] ?? null;

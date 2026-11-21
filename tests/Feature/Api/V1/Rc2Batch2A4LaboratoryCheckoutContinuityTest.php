@@ -65,7 +65,11 @@ test('A4 issues a first-party single-use laboratory link bound to cart, line and
         ->and($link->metadata['purpose'])->toBe(LaboratoryCheckoutContinuity::PURPOSE)
         ->and($link->metadata['service_line'])->toBe('laboratory')
         ->and($link->metadata['laboratory_cart_id'])->toBeInt()
-        ->and($link->expires_at->diffInMinutes(now()))->toBeLessThanOrEqual(10);
+        ->and($link->expires_at->diffInMinutes(now()))->toBeLessThanOrEqual(10)
+        ->and($response->headers->get('Cache-Control'))->toContain('no-store')
+        ->and($response->json('data.assistant_can_pay'))->toBeFalse()
+        ->and($response->json('data.can_continue_to_payment_platform'))->toBeFalse()
+        ->and($response->json('data.payment_link'))->toBeNull();
 });
 
 test('A4 link is not consumed by another session and is consumed exactly once by the owner', function () {
