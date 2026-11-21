@@ -17,6 +17,7 @@ use App\Services\Api\V1\Audit\AuditOutcome;
 use App\Services\Api\V1\Audit\CartCheckoutAuditRecorder;
 use App\Services\Api\V1\Continuity\MedicalCheckoutContinuity;
 use App\Services\Api\V1\Continuity\MedicalContinuityUnavailable;
+use App\Services\Api\V1\Continuity\LaboratoryContinuityUnavailable;
 use App\Services\Api\V1\MedicalServiceCartService;
 use App\Support\Api\V1\CartCouponSupport;
 use App\Support\Api\V1\CheckoutPreparation;
@@ -35,15 +36,29 @@ class CheckoutController extends Controller
     ): JsonResponse {
 
         // RC2 Batch 2 · A2 (rev7 L06 / D-2): Leo laboratory preparation, minimized and without payment.
-        // continuity_url/continuity_expires_at stay absent: laboratory continuity depends on A4 (not implemented).
+        // continuity_url/continuity_expires_at remain absent while the staging-only A4 flag is off.
         $leoLaboratoryBrand = $request->attributes->get(\App\Http\Middleware\Api\V1\AuthorizeRegisteredConsumer::LEO_LABORATORY_BRAND);
         if (is_string($leoLaboratoryBrand)) {
-            return ApiResponse::success($checkoutPreparation->prepareForLeo(
-                $request->user()->customer,
-                LaboratoryBrand::from($leoLaboratoryBrand),
-                $request,
-                $cartCouponSupport,
-            ));
+            try {
+                $payload = $checkoutPreparation->prepareForLeo(
+                    $request->user()->customer,
+                    LaboratoryBrand::from($leoLaboratoryBrand),
+                    $request,
+                    $cartCouponSupport,
+                );
+            } catch (LaboratoryContinuityUnavailable $e) {
+                return ApiResponse::error(
+                    $e->errorCode,
+                    'La continuidad al checkout de FAMEDIC no está disponible.',
+                    503,
+                );
+            }
+
+            $response = ApiResponse::success($payload);
+
+            return array_key_exists('continuity_url', $payload)
+                ? $response->withHeaders(['Cache-Control' => 'private, no-store'])
+                : $response;
         }
         if (\App\Services\Api\V1\Benefits\OpaqueCartContinuity::enabled() && \App\Services\Api\V1\Benefits\OpaqueCartContinuity::leo($request)) {
             return app(\App\Services\Api\V1\Benefits\OpaqueCartContinuity::class)->response($request, true);
