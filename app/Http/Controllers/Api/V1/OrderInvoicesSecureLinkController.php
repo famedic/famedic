@@ -103,6 +103,7 @@ class OrderInvoicesSecureLinkController extends Controller
                 $invoice,
                 $request->validated('grant_id'),
                 $tokenId,
+                \App\Support\Api\V1\LeoConsumer::is($request),
             );
         } catch (SecureDownloadLinkException $e) {
             $response = ApiResponse::error($e->errorCode, $e->getMessage(), $e->httpStatus);

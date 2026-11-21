@@ -13,6 +13,11 @@ use Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture;
 
 const RC2_R_ROUTES_V2 = [
     // [method, uri, literal capability, leo status with the literal grant (rev7)]
+    // Batch 2 · A3: rev7 enables Leo on the step-up, secure-link and invoice-request operations
+    // (x-consumer-allowlist ["leo","native"], x-leo-implementation-status BATCH_2; rows L10 results, L14 invoices,
+    // L13 invoice request/status). They now pass consumer authorization and answer with a rev7-listed status
+    // for this empty-body call on unknown order 999999 with the A3 flags off: 503 FEATURE_DISABLED (step-up request),
+    // 422 VALIDATION_ERROR (empty verify/secure-link/store body) or 404 ORDER_NOT_FOUND (status). Never 403.
     ['GET', '/api/v1/orders', 'api:operation:api:v1:orders:index', 200],
     ['GET', '/api/v1/orders/results', 'api:operation:api:v1:orders:results:index', 200],
     ['GET', '/api/v1/orders/invoices', 'api:operation:api:v1:orders:invoices:index', 200],
@@ -21,16 +26,16 @@ const RC2_R_ROUTES_V2 = [
     ['PUT', '/api/v1/orders/999999/cancel', 'api:operation:api:v1:orders:cancel', 403],
     ['GET', '/api/v1/orders/999999/results', 'api:operation:api:v1:orders:results', 404],
     ['GET', '/api/v1/orders/999999/results/download', 'api:operation:api:v1:orders:results:download', 403],
-    ['POST', '/api/v1/orders/999999/results/step-up/request', 'api:operation:api:v1:orders:results:step-up:request', 403],
-    ['POST', '/api/v1/orders/999999/results/step-up/verify', 'api:operation:api:v1:orders:results:step-up:verify', 403],
-    ['POST', '/api/v1/orders/999999/results/secure-link', 'api:operation:api:v1:orders:results:secure-link', 403],
+    ['POST', '/api/v1/orders/999999/results/step-up/request', 'api:operation:api:v1:orders:results:step-up:request', 503],
+    ['POST', '/api/v1/orders/999999/results/step-up/verify', 'api:operation:api:v1:orders:results:step-up:verify', 422],
+    ['POST', '/api/v1/orders/999999/results/secure-link', 'api:operation:api:v1:orders:results:secure-link', 422],
     ['GET', '/api/v1/orders/999999/invoices', 'api:operation:api:v1:orders:invoices', 404],
     ['GET', '/api/v1/orders/999999/invoices/1/download', 'api:operation:api:v1:orders:invoices:download', 403],
-    ['POST', '/api/v1/orders/999999/invoices/1/step-up/request', 'api:operation:api:v1:orders:invoices:step-up:request', 403],
-    ['POST', '/api/v1/orders/999999/invoices/1/step-up/verify', 'api:operation:api:v1:orders:invoices:step-up:verify', 403],
-    ['POST', '/api/v1/orders/999999/invoices/1/secure-link', 'api:operation:api:v1:orders:invoices:secure-link', 403],
-    ['GET', '/api/v1/orders/999999/invoice-request/status', 'api:operation:api:v1:orders:invoice-request:status', 403],
-    ['POST', '/api/v1/orders/999999/invoice-request', 'api:operation:api:v1:orders:invoice-request:store', 403],
+    ['POST', '/api/v1/orders/999999/invoices/1/step-up/request', 'api:operation:api:v1:orders:invoices:step-up:request', 503],
+    ['POST', '/api/v1/orders/999999/invoices/1/step-up/verify', 'api:operation:api:v1:orders:invoices:step-up:verify', 422],
+    ['POST', '/api/v1/orders/999999/invoices/1/secure-link', 'api:operation:api:v1:orders:invoices:secure-link', 422],
+    ['GET', '/api/v1/orders/999999/invoice-request/status', 'api:operation:api:v1:orders:invoice-request:status', 404],
+    ['POST', '/api/v1/orders/999999/invoice-request', 'api:operation:api:v1:orders:invoice-request:store', 422],
     ['GET', '/api/v1/user/family', 'api:operation:api:v1:user:family', 200],
     ['GET', '/api/v1/user/tax-profiles', 'api:operation:api:v1:user:tax-profiles', 200],
     ['GET', '/api/v1/laboratory-appointments/requirements?brand=olab', 'api:operation:api:v1:laboratory-appointments:requirements', 403],
@@ -64,7 +69,7 @@ function rc2rPurchase(Customer $customer): LaboratoryPurchase
 
 beforeEach(fn () => SyntheticConsumerRegistryFixture::reset());
 
-test('R-A leo holding every literal grant reaches exactly the rev7 reads; downloads, step-up, appointments and native-only routes 403', function () {
+test('R-A leo holding every literal grant reaches exactly the rev7 operations; downloads, appointments and native-only routes 403', function () {
     $user = User::factory()->withRegularCustomer()->create();
     $leo = SyntheticConsumerRegistryFixture::issue($user, 'leo', array_column(RC2_R_ROUTES_V2, 2));
 
@@ -76,6 +81,12 @@ test('R-A leo holding every literal grant reaches exactly the rev7 reads; downlo
         }
         if ($expected === 404) {
             expect($response->json('error.code'))->toBe('ORDER_NOT_FOUND', "$method $uri");
+        }
+        if ($expected === 503) {
+            expect($response->json('error.code'))->toBe('FEATURE_DISABLED', "$method $uri");
+        }
+        if ($expected === 422) {
+            expect($response->json('error.code'))->toBe('VALIDATION_ERROR', "$method $uri");
         }
     }
 });

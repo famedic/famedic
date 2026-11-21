@@ -53,6 +53,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.customer' => \App\Http\Middleware\EnsureApiCustomer::class,
             'api.token.guard' => \App\Http\Middleware\UseApiTokenGuard::class,
             'api.consumer.authorize' => \App\Http\Middleware\Api\V1\AuthorizeRegisteredConsumer::class,
+            'api.consumer.throttle' => \App\Http\Middleware\Api\V1\ThrottleRegisteredConsumer::class,
             'api.payment-link.pat' => \App\Http\Middleware\Api\V1\AuthenticatePaymentLinkPat::class,
             'api.payment-link.authorize' => \App\Http\Middleware\Api\V1\AuthorizePaymentLink::class,
             'api.idempotency' => \App\Http\Middleware\Api\V1\EnforceIdempotencyKey::class,
