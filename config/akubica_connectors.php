@@ -28,6 +28,13 @@ return [
 
             return ['enabled' => $on, 'certified' => $on];
         })(),
+        // RC2 A4/D-2: laboratory continuity is staging-only and independently gated.
+        'laboratory' => (static function (): array {
+            $on = env('APP_ENV') === 'staging'
+                && filter_var(env('AKUBICA_LAB_CONTINUITY_ENABLED', false), FILTER_VALIDATE_BOOL);
+
+            return ['enabled' => $on, 'certified' => $on];
+        })(),
     ],
     'financial' => ['enabled' => false, 'certified' => false, 'legacy_writers_coordinated' => false],
 ];

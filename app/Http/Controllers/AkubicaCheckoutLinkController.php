@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AkubicaCheckoutLink;
 use App\Services\Api\V1\Continuity\MedicalCheckoutContinuity;
+use App\Services\Api\V1\Continuity\LaboratoryCheckoutContinuity;
 use App\Support\Api\V1\CheckoutPreparation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,6 +42,10 @@ class AkubicaCheckoutLinkController extends Controller
 
         if ($link && ($link->metadata['purpose'] ?? null) === MedicalCheckoutContinuity::PURPOSE) {
             return $this->continueToMedicalCheckout($request, $link, $token);
+        }
+
+        if ($link && ($link->metadata['purpose'] ?? null) === LaboratoryCheckoutContinuity::PURPOSE) {
+            return $this->continueToLaboratoryCheckout($request, $link, $token, $checkoutPreparation);
         }
 
         if (! $link || ($link->metadata['purpose'] ?? null) !== 'akubica_continuity') {
@@ -89,6 +94,41 @@ class AkubicaCheckoutLinkController extends Controller
             'laboratory_brand' => $brand->value,
             ...$checkoutPreparation->checkoutRedirectQuery($draft),
         ]);
+    }
+
+    /** RC2 A4/D-2: first-party laboratory checkout continuity; never authenticates or pays. */
+    private function continueToLaboratoryCheckout(Request $request, AkubicaCheckoutLink $link, string $token, CheckoutPreparation $checkoutPreparation): RedirectResponse
+    {
+        if (! LaboratoryCheckoutContinuity::enabled() || $link->used_at !== null || $link->isExpired()) {
+            return redirect()->route('login')->with('error', 'La liga de checkout no es válida o ya expiró.');
+        }
+        if (! Auth::guard('web')->check()) {
+            $request->session()->put('akubica.checkout.continue_token', $token);
+            return redirect()->route('login');
+        }
+        $owner = $link->customer?->user;
+        if (! $owner || (int) Auth::id() !== (int) $owner->getKey()) {
+            return redirect()->route('login')->with('error', 'La liga de checkout no corresponde a la sesión activa.');
+        }
+        $failure = app(LaboratoryCheckoutContinuity::class)->bindingFailure($link);
+        if ($failure !== null || ! $link->laboratory_brand) {
+            return redirect()->route('login')->with('error', $failure ?? 'El carrito de laboratorio ya no está disponible.');
+        }
+        $redirectParameters = [
+            'laboratory_brand' => $link->laboratory_brand->value,
+        ];
+        $draft = \App\Models\LaboratoryCheckoutDraft::query()
+            ->where('customer_id', $link->customer_id)
+            ->where('laboratory_brand', $link->laboratory_brand)
+            ->first();
+        if ($draft) {
+            $redirectParameters += $checkoutPreparation->checkoutRedirectQuery($draft);
+        }
+        $destination = route('laboratory.checkout', $redirectParameters);
+        if (! $link->claim()) {
+            return redirect()->route('login')->with('error', 'La liga de checkout ya fue utilizada.');
+        }
+        return redirect($destination);
     }
 
     /**
@@ -157,7 +197,7 @@ class AkubicaCheckoutLinkController extends Controller
         $link = AkubicaCheckoutLink::findByPlainToken($token);
 
         // Continuity links never authenticate anyone: they are not accepted on the legacy payment-link route.
-        if (! $link || in_array($link->metadata['purpose'] ?? null, ['akubica_continuity', MedicalCheckoutContinuity::PURPOSE], true)) {
+        if (! $link || in_array($link->metadata['purpose'] ?? null, ['akubica_continuity', MedicalCheckoutContinuity::PURPOSE, LaboratoryCheckoutContinuity::PURPOSE], true)) {
             return redirect()->route('login')->with('error', 'La liga de pago no es válida.');
         }
 

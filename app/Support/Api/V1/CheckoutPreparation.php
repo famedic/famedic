@@ -13,6 +13,7 @@ use App\Models\Customer;
 use App\Models\EfevooToken;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\TaxProfile;
+use App\Services\Api\V1\Continuity\LaboratoryCheckoutContinuity;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 
@@ -313,8 +314,7 @@ class CheckoutPreparation
     ): array {
         $items = $this->cartItems($customer, $brand);
         $draft = $cartCouponSupport->draftForBrand($customer, $brand);
-
-        return [
+        $data = [
             'audience' => 'leo',
             'service_line' => 'laboratory',
             'brand' => $brand->value,
@@ -328,6 +328,12 @@ class CheckoutPreparation
             'can_continue_on_platform' => true,
             'can_continue_to_payment_platform' => false,
         ];
+
+        if (LaboratoryCheckoutContinuity::enabled() && $items->isNotEmpty()) {
+            $data += app(LaboratoryCheckoutContinuity::class)->issue($request, $customer, $brand);
+        }
+
+        return $data;
     }
 
     public function prepare(
