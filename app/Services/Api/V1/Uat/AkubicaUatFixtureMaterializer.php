@@ -81,9 +81,9 @@ class AkubicaUatFixtureMaterializer
         return (new AkubicaUatFixturePlanner())->configuredStatus();
     }
 
-    public function buildPlan(string $action, bool $requireConfigured = true): AkubicaUatFixturePlan
+    public function buildPlan(string $action, bool $requireConfigured = true, string $namespace = AkubicaUatFixtureContract::NAMESPACE): AkubicaUatFixturePlan
     {
-        return (new AkubicaUatFixturePlanner())->buildPlan($action, $requireConfigured);
+        return (new AkubicaUatFixturePlanner())->buildPlan($action, $requireConfigured, $namespace);
     }
 
     public function assertNoCollisions(AkubicaUatFixturePlan $plan): void
@@ -93,7 +93,8 @@ class AkubicaUatFixtureMaterializer
             ->first();
 
         if ($manifest !== null && (
-            $manifest->namespace !== AkubicaUatFixtureContract::NAMESPACE
+            ! AkubicaUatFixtureContract::isAllowedNamespace($manifest->namespace)
+            || $manifest->namespace !== $plan->namespace
             || (int) $manifest->fixture_version !== AkubicaUatFixtureContract::FIXTURE_VERSION
             || ! in_array($manifest->status, AkubicaUatFixtureContract::ALLOWED_STATUSES, true)
             || ! is_array($manifest->metadata)
@@ -253,8 +254,8 @@ class AkubicaUatFixtureMaterializer
                         $ids['users']['primary'] = $primaryUser->id;
                         $ids['users']['foreign'] = $foreignUser->id;
 
-                        $primaryCustomer = $this->upsertCustomer('primary', $primaryUser, $ids, $counts);
-                        $foreignCustomer = $this->upsertCustomer('foreign', $foreignUser, $ids, $counts);
+                        $primaryCustomer = $this->upsertCustomer('primary', $primaryUser, $ids, $counts, $plan->namespace);
+                        $foreignCustomer = $this->upsertCustomer('foreign', $foreignUser, $ids, $counts, $plan->namespace);
                         $ids['customers']['primary'] = $primaryCustomer->id;
                         $ids['customers']['foreign'] = $foreignCustomer->id;
                         $ids['regular_accounts']['primary'] = $primaryCustomer->customerable_id;
@@ -263,7 +264,7 @@ class AkubicaUatFixtureMaterializer
                         $membershipSubscriptions = [];
                         foreach (['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $membershipRole) {
                             $membershipUser = $this->upsertUser($membershipRole, $identities[$membershipRole], $ids, $counts);
-                            $membershipCustomer = $this->upsertCustomer($membershipRole, $membershipUser, $ids, $counts);
+                            $membershipCustomer = $this->upsertCustomer($membershipRole, $membershipUser, $ids, $counts, $plan->namespace);
                             $membershipCustomer->forceFill([
                                 'medical_attention_subscription_expires_at' => $membershipRole === 'membership_none'
                                     ? null
@@ -276,17 +277,17 @@ class AkubicaUatFixtureMaterializer
                             $membershipSubscriptions[$membershipRole] = $this->upsertMembershipSubscription($membershipRole, $membershipCustomer, $ids, $counts);
                         }
 
-                        $primaryContact = $this->upsertContact('primary', $primaryCustomer, $ids, $counts);
-                        $foreignContact = $this->upsertContact('foreign', $foreignCustomer, $ids, $counts);
+                        $primaryContact = $this->upsertContact('primary', $primaryCustomer, $ids, $counts, $plan->namespace);
+                        $foreignContact = $this->upsertContact('foreign', $foreignCustomer, $ids, $counts, $plan->namespace);
 
-                        $primaryAddress = $this->upsertAddress('primary', $primaryCustomer, $ids, $counts);
-                        $foreignAddress = $this->upsertAddress('foreign', $foreignCustomer, $ids, $counts);
+                        $primaryAddress = $this->upsertAddress('primary', $primaryCustomer, $ids, $counts, $plan->namespace);
+                        $foreignAddress = $this->upsertAddress('foreign', $foreignCustomer, $ids, $counts, $plan->namespace);
 
                         $primaryTaxProfile = $this->upsertTaxProfile('primary', $primaryCustomer, $plan->namespace, $ids, $counts);
                         $foreignTaxProfile = $this->upsertTaxProfile('foreign', $foreignCustomer, $plan->namespace, $ids, $counts);
 
                         $category = $this->upsertCategory($naturalKeys['category_name'], $ids, $counts);
-                        $catalogTests = $this->upsertCatalogTests($category, $naturalKeys, $ids, $counts);
+                        $catalogTests = $this->upsertCatalogTests($category, $naturalKeys, $ids, $counts, $plan->namespace);
                         $store = $this->upsertStore($naturalKeys['store_name'], $naturalKeys['brand'], $ids, $counts);
 
                         $cartItems = $this->upsertCartItems($primaryCustomer, $catalogTests, $ids, $counts);
@@ -430,6 +431,7 @@ class AkubicaUatFixtureMaterializer
             $namespace.'-customer-membership-institutional',
             $namespace.'-customer-membership-expired',
         ];
+        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
 
         if (LaboratoryCartItem::query()->withTrashed()
             ->where(function ($query) use ($customerIdentifiers, $naturalKeys): void {
@@ -448,15 +450,15 @@ class AkubicaUatFixtureMaterializer
             throw new AkubicaUatFixtureException('UAT_COLLISION_CUSTOMER');
         }
 
-        if (Contact::query()->withTrashed()->whereIn('name', ['[UAT] Contacto primary', '[UAT] Contacto foreign'])->exists()) {
+        if (Contact::query()->withTrashed()->whereIn('name', ['[UAT] '.$fixtureLabel.'Contacto primary', '[UAT] '.$fixtureLabel.'Contacto foreign'])->exists()) {
             throw new AkubicaUatFixtureException('UAT_COLLISION_CONTACT');
         }
 
-        if (Address::query()->withTrashed()->where('street', '[UAT] Avenida FAMEDIC')->where('neighborhood', 'AKUBICA')->exists()) {
+        if (Address::query()->withTrashed()->where('street', '[UAT] '.$fixtureLabel.'Avenida FAMEDIC')->where('neighborhood', 'AKUBICA')->exists()) {
             throw new AkubicaUatFixtureException('UAT_COLLISION_ADDRESS');
         }
 
-        if (TaxProfile::query()->withTrashed()->whereIn('razon_social', ['[UAT] FAMEDIC AKUBICA primary', '[UAT] FAMEDIC AKUBICA foreign'])->exists()) {
+        if (TaxProfile::query()->withTrashed()->whereIn('razon_social', ['[UAT] '.$fixtureLabel.'FAMEDIC AKUBICA primary', '[UAT] '.$fixtureLabel.'FAMEDIC AKUBICA foreign'])->exists()) {
             throw new AkubicaUatFixtureException('UAT_COLLISION_TAX_PROFILE');
         }
 
@@ -481,17 +483,17 @@ class AkubicaUatFixtureMaterializer
 
         if (Invoice::query()->withTrashed()->where(function ($query) use ($namespace): void {
             $query->whereIn('invoice', [
-                AkubicaUatFixtureContract::storagePath('invoices/invoice-ready.pdf'),
-                AkubicaUatFixtureContract::storagePath('invoices/foreign-order.pdf'),
+                AkubicaUatFixtureContract::storagePath('invoices/invoice-ready.pdf', $namespace),
+                AkubicaUatFixtureContract::storagePath('invoices/foreign-order.pdf', $namespace),
             ])->orWhereIn('invoice_xml', [
-                AkubicaUatFixtureContract::storagePath('invoices/invoice-ready.xml'),
-                AkubicaUatFixtureContract::storagePath('invoices/foreign-order.xml'),
+                AkubicaUatFixtureContract::storagePath('invoices/invoice-ready.xml', $namespace),
+                AkubicaUatFixtureContract::storagePath('invoices/foreign-order.xml', $namespace),
             ]);
         })->exists()) {
             throw new AkubicaUatFixtureException('UAT_COLLISION_INVOICE');
         }
 
-        if (InvoiceRequest::query()->withTrashed()->where('fiscal_certificate', AkubicaUatFixtureContract::storagePath('tax/fiscal-certificate.pdf'))->exists()) {
+        if (InvoiceRequest::query()->withTrashed()->where('fiscal_certificate', AkubicaUatFixtureContract::storagePath('tax/fiscal-certificate.pdf', $namespace))->exists()) {
             throw new AkubicaUatFixtureException('UAT_COLLISION_INVOICE_REQUEST');
         }
 
@@ -512,7 +514,7 @@ class AkubicaUatFixtureMaterializer
         return DB::transaction(function () use ($plan, $storageWrites): AkubicaUatFixtureManifest {
             $manifest = AkubicaUatFixtureManifest::query()->firstOrNew(['namespace' => $plan->namespace]);
 
-            if ($manifest->exists && ! $manifest->canRecoverPreparing() && $manifest->status !== AkubicaUatFixtureContract::STATUS_ACTIVE) {
+            if ($manifest->exists && ! $manifest->canRecoverPreparing($plan->namespace) && $manifest->status !== AkubicaUatFixtureContract::STATUS_ACTIVE) {
                 throw new AkubicaUatFixtureException('UAT_MANIFEST_NOT_RECOVERABLE');
             }
 
@@ -531,7 +533,7 @@ class AkubicaUatFixtureMaterializer
                     'temporary_paths' => collect($storageWrites)
                         ->pluck('temporary_path')
                         ->filter()
-                        ->map(fn (string $path): string => Str::startsWith($path, AkubicaUatFixtureContract::STORAGE_PREFIX.'.tmp/') ? $path : throw new AkubicaUatFixtureException('UAT_STORAGE_PATH_NOT_ALLOWED'))
+                        ->map(fn (string $path): string => Str::startsWith($path, AkubicaUatFixtureContract::storagePrefix($plan->namespace).'.tmp/') ? $path : throw new AkubicaUatFixtureException('UAT_STORAGE_PATH_NOT_ALLOWED'))
                         ->values()
                         ->all(),
                     'natural_key_hashes' => $this->naturalKeyHashes($plan->namespace),
@@ -550,7 +552,7 @@ class AkubicaUatFixtureMaterializer
 
     private function assertRecoverableManifest(AkubicaUatFixtureManifest $manifest, AkubicaUatFixturePlan $plan): void
     {
-        if (! $manifest->canRecoverPreparing()) {
+        if (! $manifest->canRecoverPreparing($plan->namespace)) {
             throw new AkubicaUatFixtureException('UAT_MANIFEST_NOT_RECOVERABLE');
         }
 
@@ -789,6 +791,10 @@ class AkubicaUatFixtureMaterializer
      */
     private function naturalKeys(string $namespace): array
     {
+        $isLegacy = $namespace === AkubicaUatFixtureContract::NAMESPACE;
+        $label = $isLegacy ? 'v1' : $namespace;
+        $couponPrefix = $isLegacy ? 'AKUATV1' : 'AKUATB2A4';
+
         return [
             'brand' => LaboratoryBrand::OLAB,
             'customer_identifiers' => [
@@ -799,18 +805,18 @@ class AkubicaUatFixtureMaterializer
                 'membership_institutional' => $namespace.'-customer-membership-institutional',
                 'membership_expired' => $namespace.'-customer-membership-expired',
             ],
-            'category_name' => '[UAT] Akubica UAT v1 - Laboratorio',
-            'store_name' => '[UAT] Akubica UAT v1 - Sucursal',
+            'category_name' => '[UAT] Akubica UAT '.$label.' - Laboratorio',
+            'store_name' => '[UAT] Akubica UAT '.$label.' - Sucursal',
             'test_gda_ids' => [
                 'olab' => strtoupper($namespace).'-OLAB',
                 'swisslab' => strtoupper($namespace).'-SWISSLAB',
             ],
             'coupon_codes' => [
-                'valid' => 'AKUATV1VALID',
-                'used' => 'AKUATV1USED',
-                'not_applicable' => 'AKUATV1NA',
+                'valid' => $couponPrefix.'VALID',
+                'used' => $couponPrefix.'USED',
+                'not_applicable' => $couponPrefix.'NA',
             ],
-            'reserved_nonexistent_coupon' => 'AKUATV1MISSING',
+            'reserved_nonexistent_coupon' => $couponPrefix.'MISSING',
         ];
     }
 
@@ -859,7 +865,8 @@ class AkubicaUatFixtureMaterializer
         foreach ($definitions as $finalPath => $definition) {
             $this->assertAllowedStoragePath($finalPath);
 
-            $temporaryPath = AkubicaUatFixtureContract::STORAGE_PREFIX.'.tmp/'.$runId.'/'.Str::after($finalPath, AkubicaUatFixtureContract::STORAGE_PREFIX);
+            $prefix = AkubicaUatFixtureContract::storagePrefix($namespace);
+            $temporaryPath = $prefix.'.tmp/'.$runId.'/'.Str::after($finalPath, $prefix);
             if ($disk->exists($finalPath)) {
                 $existing = (string) $disk->get($finalPath);
 
@@ -957,10 +964,13 @@ class AkubicaUatFixtureMaterializer
 
     private function assertAllowedStoragePath(string $path): void
     {
-        $relative = Str::after($path, AkubicaUatFixtureContract::STORAGE_PREFIX);
+        $namespace = collect(AkubicaUatFixtureContract::ALLOWED_NAMESPACES)
+            ->first(fn (string $candidate): bool => Str::startsWith($path, AkubicaUatFixtureContract::storagePrefix($candidate)));
+        $prefix = is_string($namespace) ? AkubicaUatFixtureContract::storagePrefix($namespace) : '';
+        $relative = Str::after($path, $prefix);
 
         if (
-            ! str_starts_with($path, AkubicaUatFixtureContract::STORAGE_PREFIX)
+            $prefix === ''
             || str_starts_with($path, '/')
             || str_contains($path, '..')
             || str_contains($path, '\\')
@@ -975,7 +985,7 @@ class AkubicaUatFixtureMaterializer
      */
     private function storageDefinitions(string $namespace): array
     {
-        $prefix = AkubicaUatFixtureContract::STORAGE_PREFIX;
+        $prefix = AkubicaUatFixtureContract::storagePrefix($namespace);
 
         return [
             $prefix.'results/result-ready.pdf' => [
@@ -1074,11 +1084,11 @@ class AkubicaUatFixtureMaterializer
      * @param  array<string, mixed>  $ids
      * @param  array<string, int>  $counts
      */
-    private function upsertCustomer(string $role, User $user, array &$ids, array &$counts): Customer
+    private function upsertCustomer(string $role, User $user, array &$ids, array &$counts, string $namespace = AkubicaUatFixtureContract::NAMESPACE): Customer
     {
         $customerId = (int) Arr::get($ids, "customers.{$role}", 0);
         $regularAccountId = (int) Arr::get($ids, "regular_accounts.{$role}", 0);
-        $naturalKeys = $this->naturalKeys(AkubicaUatFixtureContract::NAMESPACE);
+        $naturalKeys = $this->naturalKeys($namespace);
 
         if ($regularAccountId > 0 && ($account = RegularAccount::query()->withTrashed()->find($regularAccountId))) {
             if ($account->trashed()) {
@@ -1155,12 +1165,13 @@ class AkubicaUatFixtureMaterializer
         $counts['created']++;
         return $subscription;
     }
-    private function upsertContact(string $role, Customer $customer, array &$ids, array &$counts): Contact
+    private function upsertContact(string $role, Customer $customer, array &$ids, array &$counts, string $namespace = AkubicaUatFixtureContract::NAMESPACE): Contact
     {
         $contactId = (int) Arr::get($ids, "contacts.{$role}", 0);
+        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
         $attributes = [
             'customer_id' => $customer->id,
-            'name' => '[UAT] Contacto '.$role,
+            'name' => '[UAT] '.$fixtureLabel.'Contacto '.$role,
             'paternal_lastname' => Str::upper($role),
             'maternal_lastname' => 'AKUBICA',
             'birth_date' => '1990-01-01',
@@ -1190,12 +1201,13 @@ class AkubicaUatFixtureMaterializer
      * @param  array<string, mixed>  $ids
      * @param  array<string, int>  $counts
      */
-    private function upsertAddress(string $role, Customer $customer, array &$ids, array &$counts): Address
+    private function upsertAddress(string $role, Customer $customer, array &$ids, array &$counts, string $namespace = AkubicaUatFixtureContract::NAMESPACE): Address
     {
         $addressId = (int) Arr::get($ids, "addresses.{$role}", 0);
+        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
         $attributes = [
             'customer_id' => $customer->id,
-            'street' => '[UAT] Avenida FAMEDIC',
+            'street' => '[UAT] '.$fixtureLabel.'Avenida FAMEDIC',
             'number' => $role === 'primary' ? '100' : '200',
             'neighborhood' => 'AKUBICA',
             'city' => 'Monterrey',
@@ -1234,10 +1246,11 @@ class AkubicaUatFixtureMaterializer
             ARRAY_FILTER_USE_BOTH
         ));
 
+        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
         $attributes = [
             'customer_id' => $customer->id,
             'name' => '[UAT] Razon Fiscal',
-            'razon_social' => '[UAT] FAMEDIC AKUBICA '.$role,
+            'razon_social' => '[UAT] '.$fixtureLabel.'FAMEDIC AKUBICA '.$role,
             'rfc' => $role === 'primary' ? 'XAXX010101000' : 'XEXX010101000',
             'zipcode' => '64000',
             'codigo_postal_original' => '64000',
@@ -1298,7 +1311,7 @@ class AkubicaUatFixtureMaterializer
      * @param  array<string, int>  $counts
      * @return array<string, LaboratoryTest>
      */
-    private function upsertCatalogTests(LaboratoryTestCategory $category, array $naturalKeys, array &$ids, array &$counts): array
+    private function upsertCatalogTests(LaboratoryTestCategory $category, array $naturalKeys, array &$ids, array &$counts, string $namespace = AkubicaUatFixtureContract::NAMESPACE): array
     {
         $definitions = [
             'olab' => [
@@ -1314,7 +1327,7 @@ class AkubicaUatFixtureMaterializer
                 'famedic_price_cents' => 35000,
                 'public_price_cents' => 42000,
                 'requires_appointment' => false,
-                'feature_list' => ['synthetic' => true, 'namespace' => AkubicaUatFixtureContract::NAMESPACE],
+                'feature_list' => ['synthetic' => true, 'namespace' => $namespace],
             ],
             'swisslab' => [
                 'brand' => LaboratoryBrand::OLAB->value,
@@ -1329,7 +1342,7 @@ class AkubicaUatFixtureMaterializer
                 'famedic_price_cents' => 48000,
                 'public_price_cents' => 52000,
                 'requires_appointment' => true,
-                'feature_list' => ['synthetic' => true, 'namespace' => AkubicaUatFixtureContract::NAMESPACE],
+                'feature_list' => ['synthetic' => true, 'namespace' => $namespace],
             ],
         ];
 
@@ -1604,6 +1617,7 @@ class AkubicaUatFixtureMaterializer
         array $storagePaths,
     ): array {
         $paths = collect($storagePaths)->keyBy(fn (string $path): string => Str::afterLast($path, '/'));
+        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
 
         $definitions = [
             'results_ready' => [
@@ -1694,7 +1708,7 @@ class AkubicaUatFixtureMaterializer
                 'phone_country' => $customer->user->phone_country,
                 'birth_date' => '1990-01-01',
                 'gender' => Gender::MALE->value,
-                'street' => '[UAT] Avenida FAMEDIC',
+                'street' => '[UAT] '.$fixtureLabel.'Avenida FAMEDIC',
                 'number' => '100',
                 'neighborhood' => 'AKUBICA',
                 'state' => 'Nuevo Leon',
@@ -1829,7 +1843,8 @@ class AkubicaUatFixtureMaterializer
     private function assertManifestIsResettable(AkubicaUatFixtureManifest $manifest, AkubicaUatFixturePlan $plan): void
     {
         if (
-            $manifest->namespace !== AkubicaUatFixtureContract::NAMESPACE
+            ! AkubicaUatFixtureContract::isAllowedNamespace($manifest->namespace)
+            || $manifest->namespace !== $plan->namespace
             || (int) $manifest->fixture_version !== AkubicaUatFixtureContract::FIXTURE_VERSION
             || ! in_array($manifest->status, AkubicaUatFixtureContract::ALLOWED_STATUSES, true)
             || ! is_array($manifest->metadata)
@@ -1862,11 +1877,11 @@ class AkubicaUatFixtureMaterializer
 
         $this->assertSyntheticUser('primary', $ids);
         $this->assertSyntheticUser('foreign', $ids);
-        $this->assertSyntheticCustomer('primary', $ids);
-        $this->assertSyntheticCustomer('foreign', $ids);
+        $this->assertSyntheticCustomer('primary', $ids, $plan->namespace);
+        $this->assertSyntheticCustomer('foreign', $ids, $plan->namespace);
         foreach (['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $membershipRole) {
             $this->assertSyntheticUser($membershipRole, $ids);
-            $this->assertSyntheticCustomer($membershipRole, $ids);
+            $this->assertSyntheticCustomer($membershipRole, $ids, $plan->namespace);
             $subscriptionId = Arr::get($ids, "subscriptions.{$membershipRole}");
             if ($membershipRole === 'membership_none') {
                 if ($subscriptionId !== null) {
@@ -2001,14 +2016,14 @@ class AkubicaUatFixtureMaterializer
         }
     }
 
-    private function assertSyntheticCustomer(string $role, array $ids): void
+    private function assertSyntheticCustomer(string $role, array $ids, string $namespace): void
     {
         $customer = Customer::query()->withTrashed()->find((int) Arr::get($ids, "customers.{$role}"));
 
         if (
             $customer === null
             || (int) $customer->user_id !== (int) Arr::get($ids, "users.{$role}")
-            || $customer->medical_attention_identifier !== $this->naturalKeys(AkubicaUatFixtureContract::NAMESPACE)['customer_identifiers'][$role]
+            || $customer->medical_attention_identifier !== $this->naturalKeys($namespace)['customer_identifiers'][$role]
             || $customer->customerable_type !== RegularAccount::class
             || (int) $customer->customerable_id !== (int) Arr::get($ids, "regular_accounts.{$role}")
         ) {

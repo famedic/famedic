@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap-rc2-materializer.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Materializer">
+            <file>tests/Feature/Console/MaterializeAkubicaUatFixturesCommandTest.php</file>
+        </testsuite>
+        <testsuite name="Authorization">
+            <file>tests/Feature/Api/V1/ConsumerRegistryAuthorizationTest.php</file>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include><directory>app</directory></include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" force="true"/>
+        <env name="FAMEDIC_RC2_LOCAL_MYSQL" value="1" force="true"/>
+        <env name="FAMEDIC_REGISTERED_NATIVE_FIXTURES" value="1" force="true"/>
+        <env name="FAMEDIC_RC2_ACTIVE_CAMPAIGN_FAKE" value="1" force="true"/>
+        <env name="ACTIVE_CAMPAIGN_API_ENDPOINT" value="https://activecampaign.invalid" force="true"/>
+        <env name="ACTIVE_CAMPAIGN_API_TOKEN" value="synthetic-test-token" force="true"/>
+        <env name="SCOUT_DRIVER" value="null" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="DB_CONNECTION" value="mysql" force="true"/>
+        <env name="DB_HOST" value="127.0.0.1" force="true"/>
+        <env name="DB_PORT" value="13307" force="true"/>
+        <env name="DB_DATABASE" value="famedic_rc2_it0061_testing" force="true"/>
+        <env name="DB_USERNAME" value="famedic_rc2_test" force="true"/>
+        <env name="DB_PASSWORD" value="famedic_rc2_test_pw" force="true"/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="OTP_P0A_INFRASTRUCTURE_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_AKUBICA_REGISTER_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_AKUBICA_LOGIN_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_SMS_DELIVERY_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_EMAIL_FALLBACK_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_ANTI_ABUSE_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_STEP_UP_RESULTS_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_STEP_UP_INVOICES_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_SECURE_LINKS_RESULTS_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_SECURE_LINKS_INVOICES_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_STEP_UP_BEARER_DOWNLOADS_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_STEP_UP_BEARER_RESULTS_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_STEP_UP_BEARER_INVOICES_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_SANCTUM_3H_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_CLEANUP_ENABLED" value="false" force="true"/>
+        <env name="OTP_P0A_DELIVERY_DRIVER" value="fake" force="true"/>
+        <env name="API_V1_IDEMPOTENCY_ENABLED" value="false" force="true"/>
+        <env name="API_V1_IDEMPOTENCY_PRUNE_ENABLED" value="false" force="true"/>
+        <env name="API_V1_AUDIT_ENABLED" value="false" force="true"/>
+        <env name="BUSINESS_AUDIT_ENABLED" value="false" force="true"/>
+        <env name="COUPON_CREATION_OTP_REQUIRED" value="true"/>
+    </php>
+</phpunit>

@@ -6,6 +6,13 @@ final class AkubicaUatFixtureContract
 {
     public const NAMESPACE = 'akubica-uat-v1';
 
+    public const DEDICATED_NAMESPACE = 'akubica-uat-batch2-a4-v1';
+
+    public const ALLOWED_NAMESPACES = [
+        self::NAMESPACE,
+        self::DEDICATED_NAMESPACE,
+    ];
+
     public const FIXTURE_VERSION = 1;
 
     public const STORAGE_DISK = 'local';
@@ -37,8 +44,22 @@ final class AkubicaUatFixtureContract
         'tax/fiscal-certificate.pdf',
     ];
 
-    public static function storagePath(string $relativeDocument): string
+    public static function isAllowedNamespace(string $namespace): bool
     {
-        return self::STORAGE_PREFIX.$relativeDocument;
+        return in_array($namespace, self::ALLOWED_NAMESPACES, true);
+    }
+
+    public static function storagePrefix(string $namespace = self::NAMESPACE): string
+    {
+        if (! self::isAllowedNamespace($namespace)) {
+            throw new \InvalidArgumentException('Unsupported UAT namespace.');
+        }
+
+        return $namespace.'/';
+    }
+
+    public static function storagePath(string $relativeDocument, string $namespace = self::NAMESPACE): string
+    {
+        return self::storagePrefix($namespace).$relativeDocument;
     }
 }

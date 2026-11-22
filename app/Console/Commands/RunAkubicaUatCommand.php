@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
+use Symfony\Component\Process\Process;
 use Throwable;
 
 final class RunAkubicaUatCommand extends Command
@@ -604,8 +605,29 @@ final class RunAkubicaUatCommand extends Command
     private function assertSha(): void
     {
         $expected = trim((string) ($this->option('expected-sha') ?: env('AKUBICA_UAT_EXPECTED_SHA')));
-        $actual = trim((string) env('APP_COMMIT_SHA'));
-        if ($expected === '' || $actual === '' || ! hash_equals($expected, $actual)) {
+        $declared = trim((string) env('APP_COMMIT_SHA'));
+        $gitHead = null;
+        $process = new Process(['git', 'rev-parse', 'HEAD'], base_path());
+        $process->setTimeout(3);
+        $process->run();
+        if ($process->isSuccessful() && preg_match('/\A[0-9a-f]{40}\z/i', trim($process->getOutput()))) {
+            $gitHead = strtolower(trim($process->getOutput()));
+        }
+
+        // Test-only telemetry keeps its non-SHA sentinel; staging/QA always require
+        // a full SHA and reject a declared value that disagrees with the checkout.
+        $legacyTestSentinel = app()->environment('testing')
+            && ! preg_match('/\A[0-9a-f]{40}\z/i', $expected)
+            && $declared !== '';
+        if ($gitHead !== null && ! $legacyTestSentinel && $declared !== '' && ! hash_equals($gitHead, strtolower($declared))) {
+            throw new \DomainException('UAT_COMMIT_NOT_VERIFIABLE');
+        }
+
+        $actual = $declared !== '' ? $declared : ($gitHead ?? '');
+        if (! $legacyTestSentinel && (! preg_match('/\A[0-9a-f]{40}\z/i', $expected) || ! preg_match('/\A[0-9a-f]{40}\z/i', $actual))) {
+            throw new \DomainException('UAT_COMMIT_NOT_VERIFIABLE');
+        }
+        if ($expected === '' || $actual === '' || ! hash_equals(strtolower($expected), strtolower($actual))) {
             throw new \DomainException('UAT_COMMIT_NOT_VERIFIABLE');
         }
     }
