@@ -26,6 +26,7 @@ class CreateAkubicaInvoiceRequestAction
         TaxProfile $taxProfile,
         ?string $cfdiUse = null,
         ?BillingInvoiceRequestedAuditHint $auditHint = null,
+        bool $updateProfileCfdiUse = true,
     ): array {
         $order->loadMissing(['invoice', 'invoiceRequest']);
 
@@ -45,12 +46,15 @@ class CreateAkubicaInvoiceRequestAction
             return ['error' => 'ORDER_NOT_INVOICEABLE'];
         }
 
-        if ($cfdiUse !== null && $taxProfile->cfdi_use !== $cfdiUse) {
+        if ($updateProfileCfdiUse && $cfdiUse !== null && $taxProfile->cfdi_use !== $cfdiUse) {
             $taxProfile->update(['cfdi_use' => $cfdiUse]);
             $taxProfile->refresh();
         }
 
-        $invoiceRequest = $this->persistInvoiceRequest($order, $taxProfile, $auditHint);
+        // RC2 Batch 2 · A3: without a profile write (Leo, rev7 L20) the requested cfdi_use applies to this request only;
+        // when omitted, the profile's cfdi_use is used (rev7 LeoInvoiceRequestCreate.cfdi_use).
+        $invoiceRequest = $this->persistInvoiceRequest($order, $taxProfile, $auditHint,
+            $updateProfileCfdiUse ? $taxProfile->cfdi_use : ($cfdiUse ?? $taxProfile->cfdi_use));
 
         return [
             'invoice_request' => $invoiceRequest,
@@ -62,6 +66,7 @@ class CreateAkubicaInvoiceRequestAction
         LaboratoryPurchase $order,
         TaxProfile $taxProfile,
         ?BillingInvoiceRequestedAuditHint $auditHint,
+        ?string $cfdiUse,
     ): InvoiceRequest {
         DB::beginTransaction();
 
@@ -81,7 +86,7 @@ class CreateAkubicaInvoiceRequestAction
                 'rfc' => $taxProfile->rfc,
                 'zipcode' => $taxProfile->zipcode,
                 'tax_regime' => $taxProfile->tax_regime,
-                'cfdi_use' => $taxProfile->cfdi_use,
+                'cfdi_use' => $cfdiUse,
                 'fiscal_certificate' => $fiscalCertificatePath,
             ]);
 

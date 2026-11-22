@@ -241,8 +241,18 @@ foreach (Route::getRoutes() as $registeredRoute) {
     $registeredRoute->withoutMiddleware(['auth:sanctum', 'api.token.guard']);
     $action = $registeredRoute->getAction();
     $list = $action['middleware'] ?? [];
+    // A per-user `throttle:N,M` runs right after the registered actor is resolved (keyed by user, as with
+    // auth:sanctum) and still before api.customer, idempotency, audit and the controller.
+    $throttles = [];
+    foreach ($list as $i => $entry) {
+        if (is_string($entry) && preg_match('/^throttle:(\d+,\d+)$/', $entry, $m) === 1) {
+            $throttles[] = 'api.consumer.throttle:'.$m[1];
+            unset($list[$i]);
+        }
+    }
+    $list = array_values($list);
     $at = array_search('api.customer', $list, true);
-    array_splice($list, $at === false ? 0 : $at, 0, ['api.consumer.authorize']);
+    array_splice($list, $at === false ? 0 : $at, 0, array_merge(['api.consumer.authorize'], $throttles));
     $action['middleware'] = $list;
     $registeredRoute->setAction($action);
 }
