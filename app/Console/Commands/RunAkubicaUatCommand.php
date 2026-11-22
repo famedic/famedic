@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
+use Symfony\Component\Process\Process;
 use Throwable;
 
 final class RunAkubicaUatCommand extends Command
@@ -605,6 +606,14 @@ final class RunAkubicaUatCommand extends Command
     {
         $expected = trim((string) ($this->option('expected-sha') ?: env('AKUBICA_UAT_EXPECTED_SHA')));
         $actual = trim((string) env('APP_COMMIT_SHA'));
+        if ($actual === '') {
+            $process = new Process(['git', 'rev-parse', 'HEAD'], base_path());
+            $process->setTimeout(3);
+            $process->run();
+            if ($process->isSuccessful()) {
+                $actual = trim($process->getOutput());
+            }
+        }
         if ($expected === '' || $actual === '' || ! hash_equals($expected, $actual)) {
             throw new \DomainException('UAT_COMMIT_NOT_VERIFIABLE');
         }

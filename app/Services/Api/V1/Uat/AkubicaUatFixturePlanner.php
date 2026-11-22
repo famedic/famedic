@@ -31,14 +31,18 @@ class AkubicaUatFixturePlanner
             ->all();
     }
 
-    public function buildPlan(string $action, bool $requireConfigured): AkubicaUatFixturePlan
+    public function buildPlan(string $action, bool $requireConfigured, string $namespace = AkubicaUatFixtureContract::NAMESPACE): AkubicaUatFixturePlan
     {
+        if (! AkubicaUatFixtureContract::isAllowedNamespace($namespace)) {
+            throw new AkubicaUatFixtureException('UAT_NAMESPACE_NOT_ALLOWED');
+        }
+
         $configured = $this->configuredStatus();
         $identities = $requireConfigured ? $this->requiredIdentities() : $this->optionalIdentities(validateCompleteSet: false);
-        $storageDefinitions = $this->storageDefinitions(AkubicaUatFixtureContract::NAMESPACE);
+        $storageDefinitions = $this->storageDefinitions($namespace);
 
         return new AkubicaUatFixturePlan(
-            namespace: AkubicaUatFixtureContract::NAMESPACE,
+            namespace: $namespace,
             fixtureVersion: AkubicaUatFixtureContract::FIXTURE_VERSION,
             action: $action,
             configured: $configured,
@@ -145,31 +149,31 @@ class AkubicaUatFixturePlanner
     public function storageDefinitions(string $namespace): array
     {
         return [
-            AkubicaUatFixtureContract::storagePath('results/result-ready.pdf') => [
+            AkubicaUatFixtureContract::storagePath('results/result-ready.pdf', $namespace) => [
                 'content' => "%PDF-1.4\n% Synthetic [UAT] results ready {$namespace}\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
                 'mime' => 'application/pdf',
             ],
-            AkubicaUatFixtureContract::storagePath('results/foreign-order.pdf') => [
+            AkubicaUatFixtureContract::storagePath('results/foreign-order.pdf', $namespace) => [
                 'content' => "%PDF-1.4\n% Synthetic [UAT] foreign results {$namespace}\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
                 'mime' => 'application/pdf',
             ],
-            AkubicaUatFixtureContract::storagePath('invoices/invoice-ready.pdf') => [
+            AkubicaUatFixtureContract::storagePath('invoices/invoice-ready.pdf', $namespace) => [
                 'content' => "%PDF-1.4\n% Synthetic [UAT] invoice ready {$namespace}\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
                 'mime' => 'application/pdf',
             ],
-            AkubicaUatFixtureContract::storagePath('invoices/invoice-ready.xml') => [
+            AkubicaUatFixtureContract::storagePath('invoices/invoice-ready.xml', $namespace) => [
                 'content' => '<invoice synthetic="true" namespace="'.$namespace.'"><status>completed</status></invoice>',
                 'mime' => 'application/xml',
             ],
-            AkubicaUatFixtureContract::storagePath('invoices/foreign-order.pdf') => [
+            AkubicaUatFixtureContract::storagePath('invoices/foreign-order.pdf', $namespace) => [
                 'content' => "%PDF-1.4\n% Synthetic [UAT] foreign invoice {$namespace}\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
                 'mime' => 'application/pdf',
             ],
-            AkubicaUatFixtureContract::storagePath('invoices/foreign-order.xml') => [
+            AkubicaUatFixtureContract::storagePath('invoices/foreign-order.xml', $namespace) => [
                 'content' => '<invoice synthetic="true" namespace="'.$namespace.'"><status>foreign</status></invoice>',
                 'mime' => 'application/xml',
             ],
-            AkubicaUatFixtureContract::storagePath('tax/fiscal-certificate.pdf') => [
+            AkubicaUatFixtureContract::storagePath('tax/fiscal-certificate.pdf', $namespace) => [
                 'content' => "%PDF-1.4\n% Synthetic [UAT] fiscal certificate {$namespace}\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
                 'mime' => 'application/pdf',
             ],

@@ -13,13 +13,14 @@ class AkubicaUatFixtureManifest extends Model
 
     public const ALLOWED_STATUSES = AkubicaUatFixtureContract::ALLOWED_STATUSES;
 
-    public function canRecoverPreparing(): bool
+    public function canRecoverPreparing(?string $namespace = null): bool
     {
         return in_array($this->status, [
             AkubicaUatFixtureContract::STATUS_PREPARING,
             AkubicaUatFixtureContract::STATUS_FAILED,
         ], true)
-            && $this->namespace === AkubicaUatFixtureContract::NAMESPACE
+            && AkubicaUatFixtureContract::isAllowedNamespace($namespace ?? (string) $this->namespace)
+            && ($namespace === null || $this->namespace === $namespace)
             && (int) $this->fixture_version === AkubicaUatFixtureContract::FIXTURE_VERSION
             && is_array($this->metadata);
     }

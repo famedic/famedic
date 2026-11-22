@@ -32,7 +32,7 @@ class MaterializeAkubicaUatFixturesCommand extends Command
         }
 
         $namespace = (string) ($this->option('namespace') ?: AkubicaUatFixtureContract::NAMESPACE);
-        if ($namespace !== AkubicaUatFixtureContract::NAMESPACE) {
+        if (! AkubicaUatFixtureContract::isAllowedNamespace($namespace)) {
             $this->line($this->jsonPayload('error', ['error_code' => 'UAT_NAMESPACE_NOT_ALLOWED']));
 
             return self::FAILURE;
@@ -58,7 +58,7 @@ class MaterializeAkubicaUatFixturesCommand extends Command
 
         if ($dryRun) {
             try {
-                $plan = $planner->buildPlan('dry-run', false);
+                $plan = $planner->buildPlan('dry-run', false, $namespace);
             } catch (AkubicaUatFixtureException $exception) {
                 $this->line($this->jsonPayload('error', ['error_code' => $exception->errorCode]));
 
@@ -81,7 +81,7 @@ class MaterializeAkubicaUatFixturesCommand extends Command
         }
 
         try {
-            $plan = $planner->buildPlan($reset ? 'reset' : 'apply', true);
+            $plan = $planner->buildPlan($reset ? 'reset' : 'apply', true, $namespace);
 
             /** @var AkubicaUatFixtureMaterializer $materializer */
             $materializer = app(AkubicaUatFixtureMaterializer::class);
@@ -111,7 +111,7 @@ class MaterializeAkubicaUatFixturesCommand extends Command
                 'error_reference' => $errorReference,
                 'exception_class' => $throwable::class,
                 'phase' => $apply ? 'apply' : 'reset',
-                'namespace' => AkubicaUatFixtureContract::NAMESPACE,
+                'namespace' => $namespace,
             ]);
 
             $this->line($this->jsonPayload('error', [
