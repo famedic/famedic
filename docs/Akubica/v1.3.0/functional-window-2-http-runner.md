@@ -61,7 +61,10 @@ stdout únicamente un objeto JSON alias→secreto. El runner captura stdout/stde
 usa los valores sólo en memoria para construir `Authorization: Bearer` y
 `X-Api-Consumer-Credential`, y nunca copia secretos al reporte, logs, archivos
 temporales o mensajes de error. El helper debe ser un mecanismo seguro existente;
-un script de prueba sintético no acredita custodia QA.
+un script de prueba sintético no acredita custodia QA. Al finalizar el bloque
+HTTP, el runner llama al mismo helper con `{"action":"revoke","aliases":[...]}`
+y exige una confirmación sanitizada de aliases revocados; si falla, el resultado
+es `CLEANUP_FAILED` y código no exitoso.
 
 Cada request puede declarar `auth.bearer_alias`, `auth.machine_alias` y
 `assertions` (`required_paths`, `forbidden_paths`, `equals`). El status HTTP y las

@@ -52,31 +52,43 @@ class CredentialProvider:
         if self._values is not None:
             result = dict(self._values)
         else:
-            try:
-                argv = shlex.split(self._command or "", posix=sys.platform != "win32")
-                if not argv:
-                    raise CredentialProviderError("CREDENTIAL_PROVIDER_INVALID")
-                completed = subprocess.run(
-                    argv,
-                    input=json.dumps({"aliases": sorted(aliases)}),
-                    text=True,
-                    capture_output=True,
-                    timeout=10,
-                    check=False,
-                )
-            except (OSError, subprocess.SubprocessError, ValueError):
-                raise CredentialProviderError("CREDENTIAL_PROVIDER_FAILED") from None
-            if completed.returncode != 0:
-                raise CredentialProviderError("CREDENTIAL_PROVIDER_FAILED")
-            try:
-                result = json.loads(completed.stdout)
-            except json.JSONDecodeError:
-                raise CredentialProviderError("CREDENTIAL_PROVIDER_INVALID") from None
-            if not isinstance(result, dict):
-                raise CredentialProviderError("CREDENTIAL_PROVIDER_INVALID")
-
+            result = self._invoke({"action": "read", "aliases": sorted(aliases)})
+        if not isinstance(result, dict):
+            raise CredentialProviderError("CREDENTIAL_PROVIDER_INVALID")
         if set(result) != aliases or any(not isinstance(v, str) or not v for v in result.values()):
             raise CredentialProviderError("CREDENTIAL_PROVIDER_ALIASES_MISMATCH")
+        return result
+
+    def revoke(self, aliases: set[str]) -> None:
+        if self._values is not None:
+            return
+        result = self._invoke({"action": "revoke", "aliases": sorted(aliases)})
+        if not isinstance(result, dict) or sorted(result.get("revoked", [])) != sorted(aliases):
+            raise CredentialProviderError("CREDENTIAL_REVOCATION_UNCONFIRMED")
+
+    def _invoke(self, request: dict[str, Any]) -> dict[str, Any]:
+        try:
+            argv = shlex.split(self._command or "", posix=sys.platform != "win32")
+            if not argv:
+                raise CredentialProviderError("CREDENTIAL_PROVIDER_INVALID")
+            completed = subprocess.run(
+                argv,
+                input=json.dumps(request),
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError, ValueError):
+            raise CredentialProviderError("CREDENTIAL_PROVIDER_FAILED") from None
+        if completed.returncode != 0:
+            raise CredentialProviderError("CREDENTIAL_PROVIDER_FAILED")
+        try:
+            result = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            raise CredentialProviderError("CREDENTIAL_PROVIDER_INVALID") from None
+        if not isinstance(result, dict):
+            raise CredentialProviderError("CREDENTIAL_PROVIDER_INVALID")
         return result
 
 
@@ -297,7 +309,8 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
     if mode == "qa" and any(case.writes for case in requests) and not cleanup:
         raise RunnerError("CLEANUP_PLAN_REQUIRED")
     aliases = {alias for case in requests + cleanup for alias in (case.bearer_alias, case.machine_alias) if alias}
-    credentials = CredentialProvider(credential_command, credential_values).load(aliases) if aliases else None
+    credential_provider = CredentialProvider(credential_command, credential_values) if aliases else None
+    credentials = credential_provider.load(aliases) if credential_provider else None
     results: list[dict[str, Any]] = []
     cleanup_results: list[dict[str, Any]] = []
     exit_code = 0
@@ -339,6 +352,13 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                     exit_code = 1
             except BaseException as exc:
                 cleanup_results.append({"id": case.case_id, "ok": False, "error": _project_error(exc)})
+                exit_code = 1
+        if credential_provider and aliases:
+            try:
+                credential_provider.revoke(aliases)
+                cleanup_results.append({"id": "credential-revocation", "ok": True})
+            except BaseException as exc:
+                cleanup_results.append({"id": "credential-revocation", "ok": False, "error": _project_error(exc)})
                 exit_code = 1
         signal.signal(signal.SIGINT, old)
 

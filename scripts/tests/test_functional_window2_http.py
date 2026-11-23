@@ -154,7 +154,7 @@ class HttpRunnerTests(unittest.TestCase):
                 "import json,sys; x=json.load(sys.stdin); "
                 "assert x['aliases']==['bearer_leo','machine_leo']; "
                 "sys.stderr.write('synthetic-stderr-secret'); "
-                "print(json.dumps({'bearer_leo':'synthetic-bearer','machine_leo':'synthetic-machine'}))\n",
+                "print(json.dumps({'revoked':x['aliases']} if x['action']=='revoke' else {'bearer_leo':'synthetic-bearer','machine_leo':'synthetic-machine'}))\n",
                 encoding="utf-8",
             )
             proc, report = self.run_plan({
