@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import signal
+import ssl
 import sys
 import time
 from dataclasses import dataclass
@@ -21,6 +23,10 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+
+QA_HOSTS = frozenset({"staging.famedic.com.mx", "famedic-otp.on-forge.com"})
+SHA_RE = re.compile(r"^[0-9a-f]{40}$", re.I)
 
 
 class RunnerError(ValueError):
@@ -39,6 +45,7 @@ class Case:
     path: str
     expected: tuple[int, ...]
     body: dict[str, Any] | None = None
+    writes: bool = False
 
 
 def _origin(url: str) -> tuple[str, str, int | None]:
@@ -82,7 +89,10 @@ def load_plan(path: Path) -> tuple[list[Case], list[Case]]:
             body = raw.get("json")
             if body is not None and not isinstance(body, dict):
                 raise RunnerError("JSON_BODY_INVALID")
-            result.append(Case(case_id, method.upper(), path_value, tuple(expected), body))
+            writes = raw.get("writes", False)
+            if type(writes) is not bool:
+                raise RunnerError("WRITES_FLAG_INVALID")
+            result.append(Case(case_id, method.upper(), path_value, tuple(expected), body, writes))
             seen.add(case_id)
         return result
 
@@ -91,6 +101,32 @@ def load_plan(path: Path) -> tuple[list[Case], list[Case]]:
     if not requests:
         raise RunnerError("REQUESTS_EMPTY")
     return requests, cleanup
+
+
+def validate_mode(mode: str, base_url: str, metadata: dict[str, Any]) -> ssl.SSLContext | None:
+    """Validate mode/target/guards without opening a connection."""
+    scheme, host, port = _origin(base_url)
+    if mode == "local":
+        if host not in {"127.0.0.1", "localhost", "::1"} or scheme != "http":
+            raise RunnerError("LOCAL_TARGET_MUST_BE_LOOPBACK_HTTP")
+        return None
+    if mode != "qa":
+        raise RunnerError("MODE_INVALID")
+    if scheme != "https" or host not in QA_HOSTS or port is not None:
+        raise RunnerError("QA_TARGET_NOT_ALLOWLISTED_HTTPS")
+    target_env = metadata.get("target_env")
+    expected_sha = metadata.get("expected_release_sha")
+    if target_env != "staging" or not isinstance(expected_sha, str) or not SHA_RE.fullmatch(expected_sha):
+        raise RunnerError("QA_RELEASE_GUARD_INVALID")
+    for key in ("qa_writes_authorized", "leo_negative_writes_authorized"):
+        value = metadata.get(key, "0")
+        if type(value) is not str or value not in {"0", "1"}:
+            raise RunnerError("QA_FLAG_NOT_EXACT")
+    if metadata.get("https_verified") is not True:
+        raise RunnerError("TLS_VERIFICATION_REQUIRED")
+    # No unverified context is ever constructed. The actual connection path
+    # uses this context after the local validation has passed.
+    return ssl.create_default_context()
 
 
 def _project_error(exc: BaseException) -> str:
@@ -103,7 +139,7 @@ def _project_error(exc: BaseException) -> str:
     return "RUNNER_ERROR"
 
 
-def _request(base_url: str, case: Case, timeout: float) -> tuple[int, int]:
+def _request(base_url: str, case: Case, timeout: float, tls_context: ssl.SSLContext | None = None) -> tuple[int, int]:
     target = urljoin(base_url.rstrip("/") + "/", case.path.lstrip("/"))
     if not _same_origin(base_url, target):
         raise RunnerError("DESTINATION_NOT_ALLOWED")
@@ -115,7 +151,11 @@ def _request(base_url: str, case: Case, timeout: float) -> tuple[int, int]:
     request = Request(target, data=payload, method=case.method, headers=headers)
     started = time.monotonic()
     try:
-        with build_opener(NoRedirects()).open(request, timeout=timeout) as response:
+        handlers: list[Any] = [NoRedirects()]
+        if tls_context is not None:
+            from urllib.request import HTTPSHandler
+            handlers.append(HTTPSHandler(context=tls_context))
+        with build_opener(*handlers).open(request, timeout=timeout) as response:
             status = response.status
             response.read(1024 * 1024)
     except HTTPError as exc:
@@ -123,14 +163,21 @@ def _request(base_url: str, case: Case, timeout: float) -> tuple[int, int]:
     return status, round((time.monotonic() - started) * 1000)
 
 
-def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0) -> int:
+def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str = "local") -> int:
+    data = json.loads(plan.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise RunnerError("PLAN_INVALID")
     requests, cleanup = load_plan(plan)
-    # The base is the only authority. The caller must opt into a non-local host.
-    scheme, host, _ = _origin(base_url)
-    if host not in {"127.0.0.1", "localhost", "::1"}:
-        raise RunnerError("NON_LOCAL_TARGET_REQUIRES_EXPLICIT_ADAPTER")
-    if scheme != "http":
-        raise RunnerError("LOCAL_TARGET_MUST_USE_HTTP")
+    metadata = data.get("qa_guards", {}) if isinstance(data.get("qa_guards", {}), dict) else {}
+    tls_context = validate_mode(mode, base_url, metadata)
+    if mode == "qa" and any(case.writes for case in requests):
+        if metadata.get("qa_writes_authorized") != "1":
+            raise RunnerError("QA_WRITES_NOT_AUTHORIZED")
+    if any(case.case_id == "B25" and case.writes for case in requests):
+        if metadata.get("leo_negative_writes_authorized") != "1":
+            raise RunnerError("LEO_NEGATIVE_WRITES_NOT_AUTHORIZED")
+    if mode == "qa" and any(case.writes for case in requests) and not cleanup:
+        raise RunnerError("CLEANUP_PLAN_REQUIRED")
     results: list[dict[str, Any]] = []
     cleanup_results: list[dict[str, Any]] = []
     exit_code = 0
@@ -145,7 +192,7 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0) -> int:
     try:
         for case in requests:
             try:
-                status, duration = _request(base_url, case, timeout)
+                status, duration = _request(base_url, case, timeout, tls_context)
                 ok = status in case.expected
                 results.append({"id": case.case_id, "method": case.method, "path": case.path, "http_status": status, "ok": ok, "duration_ms": duration})
                 if not ok:
@@ -160,7 +207,7 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0) -> int:
     finally:
         for case in cleanup:
             try:
-                status, duration = _request(base_url, case, timeout)
+                status, duration = _request(base_url, case, timeout, tls_context)
                 ok = status in case.expected
                 cleanup_results.append({"id": case.case_id, "http_status": status, "ok": ok, "duration_ms": duration})
                 if not ok and exit_code == 0:
@@ -170,7 +217,10 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0) -> int:
                 exit_code = 1
         signal.signal(signal.SIGINT, old)
 
-    projected = {"schema": "it0061-functional-window-2-http.v1", "exit_code": exit_code, "interrupted": interrupted, "requests": results, "cleanup": cleanup_results}
+    cleanup_status = "CLEANUP_FAILED" if any(not item.get("ok", False) for item in cleanup_results) else "PASS"
+    if cleanup_status == "CLEANUP_FAILED":
+        exit_code = 1
+    projected = {"schema": "it0061-functional-window-2-http.v1", "exit_code": exit_code, "interrupted": interrupted, "cleanup_status": cleanup_status, "requests": results, "cleanup": cleanup_results}
     output.write_text(json.dumps(projected, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return exit_code
 
@@ -181,9 +231,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=5.0)
+    parser.add_argument("--mode", choices=("local", "qa"), default="local")
     args = parser.parse_args(argv)
     try:
-        return run(args.plan, args.base_url, args.output, args.timeout)
+        return run(args.plan, args.base_url, args.output, args.timeout, args.mode)
     except (OSError, RunnerError, json.JSONDecodeError) as exc:
         print(f"BLOCKED: {type(exc).__name__}", file=sys.stderr)
         return 2

@@ -6,6 +6,10 @@ La preparación anterior sólo derivaba una colección y sanitizaba un reporte N
 
 La corrección local es `scripts/functional_window2_http.py`. Recibe un plan JSON derivado, no secretos ni una carpeta completa de Newman. En local sólo admite `http://127.0.0.1`, `localhost` o `::1`; rechaza QA y cualquier otro host hasta que exista un adaptador seguro revisado. No sigue redirects, valida método/ruta/duplicados/HTTP esperado, corta ante un request fallido, conserva el código de salida y ejecuta la lista de cleanup en `finally`, incluso ante timeout o Ctrl-C. La salida contiene únicamente alias de request, método, ruta, estado, duración y códigos de error sanitizados.
 
+El modo `--mode qa` ya está preparado pero no se ejecutó: exige HTTPS, sin puerto alternativo, uno de los hosts cerrados `staging.famedic.com.mx` o `famedic-otp.on-forge.com`, SHA de 40 hexadecimales, `target_env=staging`, TLS verificado y banderas exactas `"0"`/`"1"`. Las escrituras requieren `qa_writes_authorized="1"`; B25 requiere además `leo_negative_writes_authorized="1"`. El modo valida estas guardas antes de abrir una conexión. No existe opción `--insecure` ni seguimiento de redirects.
+
+Si cualquier cleanup falla, la salida contiene `cleanup_status=CLEANUP_FAILED` y el proceso termina con código no exitoso. Un plan QA con escrituras sin lista de cleanup es rechazado antes de abrir la conexión.
+
 El plan QA futuro debe ser generado por una interfaz soportada y aportar un adaptador explícito de credenciales y cleanup del namespace. No se permite poner Bearer, PAT, headers ni secretos en el plan o en la evidencia.
 
 ## Comprobación local
@@ -23,6 +27,7 @@ La suite usa un `ThreadingHTTPServer` sintético y comprueba:
 - cleanup después de una respuesta HTTP inesperada;
 - cleanup después de timeout;
 - rechazo de destino no local;
+- cleanup fallido explícito con código no exitoso;
 - ausencia de secretos en la salida proyectada.
 
 ## Matriz de la segunda ventana
@@ -45,4 +50,6 @@ La suite usa un `ThreadingHTTPServer` sintético y comprueba:
 | R07a2 | bloqueado | Leo sin `item_type` y sin capacidad no autorizada; binding negativo dedicado | aprovisionar perfil negativo soportado |
 
 `B01`, `B01r`, `B02`, `B04` y `B05` siguen bloqueados por ausencia de preparación QA soportada. A4, OpenAPI, rev7 y `akubica-uat-v1` no se modifican.
+
+La preparación sintética de los bloqueos se describe en `functional-window-2-preconditions.synthetic.json` y se valida offline con `functional_window2_preconditions.py`. Representa relaciones y capacidades literales para `membership_regular`, `leo_none`, el binding Leo sin `cart:laboratory:write`, pedidos propios/ajenos y familiares. No crea credenciales ni pretende demostrar preparación QA. Para QA aún se requiere que el aprovisionador exponga esas variantes, conserve ownership y permita reset/revocación verificables.
 

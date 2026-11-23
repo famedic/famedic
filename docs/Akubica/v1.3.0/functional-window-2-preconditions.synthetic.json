@@ -1,0 +1,58 @@
+{
+  "schema": "it0061-functional-window-2-preconditions.synthetic.v1",
+  "namespace": "akubica-uat-batch2-a4-v1-local",
+  "legacy_namespace": "akubica-uat-v1",
+  "external_effects": false,
+  "resources": [
+    {
+      "scenario_ids": ["B09", "B14"],
+      "alias": "membership_regular",
+      "profile": "native",
+      "capabilities": ["memberships:read", "cart:read", "cart:membership:write"],
+      "delegation": "membership_regular_customer",
+      "binding": "native_olab_membership_regular",
+      "ownership": "membership_regular_customer",
+      "data": ["active individual membership", "dedicated customer"]
+    },
+    {
+      "scenario_ids": ["B21x", "R07a2"],
+      "alias": "leo_negative_lab",
+      "profile": "leo",
+      "capabilities": ["memberships:read", "cart:read"],
+      "delegation": "primary_customer",
+      "binding": "leo_olab_without_cart_laboratory_write",
+      "ownership": "primary_customer",
+      "data": ["dedicated laboratory test", "lab_brand_not_granted"]
+    },
+    {
+      "scenario_ids": ["B25"],
+      "alias": "leo_none",
+      "profile": "leo",
+      "capabilities": ["memberships:read", "cart:read"],
+      "delegation": "primary_customer",
+      "binding": "leo_olab_payment_forbidden",
+      "ownership": "primary_customer",
+      "data": ["valid brand body", "no payment capability", "no payment effect"]
+    },
+    {
+      "scenario_ids": ["R01", "R01b"],
+      "alias": "leo_orders",
+      "profile": "leo",
+      "capabilities": ["api:operation:api:v1:orders:index", "api:operation:api:v1:orders:status"],
+      "delegation": "primary_customer",
+      "binding": "leo_olab_orders_read",
+      "ownership": "primary_customer",
+      "data": ["dedicated own order", "dedicated foreign order"]
+    },
+    {
+      "scenario_ids": ["R04"],
+      "alias": "leo_family",
+      "profile": "leo",
+      "capabilities": ["api:operation:api:v1:user:family"],
+      "delegation": "primary_customer",
+      "binding": "leo_olab_family_read",
+      "ownership": "primary_customer",
+      "data": ["dedicated family member", "relationship and principal flags"]
+    }
+  ]
+}
