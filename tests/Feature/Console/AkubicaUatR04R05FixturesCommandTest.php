@@ -5,6 +5,7 @@ use App\Models\Api\V1\AkubicaUatFixtureManifest;
 use App\Models\Customer;
 use App\Models\FamilyAccount;
 use App\Models\LaboratoryAppointment;
+use App\Models\User;
 
 function r04r05Manifest(): array
 {
@@ -63,4 +64,38 @@ test('R04 family endpoint data is isolated per customer after apply', function (
     expect($primary->familyAccounts()->count())->toBe(1)
         ->and($foreign->familyAccounts()->count())->toBe(1)
         ->and($primary->familyAccounts()->first()->id)->not->toBe($foreign->familyAccounts()->first()->id);
+});
+
+test('dedicated namespace R04 fixtures are idempotent and do not reuse legacy marker', function () {
+    $primary = Customer::factory()->withRegularAccount()->create(['user_id' => User::factory()->create()->id]);
+    $foreign = Customer::factory()->withRegularAccount()->create(['user_id' => User::factory()->create()->id]);
+    AkubicaUatFixtureManifest::query()->create([
+        'namespace' => 'akubica-uat-batch2-a4-v1',
+        'fixture_version' => 1,
+        'status' => 'active',
+        'expires_at' => now()->addDays(7),
+        'metadata' => ['ids' => ['customers' => ['primary' => $primary->id, 'foreign' => $foreign->id], 'store' => []]],
+    ]);
+
+    $this->artisan('akubica:uat-fixtures-r04r05', [
+        '--apply' => true,
+        '--namespace' => 'akubica-uat-batch2-a4-v1',
+        '--confirm' => 'akubica-uat-batch2-a4-v1',
+    ])->assertSuccessful();
+    $this->artisan('akubica:uat-fixtures-r04r05', [
+        '--apply' => true,
+        '--namespace' => 'akubica-uat-batch2-a4-v1',
+        '--confirm' => 'akubica-uat-batch2-a4-v1',
+    ])->assertSuccessful();
+
+    expect(FamilyAccount::query()->where('name', Cmd::FAMILY_NAME.' akubica-uat-batch2-a4-v1')->count())->toBe(2)
+        ->and(LaboratoryAppointment::query()->where('notes', 'akubica-uat-batch2-a4-v1:rc2-r04r05')->count())->toBe(2);
+
+    $this->artisan('akubica:uat-fixtures-r04r05', [
+        '--reset' => true,
+        '--namespace' => 'akubica-uat-batch2-a4-v1',
+        '--confirm' => 'akubica-uat-batch2-a4-v1',
+    ])->assertSuccessful();
+
+    expect(FamilyAccount::query()->where('name', Cmd::FAMILY_NAME.' akubica-uat-batch2-a4-v1')->count())->toBe(0);
 });

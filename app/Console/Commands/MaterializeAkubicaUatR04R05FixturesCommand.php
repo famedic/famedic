@@ -42,6 +42,7 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
                             {--apply : Crea familiares y citas sintéticos (idempotente)}
                             {--reset : Elimina solo registros con marcador RC2}
                             {--confirm= : Debe ser exactamente akubica-uat-v1 para apply/reset}
+                            {--namespace= : Namespace dedicado permitido; por defecto akubica-uat-v1}
                             {--check-unknown-phone : Verifica (lectura) que QA_UNKNOWN_PHONE no exista; lee el número del entorno}';
 
     protected $description = 'Fixtures sintéticos RC2 R04/R05 sobre el manifiesto akubica-uat-v1 (QA únicamente).';
@@ -58,11 +59,15 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
         if ($apply && $reset) {
             return $this->out('error', ['error_code' => 'UAT_INVALID_OPTION_COMBINATION']);
         }
-        if (($apply || $reset) && (string) $this->option('confirm') !== AkubicaUatFixtureContract::NAMESPACE) {
+        $namespace = (string) ($this->option('namespace') ?: AkubicaUatFixtureContract::NAMESPACE);
+        if (! AkubicaUatFixtureContract::isAllowedNamespace($namespace)) {
+            return $this->out('error', ['error_code' => 'UAT_NAMESPACE_NOT_ALLOWED']);
+        }
+        if (($apply || $reset) && (string) $this->option('confirm') !== $namespace) {
             return $this->out('error', ['error_code' => 'UAT_CONFIRMATION_MISMATCH']);
         }
 
-        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', AkubicaUatFixtureContract::NAMESPACE)->first();
+        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->first();
         if (! $manifest || $manifest->status !== AkubicaUatFixtureContract::STATUS_ACTIVE) {
             return $this->out('error', ['error_code' => 'UAT_FIXTURES_NOT_ACTIVE']);
         }
@@ -76,7 +81,9 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
             return $this->out('error', ['error_code' => 'UAT_FIXTURE_CUSTOMERS_MISSING']);
         }
 
-        $pre = $this->snapshot($customers);
+        $marker = $this->marker($namespace);
+        $familyName = $this->familyName($namespace);
+        $pre = $this->snapshot($customers, $familyName, $marker);
         $unknown = $this->option('check-unknown-phone') ? $this->unknownPhoneCheck() : null;
 
         if (! $apply && ! $reset) {
@@ -93,11 +100,11 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
         }
 
         $changes = [];
-        DB::transaction(function () use ($apply, $customers, $storeId, &$changes): void {
+        DB::transaction(function () use ($apply, $customers, $storeId, $marker, $familyName, &$changes): void {
             foreach ($customers as $role => $customerId) {
                 if ($apply) {
                     $family = FamilyAccount::query()->withTrashed()->firstOrCreate(
-                        ['customer_id' => $customerId, 'name' => self::FAMILY_NAME, 'paternal_lastname' => self::FAMILY_LASTNAME, 'maternal_lastname' => self::FAMILY_LASTNAME_2],
+                        ['customer_id' => $customerId, 'name' => $familyName, 'paternal_lastname' => self::FAMILY_LASTNAME, 'maternal_lastname' => self::FAMILY_LASTNAME_2],
                         ['kinship' => Kinship::CHILD, 'birth_date' => '2015-01-01'],
                     );
                     if ($family->trashed()) {
@@ -106,7 +113,7 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
                     $changes[] = ['role' => $role, 'table' => 'family_accounts', 'id' => $family->id, 'op' => $family->wasRecentlyCreated ? 'created' : 'kept'];
 
                     $appointment = LaboratoryAppointment::query()->withTrashed()->firstOrCreate(
-                        ['customer_id' => $customerId, 'notes' => self::MARKER],
+                        ['customer_id' => $customerId, 'notes' => $marker],
                         [
                             'brand' => LaboratoryBrand::OLAB->value,
                             'laboratory_store_id' => $storeId,
@@ -123,8 +130,8 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
                     $changes[] = ['role' => $role, 'table' => 'laboratory_appointments', 'id' => $appointment->id, 'op' => $appointment->wasRecentlyCreated ? 'created' : 'kept'];
                 } else {
                     $f = FamilyAccount::query()->withTrashed()->where('customer_id', $customerId)
-                        ->where('name', self::FAMILY_NAME)->where('maternal_lastname', self::FAMILY_LASTNAME_2);
-                    $a = LaboratoryAppointment::query()->withTrashed()->where('customer_id', $customerId)->where('notes', self::MARKER);
+                        ->where('name', $familyName)->where('maternal_lastname', self::FAMILY_LASTNAME_2);
+                    $a = LaboratoryAppointment::query()->withTrashed()->where('customer_id', $customerId)->where('notes', $marker);
                     $changes[] = ['role' => $role, 'table' => 'family_accounts', 'ids' => $f->pluck('id')->all(), 'op' => 'deleted'];
                     $changes[] = ['role' => $role, 'table' => 'laboratory_appointments', 'ids' => $a->pluck('id')->all(), 'op' => 'deleted'];
                     $f->forceDelete();
@@ -133,27 +140,39 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
             }
         });
 
-        $post = $this->snapshot($customers);
+        $post = $this->snapshot($customers, $familyName, $marker);
         Log::info('akubica_uat_r04r05_fixtures', ['action' => $apply ? 'apply' : 'reset', 'changes' => $changes]);
 
         return $this->out('ok', ['action' => $apply ? 'apply' : 'reset', 'pre' => $pre, 'changes' => $changes, 'post' => $post, 'unknown_phone' => $unknown]);
     }
 
     /** @param array<string,int> $customers */
-    private function snapshot(array $customers): array
+    private function snapshot(array $customers, string $familyName, string $marker): array
     {
         $out = [];
         foreach ($customers as $role => $customerId) {
             $out[$role] = [
                 'customer_id' => (int) $customerId,
                 'family_total' => FamilyAccount::query()->where('customer_id', $customerId)->count(),
-                'family_marked' => FamilyAccount::query()->where('customer_id', $customerId)->where('name', self::FAMILY_NAME)->where('maternal_lastname', self::FAMILY_LASTNAME_2)->count(),
+                'family_marked' => FamilyAccount::query()->where('customer_id', $customerId)->where('name', $familyName)->where('maternal_lastname', self::FAMILY_LASTNAME_2)->count(),
                 'appointments_total' => LaboratoryAppointment::query()->where('customer_id', $customerId)->count(),
-                'appointments_marked' => LaboratoryAppointment::query()->where('customer_id', $customerId)->where('notes', self::MARKER)->count(),
+                'appointments_marked' => LaboratoryAppointment::query()->where('customer_id', $customerId)->where('notes', $marker)->count(),
             ];
         }
 
         return $out;
+    }
+
+    private function marker(string $namespace): string
+    {
+        return $namespace.':rc2-r04r05';
+    }
+
+    private function familyName(string $namespace): string
+    {
+        return $namespace === AkubicaUatFixtureContract::NAMESPACE
+            ? self::FAMILY_NAME
+            : self::FAMILY_NAME.' '.$namespace;
     }
 
     /** Solo lectura; nunca imprime el número. */
