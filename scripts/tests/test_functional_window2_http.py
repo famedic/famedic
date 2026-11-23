@@ -7,7 +7,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from scripts.functional_window2_http import RunnerError, validate_mode
+from scripts.functional_window2_http import RunnerError, run, validate_mode
 from scripts.functional_window2_preconditions import validate
 
 
@@ -24,7 +24,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self.calls.append(("GET", self.path))
-        if self.path == "/fail":
+        if self.path == "/assert":
+            payload = b'{"data":{"status":"ok"},"secret":"synthetic-secret"}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if self.path == "/interrupt":
+            import time
+            time.sleep(2)
+            self.send_response(200)
+        elif self.path == "/fail":
             self.send_response(503)
         elif self.path == "/slow":
             import time
@@ -53,13 +65,16 @@ class HttpRunnerTests(unittest.TestCase):
         self.thread.join(timeout=2)
         self.server.server_close()
 
-    def run_plan(self, plan, timeout=1):
+    def run_plan(self, plan, timeout=1, provider=None):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             plan_path = root / "plan.json"
             out = root / "out.json"
             plan_path.write_text(json.dumps(plan), encoding="utf-8")
-            proc = subprocess.run([sys.executable, str(RUNNER), str(plan_path), "--base-url", self.base, "--output", str(out), "--timeout", str(timeout)], capture_output=True, text=True)
+            command = [sys.executable, str(RUNNER), str(plan_path), "--base-url", self.base, "--output", str(out), "--timeout", str(timeout)]
+            if provider:
+                command.extend(["--credential-command", str(provider)])
+            proc = subprocess.run(command, capture_output=True, text=True)
             return proc, json.loads(out.read_text(encoding="utf-8"))
 
     def test_exact_order_and_cleanup(self):
@@ -130,6 +145,65 @@ class HttpRunnerTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
         self.assertNotIn("Authorization", json.dumps(report))
         self.assertNotIn("Bearer", json.dumps(report))
+
+    def test_custody_injects_headers_and_assertions_without_projecting_secret(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            provider = root / "provider.py"
+            provider.write_text(
+                "import json,sys; x=json.load(sys.stdin); "
+                "assert x['aliases']==['bearer_leo','machine_leo']; "
+                "sys.stderr.write('synthetic-stderr-secret'); "
+                "print(json.dumps({'revoked':x['aliases']} if x['action']=='revoke' else {'bearer_leo':'synthetic-bearer','machine_leo':'synthetic-machine'}))\n",
+                encoding="utf-8",
+            )
+            proc, report = self.run_plan({
+                "selection": {"authorized_ids": ["B09"], "expected_request_count": 1},
+                "requests": [{
+                    "id": "B09", "method": "GET", "path": "/assert", "expected_status": 200,
+                    "auth": {"bearer_alias": "bearer_leo", "machine_alias": "machine_leo"},
+                    "assertions": {"equals": {"data.status": "ok"}, "forbidden_paths": ["data.missing"]},
+                }],
+                "cleanup": [],
+            }, provider=f"{sys.executable} {provider}")
+            self.assertEqual(proc.returncode, 0)
+            self.assertTrue(report["requests"][0]["ok"])
+            serialized = json.dumps(report)
+            self.assertNotIn("synthetic-bearer", serialized)
+            self.assertNotIn("synthetic-machine", serialized)
+            self.assertNotIn("synthetic-secret", serialized)
+            self.assertNotIn("synthetic-stderr-secret", proc.stderr)
+
+    def test_assertion_failure_is_not_pass(self):
+        proc, report = self.run_plan({
+            "requests": [{"id": "B09", "method": "GET", "path": "/assert", "expected_status": 200, "assertions": {"equals": {"data.status": "wrong"}}}],
+            "cleanup": [],
+        })
+        self.assertEqual(proc.returncode, 1)
+        self.assertFalse(report["requests"][0]["ok"])
+        self.assertEqual(report["requests"][0]["assertion_error"], "ASSERTION_VALUE_MISMATCH")
+
+    def test_interrupt_keeps_failure_and_runs_cleanup(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            plan = root / "plan.json"
+            out = root / "out.json"
+            plan.write_text(json.dumps({
+                "requests": [{"id": "B07", "method": "GET", "path": "/interrupt", "expected_status": 200}],
+                "cleanup": [{"id": "cleanup", "method": "POST", "path": "/cleanup", "expected_status": 204}],
+            }), encoding="utf-8")
+            import signal
+            previous = signal.signal(signal.SIGALRM, lambda _signum, _frame: (_ for _ in ()).throw(KeyboardInterrupt()))
+            signal.setitimer(signal.ITIMER_REAL, 0.03)
+            try:
+                exit_code = run(plan, self.base, out)
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                signal.signal(signal.SIGALRM, previous)
+            report = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(exit_code, 130)
+            self.assertTrue(report["interrupted"])
+            self.assertEqual(report["cleanup_status"], "PASS")
 
     def test_synthetic_blocked_preconditions_are_namespace_isolated_and_literal(self):
         result = validate(ROOT / "docs" / "Akubica" / "v1.3.0" / "functional-window-2-preconditions.synthetic.json")

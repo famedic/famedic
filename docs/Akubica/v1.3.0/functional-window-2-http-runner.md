@@ -53,3 +53,67 @@ La suite usa un `ThreadingHTTPServer` sintético y comprueba:
 
 La preparación sintética de los bloqueos se describe en `functional-window-2-preconditions.synthetic.json` y se valida offline con `functional_window2_preconditions.py`. Representa relaciones y capacidades literales para `membership_regular`, `leo_none`, el binding Leo sin `cart:laboratory:write`, pedidos propios/ajenos y familiares. No crea credenciales ni pretende demostrar preparación QA. Para QA aún se requiere que el aprovisionador exponga esas variantes, conserve ownership y permita reset/revocación verificables.
 
+## Adaptador de custodia local
+
+El runner admite `--credential-command <programa>`. El programa no recibe secretos
+por argumentos: recibe por stdin JSON con los aliases solicitados y devuelve por
+stdout únicamente un objeto JSON alias→secreto. El runner captura stdout/stderr,
+usa los valores sólo en memoria para construir `Authorization: Bearer` y
+`X-Api-Consumer-Credential`, y nunca copia secretos al reporte, logs, archivos
+temporales o mensajes de error. El helper debe ser un mecanismo seguro existente;
+un script de prueba sintético no acredita custodia QA. Al finalizar el bloque
+HTTP, el runner llama al mismo helper con `{"action":"revoke","aliases":[...]}`
+y exige una confirmación sanitizada de aliases revocados; si falla, el resultado
+es `CLEANUP_FAILED` y código no exitoso.
+
+Cada request puede declarar `auth.bearer_alias`, `auth.machine_alias` y
+`assertions` (`required_paths`, `forbidden_paths`, `equals`). El status HTTP y las
+assertions deben pasar; un status esperado con envelope incorrecto es FAIL.
+La selección puede declarar `selection.authorized_ids` y
+`selection.expected_request_count`; se rechazan IDs no autorizados, duplicados o
+un conteo distinto.
+
+Ejemplo sin valores secretos:
+
+```text
+python3 scripts/functional_window2_http.py plan.qa.json \
+  --mode qa --base-url https://famedic-otp.on-forge.com \
+  --output evidence/functional-window-2.sanitized.json \
+  --credential-command /ruta/al/helper-de-custodia
+```
+
+El helper implementado sobre la custodia Laravel es el comando privado
+`php artisan functional-window2:custody --no-ansi`. Se ejecuta en la máquina
+que contiene el release Laravel, APP_KEY y la conexión de la BD; su
+autenticación es el control de acceso del proceso/SSH y la lectura de la
+custodia local de Laravel, no una ruta HTTP. Recibe sólo JSON por stdin y
+responde JSON por stdout; no acepta aliases por argumentos, rechaza stdout
+interactivo y sólo permite los cuatro aliases de este escenario:
+`machine_native`, `machine_leo`, `native_membership_regular` y
+`leo_membership_none`.
+
+Antes de leer o revocar exige namespace y escenario exactos, estado vigente,
+referencias de PAT existentes y material cifrado íntegro. `read` descifra sólo
+en memoria. `revoke` elimina todos los PAT referenciados por el estado dedicado y consulta nuevamente la BD;
+devuelve éxito únicamente si cada ID dejó de existir. No elimina consumers,
+delegaciones ni bindings y no crea un endpoint público. Errores de framework,
+SQL, ciphertext y secretos se proyectan sólo como códigos sanitizados.
+
+El plan completo y ejecutable está en
+`functional-window-2-qa-plan.json`: 22 requests físicos, dos requests de
+cleanup, aliases, assertions, dependencias y efectos. `B01`, `B01r`, `B02`,
+`B04` y `B05` están fuera de `selection.authorized_ids` y son rechazados si se
+intenta incluirlos. R01/R01b son requests individuales; R07a/R07a2/R07b son
+los tres físicos del agrupador R07. Los IDs numéricos del plan son IDs
+deterministas del namespace dedicado de esta ventana, no recursos legacy.
+Los IDs `910006` y `910020` son exclusivamente del doble local. El runner
+rechaza este plan en modo QA hasta que una interfaz de inventario sustituya
+cada DELETE por el ID activo de la ventana, confirme namespace y ownership
+inmediatamente antes de borrar, y rechace cualquier ID ajeno.
+
+Instalación/publicación: el comando PHP y `bootstrap/app.php` deben estar en
+el release Laravel que ejecute el aprovisionador; el plan JSON, el runner
+Python y su custodia ejecutan en el host controlado del runner. No se copia
+`access-state.json`, PAT ni ciphertext al runner. Esta iteración sólo valida
+localmente; todavía no publica ni instala nada en QA.
+
