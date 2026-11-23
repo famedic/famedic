@@ -14,7 +14,7 @@ use Laravel\Sanctum\PersonalAccessToken;
  */
 final class FunctionalWindow2CustodyCommand extends Command
 {
-    protected $signature = 'functional-window2:custody';
+    protected $signature = 'functional-window2:custody {--private : Permit the caller to receive bearer material over the captured pipe}';
     protected $description = 'Read or revoke dedicated functional-window-2 bearer material';
 
     private const NAMESPACE = AkubicaUatFixtureContract::DEDICATED_NAMESPACE;
@@ -78,6 +78,8 @@ final class FunctionalWindow2CustodyCommand extends Command
     /** @param list<string> $aliases */
     private function readSecrets(array $state, array $aliases): int
     {
+        if (! $this->option('private')) return $this->failSafe('CREDENTIAL_READ_REQUIRES_PRIVATE_CHANNEL');
+
         $result = [];
         foreach ($aliases as $alias) {
             $encrypted = $this->encryptedSecret($state, $alias);

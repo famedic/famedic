@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PLAN = ROOT / "docs/Akubica/v1.3.0/functional-window-2-qa-plan.json"
+PLAN = Path(os.environ.get("FW2_PLAN", ROOT / "docs/Akubica/v1.3.0/functional-window-2-qa-plan.json"))
 RUNNER = ROOT / "scripts/functional_window2_http.py"
 PREPARE = ROOT / "scripts/local_window2_positive_check.php"
 
@@ -92,9 +92,12 @@ def main() -> int:
         sys.modules["functional_window2_http"] = module
         spec.loader.exec_module(module)
         values = {"machine_native": "synthetic-machine-native", "machine_leo": "synthetic-machine-leo", "native_membership_regular": "synthetic-native-bearer", "leo_membership_none": "synthetic-leo-bearer"}
-        exit_code = module.run(PLAN, f"http://127.0.0.1:{server.server_port}", output, mode="local", credential_values=values)
+        credential_command = os.environ.get("FW2_CREDENTIAL_COMMAND")
+        inventory_command = os.environ.get("FW2_INVENTORY_COMMAND")
+        exit_code = module.run(PLAN, f"http://127.0.0.1:{server.server_port}", output, mode="local", credential_command=credential_command, credential_values=None if credential_command else values, inventory_command=inventory_command)
         if exit_code != 0:
-            print("runner failed: code=" + str(exit_code), file=sys.stderr)
+            diagnostic = json.loads(output.read_text()) if output.exists() else {}
+            print(json.dumps({"runner_failed": exit_code, "cleanup_status": diagnostic.get("cleanup_status"), "request_count": len(diagnostic.get("requests", [])), "cleanup_count": len(diagnostic.get("cleanup", [])), "errors": [item.get("error") for item in diagnostic.get("requests", []) + diagnostic.get("cleanup", []) if item.get("error")]}, sort_keys=True), file=sys.stderr)
             return 1
         report = json.loads(output.read_text())
         expected = [(item["method"], item["path"].split("?", 1)[0]) for item in json.loads(PLAN.read_text())["requests"]]
