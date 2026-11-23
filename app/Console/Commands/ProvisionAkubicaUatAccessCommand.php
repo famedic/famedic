@@ -26,7 +26,7 @@ final class ProvisionAkubicaUatAccessCommand extends Command
         if ($this->option('apply') && $this->option('reset') || ! $this->option('dry-run') && ! $this->option('apply') && ! $this->option('reset')) return $this->failCode('UAT_MODE_REQUIRED');
         if (($this->option('apply') || $this->option('reset')) && (string) $this->option('confirm') !== $namespace) return $this->failCode('UAT_CONFIRMATION_MISMATCH');
         try {
-            $operatorId = (int) env('AKUBICA_UAT_OPERATOR_ID', 0);
+            $operatorId = (int) config('akubica_uat.operator_id', 0);
             $operator = $operatorId > 0 ? User::query()->find($operatorId) : null;
             if ($this->option('dry-run')) return $this->json(['status' => 'ok', 'action' => 'dry-run'] + $provisioner->dryRun($namespace, $operator));
             if ($operator === null) return $this->failCode('UAT_OPERATOR_NOT_CONFIGURED');

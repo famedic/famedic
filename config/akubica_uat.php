@@ -6,6 +6,8 @@ return [
     'namespace' => AkubicaUatFixtureContract::NAMESPACE,
     'fixture_version' => AkubicaUatFixtureContract::FIXTURE_VERSION,
     'allowed_environments' => ['testing', 'staging'],
+    'operator_id' => (int) env('AKUBICA_UAT_OPERATOR_ID', 0),
+    'access_ttl_minutes' => (int) env('AKUBICA_UAT_ACCESS_TTL_MINUTES', 30),
     'ttl_days' => 14,
     'audit_retention_days' => 30,
     'storage' => [

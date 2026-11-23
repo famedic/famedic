@@ -231,6 +231,6 @@ final class AkubicaUatAccessProvisioner
     }
 
     private function statePath(string $namespace): string { return AkubicaUatFixtureContract::storagePath('access-state.json', $namespace); }
-    private function ttlMinutes(): int { return max(1, min(45, (int) env('AKUBICA_UAT_ACCESS_TTL_MINUTES', 30))); }
+    private function ttlMinutes(): int { return max(1, min(45, (int) config('akubica_uat.access_ttl_minutes', 30))); }
     private function assertNamespace(string $namespace): void { if ($namespace !== AkubicaUatFixtureContract::DEDICATED_NAMESPACE) throw new \DomainException('UAT_ACCESS_NAMESPACE_NOT_ALLOWED'); }
 }
