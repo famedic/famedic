@@ -5,6 +5,9 @@ return [
         'administrators' => [
             ['manage' => 'Administrar administradores, roles y permisos'],
         ],
+        'api-consumers' => [
+            ['manage' => 'Administrar consumidores API'],
+        ],
         'customers' => [
             ['manage' => 'Administrar clientes'],
             ['manage.export' => 'Descargar clientes'],
