@@ -106,6 +106,10 @@ cleanup, aliases, assertions, dependencias y efectos. `B01`, `B01r`, `B02`,
 intenta incluirlos. R01/R01b son requests individuales; R07a/R07a2/R07b son
 los tres físicos del agrupador R07. Los IDs numéricos del plan son IDs
 deterministas del namespace dedicado de esta ventana, no recursos legacy.
+Los IDs `910006` y `910020` son exclusivamente del doble local. El runner
+rechaza este plan en modo QA hasta que una interfaz de inventario sustituya
+cada DELETE por el ID activo de la ventana, confirme namespace y ownership
+inmediatamente antes de borrar, y rechace cualquier ID ajeno.
 
 Instalación/publicación: el comando PHP y `bootstrap/app.php` deben estar en
 el release Laravel que ejecute el aprovisionador; el plan JSON, el runner

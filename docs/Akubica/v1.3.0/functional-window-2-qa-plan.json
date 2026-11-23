@@ -1,6 +1,8 @@
 {
   "schema": "it0061-functional-window-2-qa-plan.v1",
   "namespace": "akubica-uat-batch2-a4-v1",
+  "id_source": "local-synthetic-only",
+  "qa_cleanup_policy": "Do not use local IDs 910006 or 910020 in QA. Generate each DELETE from the active-window inventory, verify namespace ownership and current cart-item ownership immediately before deletion, and reject an ID not owned by this window.",
   "base_sha": "e2ff4365cda5df6cbef605e97414d1f071ddf9a5",
   "qa_guards": {"target_env":"staging","expected_release_sha":"e2ff4365cda5df6cbef605e97414d1f071ddf9a5","qa_writes_authorized":"1","leo_negative_writes_authorized":"1","https_verified":true},
   "selection": {

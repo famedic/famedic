@@ -305,6 +305,8 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
     data = json.loads(plan.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise RunnerError("PLAN_INVALID")
+    if mode == "qa" and data.get("id_source") == "local-synthetic-only":
+        raise RunnerError("QA_PLAN_REQUIRES_RUNTIME_INVENTORY")
     requests, cleanup = load_plan(plan)
     metadata = data.get("qa_guards", {}) if isinstance(data.get("qa_guards", {}), dict) else {}
     tls_context = validate_mode(mode, base_url, metadata)
