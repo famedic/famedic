@@ -8,6 +8,26 @@
     "R01", "R04", "R06", "R07"
   ],
   "request_count": 27,
+  "qa_selection": {
+    "executable_request_count": 22,
+    "blocked_request_count": 5,
+    "executable_logical_ids": ["B03", "B03r", "B06a", "B06b", "B06r", "B07", "B09", "B14", "B19", "B20", "B21", "B21r", "B21x", "B22", "B25", "R01", "R04", "R06", "R07"],
+    "executable_physical_requests": ["B03", "B03r", "B06a", "B06b", "B06r", "B07", "B09", "B14", "B19", "B20", "B21", "B21r", "B21x", "B22", "B25", "R01", "R01b", "R04", "R06", "R07a", "R07a2", "R07b"],
+    "blocked_logical_ids": ["B01", "B01r", "B02", "B04", "B05"],
+    "blocked_reasons": {
+      "B01": "No supported QA fixture/materializer interface identified for the dedicated catalog_available variant.",
+      "B01r": "Depends on B01 and the same unsupported dedicated QA catalog fixture.",
+      "B02": "No supported QA fixture/materializer interface identified for the dedicated catalog_available package variant.",
+      "B04": "Only local factory coverage exists; no supported QA preparation interface.",
+      "B05": "Only local factory coverage exists; no supported QA preparation interface."
+    }
+  },
+  "qa_interfaces": {
+    "price_fixtures": "php artisan akubica:rc2-price-fixtures --dry-run|--apply|--mutate|--cleanup --confirm=rc2-price-fixtures",
+    "uat_fixtures": "php artisan akubica:uat-fixtures --dry-run|--apply|--reset --namespace=akubica-uat-batch2-a4-v1 --confirm=akubica-uat-batch2-a4-v1",
+    "uat_access": "php artisan akubica:uat-access --dry-run|--apply|--reset --namespace=akubica-uat-batch2-a4-v1 --confirm=akubica-uat-batch2-a4-v1",
+    "writes": "Only marked RC2 price rows/cart lines or dedicated UAT namespace resources; no global seeders and no adoption of legacy resources."
+  },
   "selector_semantics": {
     "ordinary_id": "The logical ID names one executable request.",
     "R01": "Executable primary request plus grouped physical variant R01b; selecting R01 selects both.",
