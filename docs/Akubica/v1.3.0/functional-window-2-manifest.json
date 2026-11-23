@@ -1,0 +1,41 @@
+{
+  "schema": "it0061-functional-window-2-manifest.v1",
+  "selection_rule": "exact logical scenario IDs only; folder selection and unlisted requests are rejected",
+  "logical_ids": [
+    "B01", "B01r", "B02", "B03", "B03r", "B04", "B05", "B06a", "B06b", "B06r",
+    "B07", "B09", "B14", "B19", "B20", "B21", "B21r", "B21x", "B22", "B25",
+    "R01", "R04", "R06", "R07"
+  ],
+  "request_count": 26,
+  "requests": [
+    {"id": "B01", "name": "B01 Catálogo estudio con ahorro", "variant": "catalog_available", "depends_on": ["catalog_available"]},
+    {"id": "B01r", "name": "B01r Readback listado contiene el estudio con mismo precio", "variant": "catalog_available", "depends_on": ["B01"]},
+    {"id": "B02", "name": "B02 Paquete listado: nombre, marca, item_type, precio público, precio FAMEDIC y ahorro", "variant": "catalog_available", "depends_on": ["catalog_available"]},
+    {"id": "B03", "name": "B03 Catálogo public_price_unavailable", "variant": "catalog_no_public", "depends_on": ["catalog_no_public"]},
+    {"id": "B03r", "name": "B03r Readback listado: mismo estudio con public_price_unavailable", "variant": "catalog_no_public", "depends_on": ["B03"]},
+    {"id": "B04", "name": "B04 Catálogo no_savings", "variant": "catalog_no_savings", "depends_on": ["catalog_no_savings"]},
+    {"id": "B05", "name": "B05 Catálogo data_inconsistent", "variant": "catalog_inconsistent", "depends_on": ["catalog_inconsistent"]},
+    {"id": "B06a", "name": "B06a Precio actual (antes de agregar)", "variant": "cart_mutable_window2", "depends_on": ["cart_mutable_window2"]},
+    {"id": "B06b", "name": "B06b Agregar estudio mutable (perfil nativo)", "variant": "cart_mutable_window2", "depends_on": ["B06a"]},
+    {"id": "B06r", "name": "B06r Readback carrito usa precio vigente del servidor", "variant": "cart_mutable_window2", "depends_on": ["B06b"]},
+    {"id": "B07", "name": "B07 Planes: solo basic_annual adquirible", "variant": "membership_catalog", "depends_on": ["membership catalog"]},
+    {"id": "B09", "name": "B09 Estado de membresía (bearer_active)", "variant": "native_membership_active", "depends_on": ["access: native consumer, delegated binding, bearer_active"]},
+    {"id": "B14", "name": "B14 Rechazo con membresía individual activa", "variant": "native_membership_active", "depends_on": ["B09"]},
+    {"id": "B19", "name": "B19 Nativo: alta de membresía", "variant": "native_membership_write", "depends_on": ["native membership write capability"]},
+    {"id": "B20", "name": "B20 Nativo: alta de estudio de laboratorio", "variant": "native_lab_write", "depends_on": ["native laboratory write capability"]},
+    {"id": "B21", "name": "B21 Nativo: retiro del estudio con discriminador", "variant": "native_lab_write", "depends_on": ["B20"]},
+    {"id": "B21r", "name": "B21r Readback carrito médico intacto", "variant": "native_lab_write", "depends_on": ["B21"]},
+    {"id": "B21x", "name": "B21x Leo sin cart:laboratory:write para la marca: 403", "variant": "leo_negative_lab_write", "depends_on": ["leo binding without laboratory write"]},
+    {"id": "B22", "name": "B22 Farmacia suspendida", "variant": "pharmacy_suspended", "depends_on": ["feature disabled contract"]},
+    {"id": "B25", "name": "B25 NEGATIVA DE SEGURIDAD: Leo no puede generar liga de pago (403)", "variant": "leo_payment_forbidden", "depends_on": ["Leo payment-link prohibition"]},
+    {"id": "R01", "name": "R01 Pedidos propios (Leo, contrato B1-T7): datos mínimos sin pedido ajeno", "variant": "leo_ownership", "depends_on": ["Leo delegated ownership"]},
+    {"id": "R01", "name": "R01b Estado de pedido ajeno", "variant": "leo_ownership_negative", "depends_on": ["R01"]},
+    {"id": "R04", "name": "R04 Familiares propios (Leo, contrato B1-T7): id opaco, nombre, parentesco y principal", "variant": "leo_ownership", "depends_on": ["Leo delegated ownership"]},
+    {"id": "R06", "name": "R06 Observabilidad: correlation id", "variant": "correlation", "depends_on": ["authorized request"]},
+    {"id": "R07", "name": "R07a Error de validación tipado", "variant": "typed_validation", "depends_on": ["HTTP/envelope validation"]},
+    {"id": "R07", "name": "R07a2 Leo sin item_type: rechazo tipado por autorización", "variant": "typed_authorization", "depends_on": ["Leo restricted binding"]},
+    {"id": "R07", "name": "R07b Sin Bearer → 401 tipado", "variant": "unauthenticated", "depends_on": ["no bearer"]}
+  ],
+  "rejected_requests": ["R02b", "R03b", "any request not listed above"],
+  "external_effects": "No OTP, SMS, email, payment, ATIX, GDA or provider calls are permitted in this local preparation."
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "it0061-functional-window-2-fixtures.v1",
+  "base_sha": "e2ff4365cda5df6cbef605e97414d1f071ddf9a5",
+  "namespace": "akubica-uat-batch2-a4-v1",
+  "mode": "local-plan-only",
+  "variants": {
+    "available": {"alias": "catalog_available", "scenario_ids": ["B01", "B01r"], "brand": "olab", "required": "detail and filtered list contain the same dedicated study and price"},
+    "no_public": {"alias": "catalog_no_public", "scenario_ids": ["B03", "B03r"], "brand": "olab", "required": "public_price_cents null or zero; savings fields null; detail/list parity"},
+    "no_savings": {"alias": "catalog_no_savings", "scenario_ids": ["B04"], "brand": "olab", "required": "comparison_status no_savings; savings_cents zero"},
+    "inconsistent": {"alias": "catalog_inconsistent", "scenario_ids": ["B05"], "brand": "olab", "required": "comparison_status data_inconsistent; savings_cents null"},
+    "mutable": {"alias": "cart_mutable_window2", "scenario_ids": ["B06a", "B06b", "B06r"], "brand": "olab", "required": "dedicated integer study ID absent from the initial laboratory cart and verified before POST"}
+  },
+  "invariants": [
+    "IDs are generated deterministically from namespace and alias by the existing materializer; no occupied ID may be adopted.",
+    "detail and filtered-list queries use the same dedicated ID and explicit search/pagination parameters.",
+    "repetition is idempotent and reset is limited to this namespace.",
+    "akubica-uat-v1 is read-only for this plan.",
+    "no SMS, email, OTP, payment, ATIX or R08 integration is enabled."
+  ],
+  "apply": "not authorized in this preparation step"
+}
