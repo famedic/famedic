@@ -5,11 +5,15 @@ pero no contiene un inventory helper equivalente. El helper nuevo es un
 componente del host del runner, no una ruta HTTP ni un comando que maneje
 credenciales.
 
-En local sintético usa SQLite y deriva el SHA con `git rev-parse`. Para QA,
-la implementación equivalente debe ejecutarse en el host controlado que tenga
-acceso de sólo lectura a la BD y al release activo; debe obtener el SHA desde
-`current`/metadatos del release y consultar el inventario dedicado. Debe
-rechazar namespace, ownership, propósito o SHA distintos.
+En local sintético, el helper Python/SQLite y `git rev-parse` sólo sirven para
+probar el runner. Para QA, el adaptador real es
+`functional-window2:inventory`, ejecutado junto al release Laravel y su MySQL;
+obtiene el SHA desde `current`/metadatos del release y consulta el manifest,
+customer, línea de laboratorio y marca del recurso. Debe rechazar namespace,
+ownership, tipo, propósito, expiración o SHA distintos.
 
-El helper sólo acepta `action=verify` y devuelve una confirmación sanitizada.
-No crea, actualiza ni elimina filas.
+Acepta por stdin `action=identity` para generar `release-source.json` y
+`action=verify` para autorizar un DELETE. Devuelve sólo JSON sanitizado y no
+crea, actualiza ni elimina filas. El runner debe invocarlo por proceso local en
+el host Laravel o por un puente privado; nunca usa el HEAD del checkout del
+runner como SHA desplegado.
