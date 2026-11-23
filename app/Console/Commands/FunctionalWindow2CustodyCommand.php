@@ -38,7 +38,8 @@ final class FunctionalWindow2CustodyCommand extends Command
             $input = json_decode((string) stream_get_contents(STDIN), true, 32, JSON_THROW_ON_ERROR);
             if (! is_array($input)) return $this->failSafe('REQUEST_INVALID');
 
-            $state = $this->validatedState();
+            $action = $input['action'] ?? null;
+            $state = $this->validatedState($action === 'revoke');
             $aliases = $input['aliases'] ?? null;
             if (! is_array($aliases) || $aliases === [] || count($aliases) !== count(array_unique($aliases))) {
                 return $this->failSafe('ALIASES_INVALID');
@@ -61,7 +62,7 @@ final class FunctionalWindow2CustodyCommand extends Command
     }
 
     /** @return array<string, mixed> */
-    private function validatedState(): array
+    private function validatedState(bool $allowAlreadyRevokedTokens = false): array
     {
         $path = AkubicaUatFixtureContract::storagePath('access-state.json', self::NAMESPACE);
         if (! Storage::disk('local')->exists($path)) throw new \DomainException('STATE_MISSING');
@@ -70,7 +71,7 @@ final class FunctionalWindow2CustodyCommand extends Command
         if (empty($state['scenario_encrypted_secrets']) || empty($state['scenario_token_ids'])) throw new \DomainException('STATE_SCENARIO_MATERIAL_MISSING');
         if (isset($state['expires_at']) && now()->isAfter($state['expires_at'])) throw new \DomainException('STATE_EXPIRED');
         foreach (array_merge(array_values($state['token_ids'] ?? []), array_values($state['scenario_token_ids'])) as $id) {
-            if (! PersonalAccessToken::query()->whereKey((int) $id)->exists()) throw new \DomainException('STATE_TOKEN_REFERENCE_INVALID');
+            if (! $allowAlreadyRevokedTokens && ! PersonalAccessToken::query()->whereKey((int) $id)->exists()) throw new \DomainException('STATE_TOKEN_REFERENCE_INVALID');
         }
         return $state;
     }

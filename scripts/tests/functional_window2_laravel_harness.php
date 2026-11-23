@@ -6,7 +6,7 @@ use App\Data\Api\V1\Uat\AkubicaUatFixtureContract;
 use App\Models\Administrator;
 use App\Models\Api\V1\AkubicaUatFixtureManifest;
 use App\Models\Permission;
-use App\Models\PersonalAccessToken;
+use Laravel\Sanctum\PersonalAccessToken;
 use App\Models\User;
 use Illuminate\Console\Application as ArtisanApplication;
 use Illuminate\Support\Facades\Artisan;
