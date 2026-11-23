@@ -52,6 +52,8 @@ final class FunctionalWindow2CustodyCommand extends Command
                 'revoke' => $this->revokeSecrets($state, $aliases),
                 default => $this->failSafe('ACTION_INVALID'),
             };
+        } catch (\DomainException $exception) {
+            return $this->failSafe($exception->getMessage());
         } catch (\Throwable) {
             // Never expose framework, SQL, ciphertext or secret-bearing errors.
             return $this->failSafe('CUSTODY_OPERATION_FAILED');
@@ -92,11 +94,13 @@ final class FunctionalWindow2CustodyCommand extends Command
     /** @param list<string> $aliases */
     private function revokeSecrets(array $state, array $aliases): int
     {
-        $ids = [];
-        foreach ($aliases as $alias) {
-            $ids[] = $this->tokenId($state, $alias);
-            PersonalAccessToken::query()->whereKey($ids[array_key_last($ids)])->delete();
-        }
+        // Cleanup is scoped to every PAT recorded by this dedicated state,
+        // not only the four bearer aliases needed by the HTTP plan.
+        $ids = array_values(array_unique(array_merge(
+            array_map('intval', array_values($state['token_ids'] ?? [])),
+            array_map('intval', array_values($state['scenario_token_ids'] ?? [])),
+        )));
+        foreach ($ids as $id) PersonalAccessToken::query()->whereKey($id)->delete();
         foreach ($ids as $id) {
             if (PersonalAccessToken::query()->whereKey($id)->exists()) return $this->failSafe('CREDENTIAL_REVOCATION_UNCONFIRMED');
         }

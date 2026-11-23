@@ -94,7 +94,7 @@ interactivo y sólo permite los cuatro aliases de este escenario:
 
 Antes de leer o revocar exige namespace y escenario exactos, estado vigente,
 referencias de PAT existentes y material cifrado íntegro. `read` descifra sólo
-en memoria. `revoke` elimina los PAT referenciados y consulta nuevamente la BD;
+en memoria. `revoke` elimina todos los PAT referenciados por el estado dedicado y consulta nuevamente la BD;
 devuelve éxito únicamente si cada ID dejó de existir. No elimina consumers,
 delegaciones ni bindings y no crea un endpoint público. Errores de framework,
 SQL, ciphertext y secretos se proyectan sólo como códigos sanitizados.

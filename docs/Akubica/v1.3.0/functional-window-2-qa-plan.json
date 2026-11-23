@@ -2,6 +2,7 @@
   "schema": "it0061-functional-window-2-qa-plan.v1",
   "namespace": "akubica-uat-batch2-a4-v1",
   "base_sha": "e2ff4365cda5df6cbef605e97414d1f071ddf9a5",
+  "qa_guards": {"target_env":"staging","expected_release_sha":"e2ff4365cda5df6cbef605e97414d1f071ddf9a5","qa_writes_authorized":"1","leo_negative_writes_authorized":"1","https_verified":true},
   "selection": {
     "authorized_ids": ["B03", "B03r", "B06a", "B06b", "B06r", "B07", "B09", "B14", "B19", "B20", "B21", "B21r", "B21x", "B22", "B25", "R01", "R04", "R06", "R07a", "R07a2", "R07b", "R01b"],
     "expected_request_count": 22,
