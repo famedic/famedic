@@ -228,9 +228,17 @@ def _project_error(exc: BaseException) -> str:
 def _path_value(value: Any, path: str) -> Any:
     current = value
     for segment in path.split("."):
-        if not isinstance(current, dict) or segment not in current:
+        if isinstance(current, dict):
+            if segment not in current:
+                return None
+            current = current[segment]
+        elif isinstance(current, list) and segment.isdigit():
+            index = int(segment)
+            if index >= len(current):
+                return None
+            current = current[index]
+        else:
             return None
-        current = current[segment]
     return current
 
 

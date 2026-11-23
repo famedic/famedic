@@ -82,9 +82,34 @@ python3 scripts/functional_window2_http.py plan.qa.json \
   --credential-command /ruta/al/helper-de-custodia
 ```
 
-El helper QA debe resolver los secretos desde la custodia aprobada del entorno;
-no se deben copiar `access-state.json`, PAT ni ciphertext al equipo del runner.
-La aplicación no necesita un endpoint nuevo. El release desplegado no incluye
-por sí mismo ese helper ni una colección QA de 22 requests con assertions, por
-lo que esos son prerrequisitos operativos antes de ejecutar QA.
+El helper implementado sobre la custodia Laravel es el comando privado
+`php artisan functional-window2:custody --no-ansi`. Se ejecuta en la máquina
+que contiene el release Laravel, APP_KEY y la conexión de la BD; su
+autenticación es el control de acceso del proceso/SSH y la lectura de la
+custodia local de Laravel, no una ruta HTTP. Recibe sólo JSON por stdin y
+responde JSON por stdout; no acepta aliases por argumentos, rechaza stdout
+interactivo y sólo permite los cuatro aliases de este escenario:
+`machine_native`, `machine_leo`, `native_membership_regular` y
+`leo_membership_none`.
+
+Antes de leer o revocar exige namespace y escenario exactos, estado vigente,
+referencias de PAT existentes y material cifrado íntegro. `read` descifra sólo
+en memoria. `revoke` elimina los PAT referenciados y consulta nuevamente la BD;
+devuelve éxito únicamente si cada ID dejó de existir. No elimina consumers,
+delegaciones ni bindings y no crea un endpoint público. Errores de framework,
+SQL, ciphertext y secretos se proyectan sólo como códigos sanitizados.
+
+El plan completo y ejecutable está en
+`functional-window-2-qa-plan.json`: 22 requests físicos, dos requests de
+cleanup, aliases, assertions, dependencias y efectos. `B01`, `B01r`, `B02`,
+`B04` y `B05` están fuera de `selection.authorized_ids` y son rechazados si se
+intenta incluirlos. R01/R01b son requests individuales; R07a/R07a2/R07b son
+los tres físicos del agrupador R07. Los IDs numéricos del plan son IDs
+deterministas del namespace dedicado de esta ventana, no recursos legacy.
+
+Instalación/publicación: el comando PHP y `bootstrap/app.php` deben estar en
+el release Laravel que ejecute el aprovisionador; el plan JSON, el runner
+Python y su custodia ejecutan en el host controlado del runner. No se copia
+`access-state.json`, PAT ni ciphertext al runner. Esta iteración sólo valida
+localmente; todavía no publica ni instala nada en QA.
 
