@@ -1,12 +1,44 @@
 {
   "schema": "it0061-functional-window-2-manifest.v1",
   "selection_rule": "exact logical scenario IDs only; folder selection and unlisted requests are rejected",
+  "ordering": "The mapping below is logical-ID order; the derived collection preserves the source collection order. Reconciliation compares the exact physical-name set and rejects duplicates.",
   "logical_ids": [
     "B01", "B01r", "B02", "B03", "B03r", "B04", "B05", "B06a", "B06b", "B06r",
     "B07", "B09", "B14", "B19", "B20", "B21", "B21r", "B21x", "B22", "B25",
     "R01", "R04", "R06", "R07"
   ],
-  "request_count": 26,
+  "request_count": 27,
+  "selector_semantics": {
+    "ordinary_id": "The logical ID names one executable request.",
+    "R01": "Executable primary request plus grouped physical variant R01b; selecting R01 selects both.",
+    "R07": "Grouping selector only; there is no physical request named exactly R07. It selects R07a, R07a2 and R07b."
+  },
+  "logical_id_to_physical_requests": {
+    "B01": ["B01 Catálogo estudio con ahorro"],
+    "B01r": ["B01r Readback listado contiene el estudio con mismo precio"],
+    "B02": ["B02 Paquete listado: nombre, marca, item_type, precio público, precio FAMEDIC y ahorro"],
+    "B03": ["B03 Catálogo public_price_unavailable"],
+    "B03r": ["B03r Readback listado: mismo estudio con public_price_unavailable"],
+    "B04": ["B04 Catálogo no_savings"],
+    "B05": ["B05 Catálogo data_inconsistent"],
+    "B06a": ["B06a Precio actual (antes de agregar)"],
+    "B06b": ["B06b Agregar estudio mutable (perfil nativo)"],
+    "B06r": ["B06r Readback carrito usa precio vigente del servidor"],
+    "B07": ["B07 Planes: solo basic_annual adquirible"],
+    "B09": ["B09 Estado de membresía (bearer_active)"],
+    "B14": ["B14 Rechazo con membresía individual activa"],
+    "B19": ["B19 Nativo: alta de membresía"],
+    "B20": ["B20 Nativo: alta de estudio de laboratorio"],
+    "B21": ["B21 Nativo: retiro del estudio con discriminador"],
+    "B21r": ["B21r Readback carrito médico intacto"],
+    "B21x": ["B21x Leo sin cart:laboratory:write para la marca: 403"],
+    "B22": ["B22 Farmacia suspendida"],
+    "B25": ["B25 NEGATIVA DE SEGURIDAD: Leo no puede generar liga de pago (403)"],
+    "R01": ["R01 Pedidos propios (Leo, contrato B1-T7): datos mínimos sin pedido ajeno", "R01b Estado de pedido ajeno"],
+    "R04": ["R04 Familiares propios (Leo, contrato B1-T7): id opaco, nombre, parentesco y principal"],
+    "R06": ["R06 Observabilidad: correlation id"],
+    "R07": ["R07a Error de validación tipado", "R07a2 Leo sin item_type: rechazo tipado por autorización", "R07b Sin Bearer → 401 tipado"]
+  },
   "requests": [
     {"id": "B01", "name": "B01 Catálogo estudio con ahorro", "variant": "catalog_available", "depends_on": ["catalog_available"]},
     {"id": "B01r", "name": "B01r Readback listado contiene el estudio con mismo precio", "variant": "catalog_available", "depends_on": ["B01"]},

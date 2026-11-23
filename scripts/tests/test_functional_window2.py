@@ -16,6 +16,9 @@ COLLECTION = {
         {"name": "Regresión (R01–R08)", "item": [
             {"name": "R02b Nativo: metadatos de resultados", "request": {"method": "GET", "url": "{{base_url}}/orders/1/results"}},
             {"name": "R04 Familiares propios", "request": {"method": "GET", "url": "{{base_url}}/user/family"}},
+            {"name": "R07a Error de validación tipado", "request": {"method": "POST", "url": "{{base_url}}/cart/items"}},
+            {"name": "R07a2 Leo sin item_type", "request": {"method": "POST", "url": "{{base_url}}/cart/items"}},
+            {"name": "R07b Sin Bearer", "request": {"method": "GET", "url": "{{base_url}}/cart/items"}},
         ]},
     ],
 }
@@ -30,6 +33,15 @@ class FunctionalWindow2Tests(unittest.TestCase):
             source.write_text(json.dumps(COLLECTION), encoding="utf-8")
             with self.assertRaises(WindowError):
                 select_collection(source, output, "R02b")
+
+    def test_selection_counts_numeric_variant(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "collection.json"
+            output = root / "selected.json"
+            source.write_text(json.dumps(COLLECTION), encoding="utf-8")
+            result = select_collection(source, output, "R07")
+            self.assertEqual(result["requests_selected"], 3)
 
     def test_selection_does_not_include_full_folder(self):
         with tempfile.TemporaryDirectory() as directory:

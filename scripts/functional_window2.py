@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
-SCENARIO_RE = re.compile(r"^([BR]\d{2}[a-z]?)\b", re.I)
+SCENARIO_RE = re.compile(r"^([BR]\d{2}[a-z]?\d*)\b", re.I)
 AUTHORIZED = frozenset({
     "B01", "B01r", "B02", "B03", "B03r", "B04", "B05", "B06a", "B06b", "B06r",
     "B07", "B09", "B14", "B19", "B20", "B21", "B21r", "B21x", "B22", "B25",
