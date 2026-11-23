@@ -176,9 +176,9 @@ class AkubicaUatFixtureMaterializer
 
         foreach ([
             ['model' => Customer::class, 'metadata' => 'ids.customers', 'column' => 'user_id', 'values' => array_values((array) Arr::get($manifest?->metadata ?? [], 'ids.users', [])), 'code' => 'UAT_COLLISION_CUSTOMER'],
-            ['model' => Contact::class, 'metadata' => 'ids.contacts', 'column' => 'name', 'values' => ['[UAT] Contacto primary', '[UAT] Contacto foreign'], 'code' => 'UAT_COLLISION_CONTACT'],
-            ['model' => Address::class, 'metadata' => 'ids.addresses', 'column' => 'street', 'values' => ['[UAT] Avenida FAMEDIC'], 'code' => 'UAT_COLLISION_ADDRESS'],
-            ['model' => TaxProfile::class, 'metadata' => 'ids.tax_profiles', 'column' => 'razon_social', 'values' => ['[UAT] FAMEDIC AKUBICA primary', '[UAT] FAMEDIC AKUBICA foreign'], 'code' => 'UAT_COLLISION_TAX_PROFILE'],
+            ['model' => Contact::class, 'metadata' => 'ids.contacts', 'column' => 'name', 'values' => array_values($naturalKeys['contact_names']), 'code' => 'UAT_COLLISION_CONTACT'],
+            ['model' => Address::class, 'metadata' => 'ids.addresses', 'column' => 'street', 'values' => [$naturalKeys['address_street']], 'code' => 'UAT_COLLISION_ADDRESS'],
+            ['model' => TaxProfile::class, 'metadata' => 'ids.tax_profiles', 'column' => 'razon_social', 'values' => array_values($naturalKeys['tax_profile_razon_socials']), 'code' => 'UAT_COLLISION_TAX_PROFILE'],
             ['model' => LaboratoryPurchase::class, 'metadata' => 'ids.purchases', 'column' => 'gda_order_id', 'values' => [
                 strtoupper($plan->namespace).'-RESULT-READY',
                 strtoupper($plan->namespace).'-RESULT-PENDING',
@@ -431,8 +431,6 @@ class AkubicaUatFixtureMaterializer
             $namespace.'-customer-membership-institutional',
             $namespace.'-customer-membership-expired',
         ];
-        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
-
         if (LaboratoryCartItem::query()->withTrashed()
             ->where(function ($query) use ($customerIdentifiers, $naturalKeys): void {
                 $query->whereHas('customer', fn ($customerQuery) => $customerQuery->whereIn('medical_attention_identifier', $customerIdentifiers))
@@ -450,15 +448,15 @@ class AkubicaUatFixtureMaterializer
             throw new AkubicaUatFixtureException('UAT_COLLISION_CUSTOMER');
         }
 
-        if (Contact::query()->withTrashed()->whereIn('name', ['[UAT] '.$fixtureLabel.'Contacto primary', '[UAT] '.$fixtureLabel.'Contacto foreign'])->exists()) {
+        if (Contact::query()->withTrashed()->whereIn('name', array_values($naturalKeys['contact_names']))->exists()) {
             throw new AkubicaUatFixtureException('UAT_COLLISION_CONTACT');
         }
 
-        if (Address::query()->withTrashed()->where('street', '[UAT] '.$fixtureLabel.'Avenida FAMEDIC')->where('neighborhood', 'AKUBICA')->exists()) {
+        if (Address::query()->withTrashed()->where('street', $naturalKeys['address_street'])->where('neighborhood', 'AKUBICA')->exists()) {
             throw new AkubicaUatFixtureException('UAT_COLLISION_ADDRESS');
         }
 
-        if (TaxProfile::query()->withTrashed()->whereIn('razon_social', ['[UAT] '.$fixtureLabel.'FAMEDIC AKUBICA primary', '[UAT] '.$fixtureLabel.'FAMEDIC AKUBICA foreign'])->exists()) {
+        if (TaxProfile::query()->withTrashed()->whereIn('razon_social', array_values($naturalKeys['tax_profile_razon_socials']))->exists()) {
             throw new AkubicaUatFixtureException('UAT_COLLISION_TAX_PROFILE');
         }
 
@@ -793,6 +791,7 @@ class AkubicaUatFixtureMaterializer
     {
         $isLegacy = $namespace === AkubicaUatFixtureContract::NAMESPACE;
         $label = $isLegacy ? 'v1' : $namespace;
+        $scopedLabel = $isLegacy ? '' : $namespace.' ';
         $couponPrefix = $isLegacy ? 'AKUATV1' : 'AKUATB2A4';
 
         return [
@@ -807,6 +806,15 @@ class AkubicaUatFixtureMaterializer
             ],
             'category_name' => '[UAT] Akubica UAT '.$label.' - Laboratorio',
             'store_name' => '[UAT] Akubica UAT '.$label.' - Sucursal',
+            'contact_names' => [
+                'primary' => '[UAT] '.$scopedLabel.'Contacto primary',
+                'foreign' => '[UAT] '.$scopedLabel.'Contacto foreign',
+            ],
+            'address_street' => '[UAT] '.$scopedLabel.'Avenida FAMEDIC',
+            'tax_profile_razon_socials' => [
+                'primary' => '[UAT] '.$scopedLabel.'FAMEDIC AKUBICA primary',
+                'foreign' => '[UAT] '.$scopedLabel.'FAMEDIC AKUBICA foreign',
+            ],
             'test_gda_ids' => [
                 'olab' => strtoupper($namespace).'-OLAB',
                 'swisslab' => strtoupper($namespace).'-SWISSLAB',
@@ -827,7 +835,7 @@ class AkubicaUatFixtureMaterializer
     {
         $keys = $this->naturalKeys($namespace);
 
-        return [
+        $hashes = [
             'customers' => collect($keys['customer_identifiers'])->map(fn (string $value): string => $this->hashNaturalKey('customer|'.$value))->all(),
             'category' => $this->hashNaturalKey('category|'.$keys['category_name']),
             'store' => $this->hashNaturalKey('store|'.$keys['store_name'].'|'.$keys['brand']->value),
@@ -845,6 +853,18 @@ class AkubicaUatFixtureMaterializer
                 'foreign_order_invoice_request' => $this->hashNaturalKey('invoice_request|'.strtoupper($namespace).'-FOREIGN-ORDER'),
             ],
         ];
+
+        // Legacy manifests predate these three hashes. Keep their metadata shape
+        // stable while recording the expanded collision proof for new namespaces.
+        if ($namespace !== AkubicaUatFixtureContract::NAMESPACE) {
+            $hashes = array_merge([
+                'contacts' => collect($keys['contact_names'])->map(fn (string $value): string => $this->hashNaturalKey('contact|'.$value))->all(),
+                'address' => $this->hashNaturalKey('address|'.$keys['address_street']),
+                'tax_profiles' => collect($keys['tax_profile_razon_socials'])->map(fn (string $value): string => $this->hashNaturalKey('tax_profile|'.$value))->all(),
+            ], $hashes);
+        }
+
+        return $hashes;
     }
 
     private function hashNaturalKey(string $value): string
@@ -1168,10 +1188,10 @@ class AkubicaUatFixtureMaterializer
     private function upsertContact(string $role, Customer $customer, array &$ids, array &$counts, string $namespace = AkubicaUatFixtureContract::NAMESPACE): Contact
     {
         $contactId = (int) Arr::get($ids, "contacts.{$role}", 0);
-        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
+        $naturalKeys = $this->naturalKeys($namespace);
         $attributes = [
             'customer_id' => $customer->id,
-            'name' => '[UAT] '.$fixtureLabel.'Contacto '.$role,
+            'name' => $naturalKeys['contact_names'][$role],
             'paternal_lastname' => Str::upper($role),
             'maternal_lastname' => 'AKUBICA',
             'birth_date' => '1990-01-01',
@@ -1204,10 +1224,10 @@ class AkubicaUatFixtureMaterializer
     private function upsertAddress(string $role, Customer $customer, array &$ids, array &$counts, string $namespace = AkubicaUatFixtureContract::NAMESPACE): Address
     {
         $addressId = (int) Arr::get($ids, "addresses.{$role}", 0);
-        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
+        $naturalKeys = $this->naturalKeys($namespace);
         $attributes = [
             'customer_id' => $customer->id,
-            'street' => '[UAT] '.$fixtureLabel.'Avenida FAMEDIC',
+            'street' => $naturalKeys['address_street'],
             'number' => $role === 'primary' ? '100' : '200',
             'neighborhood' => 'AKUBICA',
             'city' => 'Monterrey',
@@ -1240,17 +1260,17 @@ class AkubicaUatFixtureMaterializer
     private function upsertTaxProfile(string $role, Customer $customer, string $namespace, array &$ids, array &$counts): TaxProfile
     {
         $taxProfileId = (int) Arr::get($ids, "tax_profiles.{$role}", 0);
+        $naturalKeys = $this->naturalKeys($namespace);
         $certificatePath = (string) array_key_first(array_filter(
             $this->storageDefinitions($namespace),
             fn (array $definition, string $path): bool => str_contains($path, 'fiscal-certificate'),
             ARRAY_FILTER_USE_BOTH
         ));
 
-        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
         $attributes = [
             'customer_id' => $customer->id,
             'name' => '[UAT] Razon Fiscal',
-            'razon_social' => '[UAT] '.$fixtureLabel.'FAMEDIC AKUBICA '.$role,
+            'razon_social' => $naturalKeys['tax_profile_razon_socials'][$role],
             'rfc' => $role === 'primary' ? 'XAXX010101000' : 'XEXX010101000',
             'zipcode' => '64000',
             'codigo_postal_original' => '64000',
@@ -1617,7 +1637,7 @@ class AkubicaUatFixtureMaterializer
         array $storagePaths,
     ): array {
         $paths = collect($storagePaths)->keyBy(fn (string $path): string => Str::afterLast($path, '/'));
-        $fixtureLabel = $namespace === AkubicaUatFixtureContract::NAMESPACE ? '' : $namespace.' ';
+        $naturalKeys = $this->naturalKeys($namespace);
 
         $definitions = [
             'results_ready' => [
@@ -1708,7 +1728,7 @@ class AkubicaUatFixtureMaterializer
                 'phone_country' => $customer->user->phone_country,
                 'birth_date' => '1990-01-01',
                 'gender' => Gender::MALE->value,
-                'street' => '[UAT] '.$fixtureLabel.'Avenida FAMEDIC',
+                'street' => $naturalKeys['address_street'],
                 'number' => '100',
                 'neighborhood' => 'AKUBICA',
                 'state' => 'Nuevo Leon',

@@ -19,6 +19,7 @@ use App\Models\LaboratoryStore;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
 use App\Models\RegularAccount;
+use App\Models\TaxProfile;
 use App\Models\User;
 use App\Services\Api\V1\Uat\AkubicaUatFixtureMaterializer;
 use App\Data\Api\V1\Uat\AkubicaUatFixturePlan;
@@ -44,6 +45,22 @@ function eulU01Identities(): array
         'membership_institutional' => ['email' => 'akubica-uat-membership-institutional@example.invalid', 'phone' => '8110000006', 'country' => 'MX'],
         'membership_expired' => ['email' => 'akubica-uat-membership-expired@example.invalid', 'phone' => '8110000007', 'country' => 'MX'],
     ];
+}
+
+function eulU01DedicatedIdentities(): array
+{
+    $roles = ['primary', 'foreign', 'disposable', 'membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'];
+    $identities = [];
+
+    foreach ($roles as $index => $role) {
+        $identities[$role] = [
+            'email' => 'it0061-'.$role.'@dedicated.example.invalid',
+            'phone' => (string) (8210000001 + $index),
+            'country' => 'MX',
+        ];
+    }
+
+    return $identities;
 }
 
 function eulU01ConfigureIdentities(?array $override = null): void
@@ -218,7 +235,7 @@ test('apply requires complete configured identities', function () {
 
 test('identity collision is rejected without manifest writes', function () {
     $identity = eulU01Identities()['primary'];
-    User::factory()->create([
+    $user = User::factory()->create([
         'email' => $identity['email'],
         'phone' => $identity['phone'],
         'phone_country' => $identity['country'],
@@ -229,14 +246,15 @@ test('identity collision is rejected without manifest writes', function () {
         ->assertFailed();
 
     expect(AkubicaUatFixtureManifest::query()->count())->toBe(0);
+    DB::table('users')->where('id', $user->id)->delete();
 });
 
 test('customer and contact collisions are rejected before writes', function () {
     $user = User::factory()->create();
     $account = RegularAccount::query()->create([]);
-    Customer::query()->create(['user_id' => $user->id, 'customerable_type' => RegularAccount::class, 'customerable_id' => $account->id]);
-    Contact::query()->create([
-        'customer_id' => Customer::query()->firstOrFail()->id,
+    $customer = Customer::query()->create(['user_id' => $user->id, 'customerable_type' => RegularAccount::class, 'customerable_id' => $account->id]);
+    $contact = Contact::query()->create([
+        'customer_id' => $customer->id,
         'name' => '[UAT] Contacto primary',
         'paternal_lastname' => 'PRIMARY',
         'maternal_lastname' => 'AKUBICA',
@@ -249,6 +267,115 @@ test('customer and contact collisions are rejected before writes', function () {
     $this->artisan('akubica:uat-fixtures', ['--apply' => true, '--confirm' => AkubicaUatFixtureContract::NAMESPACE])
         ->expectsOutputToContain('UAT_COLLISION_CONTACT')
         ->assertFailed();
+
+    DB::table('contacts')->where('id', $contact->id)->delete();
+    DB::table('customers')->where('id', $customer->id)->delete();
+    DB::table('regular_accounts')->where('id', $account->id)->delete();
+    DB::table('users')->where('id', $user->id)->delete();
+});
+
+test('dedicated natural keys isolate namespaces and reset preserves legacy namespace', function () {
+    eulU01ConfigureIdentities(eulU01Identities());
+    eulU01Apply($this);
+
+    eulU01ConfigureIdentities(eulU01DedicatedIdentities());
+    $this->artisan('akubica:uat-fixtures', [
+        '--namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+        '--apply' => true,
+        '--confirm' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+    ])->assertSuccessful();
+
+    expect(AkubicaUatFixtureManifest::query()->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)->count())->toBe(2)
+        ->and(Contact::query()->where('name', '[UAT] Contacto primary')->count())->toBe(1)
+        ->and(Contact::query()->where('name', '[UAT] '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.' Contacto primary')->count())->toBe(1)
+        ->and(Address::query()->where('street', '[UAT] Avenida FAMEDIC')->count())->toBe(2)
+        ->and(Address::query()->where('street', '[UAT] '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.' Avenida FAMEDIC')->count())->toBe(2)
+        ->and(TaxProfile::query()->where('razon_social', '[UAT] FAMEDIC AKUBICA primary')->count())->toBe(1)
+        ->and(TaxProfile::query()->where('razon_social', '[UAT] '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.' FAMEDIC AKUBICA primary')->count())->toBe(1);
+
+    $userCount = User::query()->count();
+    $contactCount = Contact::query()->count();
+    $this->artisan('akubica:uat-fixtures', [
+        '--namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+        '--apply' => true,
+        '--confirm' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+    ])->expectsOutputToContain('"created":0')->assertSuccessful();
+
+    expect(User::query()->count())->toBe($userCount)->and(Contact::query()->count())->toBe($contactCount);
+
+    $this->artisan('akubica:uat-fixtures', [
+        '--namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+        '--reset' => true,
+        '--confirm' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+    ])->assertSuccessful();
+
+    expect(AkubicaUatFixtureManifest::query()->where('namespace', AkubicaUatFixtureContract::NAMESPACE)->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)->exists())->toBeTrue()
+        ->and(AkubicaUatFixtureManifest::query()->where('namespace', AkubicaUatFixtureContract::DEDICATED_NAMESPACE)->exists())->toBeFalse()
+        ->and(Contact::query()->where('name', '[UAT] Contacto primary')->count())->toBe(1)
+        ->and(Contact::query()->where('name', '[UAT] '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.' Contacto primary')->count())->toBe(0);
+
+    eulU01ConfigureIdentities(eulU01Identities());
+    $this->artisan('akubica:uat-fixtures', ['--reset' => true, '--confirm' => AkubicaUatFixtureContract::NAMESPACE])->assertSuccessful();
+});
+
+test('foreign dedicated contact collision is rejected without altering existing resources', function () {
+    eulU01ConfigureIdentities(eulU01DedicatedIdentities());
+    $user = User::factory()->create();
+    $account = RegularAccount::query()->create([]);
+    $customer = Customer::query()->create(['user_id' => $user->id, 'customerable_type' => RegularAccount::class, 'customerable_id' => $account->id]);
+    $contact = Contact::query()->create([
+        'customer_id' => $customer->id,
+        'name' => '[UAT] '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.' Contacto primary',
+        'paternal_lastname' => 'PRIMARY',
+        'maternal_lastname' => 'AKUBICA',
+        'birth_date' => '1990-01-01',
+        'gender' => 1,
+        'phone' => '8219990001',
+        'phone_country' => 'MX',
+    ]);
+    $before = Contact::query()->count();
+
+    $this->artisan('akubica:uat-fixtures', [
+        '--namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+        '--apply' => true,
+        '--confirm' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+    ])->expectsOutputToContain('UAT_COLLISION_CONTACT')->assertFailed();
+
+    expect(Contact::query()->count())->toBe($before)
+        ->and(AkubicaUatFixtureManifest::query()->where('namespace', AkubicaUatFixtureContract::DEDICATED_NAMESPACE)->exists())->toBeFalse();
+
+    // This unrelated collision fixture is created outside the command transaction;
+    // remove only these test-owned rows so later cases remain isolated.
+    DB::table('contacts')->where('id', $contact->id)->delete();
+    DB::table('customers')->where('id', $customer->id)->delete();
+    DB::table('regular_accounts')->where('id', $account->id)->delete();
+    DB::table('users')->where('id', $user->id)->delete();
+});
+
+test('intermediate materializer failure rolls back resources and leaves only failed control metadata', function () {
+    eulU01ConfigureIdentities(eulU01DedicatedIdentities());
+    config()->set('akubica_uat.testing_faults', ['after_resources_before_promotion']);
+
+    $this->artisan('akubica:uat-fixtures', [
+        '--namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+        '--apply' => true,
+        '--confirm' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+    ])->expectsOutputToContain('UAT_TESTING_FAULT_after_resources_before_promotion')->assertFailed();
+
+    $manifest = AkubicaUatFixtureManifest::query()->where('namespace', AkubicaUatFixtureContract::DEDICATED_NAMESPACE)->firstOrFail();
+    $fixtureIdentities = eulU01DedicatedIdentities();
+    expect($manifest->status)->toBe(AkubicaUatFixtureContract::STATUS_FAILED)
+        ->and(User::query()->whereIn('email', array_column($fixtureIdentities, 'email'))->count())->toBe(0)
+        ->and(User::query()->whereIn('phone', array_column($fixtureIdentities, 'phone'))->count())->toBe(0)
+        ->and(Customer::query()->whereHas('user', fn ($query) => $query->whereIn('email', array_column($fixtureIdentities, 'email')))->count())->toBe(0)
+        ->and(Contact::query()->where('name', '[UAT] '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.' Contacto primary')->count())->toBe(0)
+        ->and(Address::query()->where('street', '[UAT] '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.' Avenida FAMEDIC')->count())->toBe(0)
+        ->and(TaxProfile::query()->where('razon_social', '[UAT] '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.' FAMEDIC AKUBICA primary')->count())->toBe(0);
+
+    config()->set('akubica_uat.testing_faults', []);
+    // The failed transaction deliberately leaves only control metadata; production reset
+    // requires a complete active manifest, so remove this test-only control row directly.
+    $manifest->delete();
 });
 
 test('apply creates active manifest with no pii in metadata', function () {
