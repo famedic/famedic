@@ -112,8 +112,8 @@ class InventoryProvider:
         if not argv or (not Path(argv[0]).exists() and shutil.which(argv[0]) is None):
             raise InventoryProviderError("INVENTORY_PROVIDER_UNAVAILABLE")
 
-    def verify(self, namespace: str, resource_id: int, purpose: str, owner: str) -> None:
-        result = self._invoke({"action": "verify", "namespace": namespace, "resource_id": resource_id, "purpose": purpose, "owner": owner})
+    def verify(self, namespace: str, resource_id: int, purpose: str, owner: str, expected_sha: str) -> None:
+        result = self._invoke({"action": "verify", "namespace": namespace, "resource_id": resource_id, "purpose": purpose, "owner": owner, "expected_sha": expected_sha})
         if result != {"status": "verified", "namespace": namespace, "resource_id": resource_id, "purpose": purpose, "owner": owner}:
             raise InventoryProviderError("INVENTORY_OWNERSHIP_UNCONFIRMED")
 
@@ -267,6 +267,8 @@ def validate_mode(mode: str, base_url: str, metadata: dict[str, Any]) -> ssl.SSL
 
 
 def _project_error(exc: BaseException) -> str:
+    if isinstance(exc, RunnerError):
+        return str(exc)
     if isinstance(exc, HTTPError):
         return f"HTTP_{exc.code}"
     if isinstance(exc, TimeoutError):
@@ -416,7 +418,7 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                     if not isinstance(ref, dict):
                         raise InventoryProviderError("INVENTORY_RECORD_MISSING")
                     resource_id = int(case.path.rsplit("/", 1)[-1])
-                    inventory_provider.verify(data.get("inventory", {}).get("namespace", ""), resource_id, ref.get("purpose", ""), ref.get("owner", ""))
+                    inventory_provider.verify(data.get("inventory", {}).get("namespace", ""), resource_id, ref.get("purpose", ""), ref.get("owner", ""), metadata.get("expected_release_sha", ""))
                 status, duration, body, assertion_error = _request(base_url, case, timeout, tls_context, credentials)
                 response_bodies[case.case_id] = body
                 ok = status in case.expected and assertion_error is None
@@ -461,7 +463,7 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                     if inventory_provider is None:
                         raise InventoryProviderError("INVENTORY_PROVIDER_REQUIRED")
                     resource_id = int(urlsplit(cleanup_case.path).path.rsplit("/", 1)[-1])
-                    inventory_provider.verify(data.get("inventory", {}).get("namespace", ""), resource_id, ref.get("purpose", ""), ref.get("owner", ""))
+                    inventory_provider.verify(data.get("inventory", {}).get("namespace", ""), resource_id, ref.get("purpose", ""), ref.get("owner", ""), metadata.get("expected_release_sha", ""))
                 status, duration, _body, assertion_error = _request(base_url, cleanup_case, timeout, tls_context, credentials)
                 ok = status in case.expected and assertion_error is None
                 cleanup_results.append({"id": case.case_id, "http_status": status, "ok": ok, "duration_ms": duration})
