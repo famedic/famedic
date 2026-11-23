@@ -53,3 +53,35 @@ La suite usa un `ThreadingHTTPServer` sintético y comprueba:
 
 La preparación sintética de los bloqueos se describe en `functional-window-2-preconditions.synthetic.json` y se valida offline con `functional_window2_preconditions.py`. Representa relaciones y capacidades literales para `membership_regular`, `leo_none`, el binding Leo sin `cart:laboratory:write`, pedidos propios/ajenos y familiares. No crea credenciales ni pretende demostrar preparación QA. Para QA aún se requiere que el aprovisionador exponga esas variantes, conserve ownership y permita reset/revocación verificables.
 
+## Adaptador de custodia local
+
+El runner admite `--credential-command <programa>`. El programa no recibe secretos
+por argumentos: recibe por stdin JSON con los aliases solicitados y devuelve por
+stdout únicamente un objeto JSON alias→secreto. El runner captura stdout/stderr,
+usa los valores sólo en memoria para construir `Authorization: Bearer` y
+`X-Api-Consumer-Credential`, y nunca copia secretos al reporte, logs, archivos
+temporales o mensajes de error. El helper debe ser un mecanismo seguro existente;
+un script de prueba sintético no acredita custodia QA.
+
+Cada request puede declarar `auth.bearer_alias`, `auth.machine_alias` y
+`assertions` (`required_paths`, `forbidden_paths`, `equals`). El status HTTP y las
+assertions deben pasar; un status esperado con envelope incorrecto es FAIL.
+La selección puede declarar `selection.authorized_ids` y
+`selection.expected_request_count`; se rechazan IDs no autorizados, duplicados o
+un conteo distinto.
+
+Ejemplo sin valores secretos:
+
+```text
+python3 scripts/functional_window2_http.py plan.qa.json \
+  --mode qa --base-url https://famedic-otp.on-forge.com \
+  --output evidence/functional-window-2.sanitized.json \
+  --credential-command /ruta/al/helper-de-custodia
+```
+
+El helper QA debe resolver los secretos desde la custodia aprobada del entorno;
+no se deben copiar `access-state.json`, PAT ni ciphertext al equipo del runner.
+La aplicación no necesita un endpoint nuevo. El release desplegado no incluye
+por sí mismo ese helper ni una colección QA de 22 requests con assertions, por
+lo que esos son prerrequisitos operativos antes de ejecutar QA.
+
