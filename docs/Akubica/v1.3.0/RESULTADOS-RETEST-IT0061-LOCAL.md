@@ -24,9 +24,9 @@ No adopta los cart items del manifest ni los fixtures legacy.
 
 El inventory helper incorpora un ledger privado `window2-inventory.json` y acciones
 `register`/`unregister`. Sólo acepta recursos creados por B06b/B20/B21, del
-customer primario, marca `olab`, con el prefijo de namespace y procedencia
-coincidente. La verificación de DELETE exige ese registro y vuelve a comprobar
-ownership, tipo y propósito.
+customer dedicado declarado por el alias (`membership_regular`/`membership_none`),
+marca `olab`, con el prefijo de namespace y procedencia coincidente. La verificación
+de DELETE exige ese registro y vuelve a comprobar ownership, tipo y propósito.
 
 El runner puede registrar el ID devuelto por HTTP mediante
 `register_after_success`; un ID ausente, ajeno o con SHA incompatible falla
@@ -44,6 +44,14 @@ como fila activa y después retira su entrada del ledger mediante `unregister`.
 - A2 laboratorio y controles de capacidad/marca/ownership: 20 tests, PASS.
 - Precio B03/B06 y cleanup aislado: 5 tests / 35 assertions, PASS.
 - Membresía médica y rechazo `MEMBERSHIP_ALREADY_ACTIVE`: 5 tests / 34 assertions, PASS.
+- Integración operativa local `scripts/tests/functional_window2_operational_integration.php`:
+  PASS, código 0. Manifest activo en MySQL sintético, `--cart-window` aplicado y
+  repetido idempotentemente; B06/B20/B21 ejecutados contra el kernel Laravel; IDs
+  dinámicos registrados, verificados y desregistrados por el helper real; fallo
+  parcial limpiado; revocación y reset de accesos PASS.
+- Conciliación independiente: 0 PAT temporales activos, `access-state.json` y ledger
+  ausentes, 0 price-fixtures temporales y 0 cart items temporales; manifest y los 2
+  cart items base conservados; legacy y recursos ajenos sin cambios.
 
 Las corridas PHPUnit muestran advertencias conocidas de `file_get_contents` del
 arnés; no son fallos de assertions. El proceso WSL sin `pdo_mysql` no es una ruta
@@ -53,8 +61,9 @@ válida para esta suite; las corridas concluyentes usaron PHP Windows con
 ## Pendientes explícitos
 
 La extensión requiere revisión, publicación y despliegue antes de poder usarse
-en QA. El comando único validado es exclusivamente local y usa un doble HTTP;
-no acredita por sí mismo el comportamiento de los endpoints desplegados. No se
-hizo push, merge, deploy, acceso QA ni emisión remota de credenciales.
+en QA. El comando único de integración está validado localmente contra el kernel
+Laravel y MySQL sintético; el comando separado de doble HTTP sigue siendo sólo
+una validación del runner y no equivale a endpoints Laravel. No se hizo push,
+merge, deploy, acceso QA ni emisión remota de credenciales.
 El retest QA mínimo será B19, B06b/B06r, B20/B21/B21r y los controles negativos
 de capacidad, marca y titular ajenos, con un plan nuevo y cleanup por ledger.

@@ -33,7 +33,7 @@ final class FunctionalWindow2InventoryCommand extends Command
         'cart-item-created-by-B20' => 'B20',
         'cart-item-created-by-B21' => 'B21',
     ];
-    private const OWNERS = ['customer-dedicated', 'customer:primary'];
+    private const OWNERS = ['customer-dedicated', 'customer:primary', 'customer:membership_regular', 'customer:membership_none'];
 
     public function handle(): int
     {
@@ -118,6 +118,8 @@ final class FunctionalWindow2InventoryCommand extends Command
 
         $ids = (array) Arr::get((array) $manifest->metadata, 'ids', []);
         $primaryCustomerId = (int) Arr::get($ids, 'customers.primary', 0);
+        $temporaryPurpose = str_starts_with($purpose, 'cart-item-created-by-');
+        $ownerCustomerId = $temporaryPurpose ? $this->customerIdForOwner($owner, $ids) : $primaryCustomerId;
         $testIds = array_map('intval', array_values((array) Arr::get($ids, 'tests', [])));
         if ($primaryCustomerId < 1 || $testIds === []) {
             throw new \DomainException('MANIFEST_INVENTORY_INCOMPLETE');
@@ -127,10 +129,9 @@ final class FunctionalWindow2InventoryCommand extends Command
         if ($item === null) {
             throw new \DomainException('RESOURCE_NOT_FOUND');
         }
-        if ((int) $item->customer_id !== $primaryCustomerId) {
+        if ((int) $item->customer_id !== $ownerCustomerId) {
             throw new \DomainException('RESOURCE_OWNER_MISMATCH');
         }
-        $temporaryPurpose = str_starts_with($purpose, 'cart-item-created-by-');
         if (! $temporaryPurpose && ! in_array((int) $item->laboratory_test_id, $testIds, true)) {
             throw new \DomainException('RESOURCE_NAMESPACE_MISMATCH');
         }
@@ -219,7 +220,15 @@ final class FunctionalWindow2InventoryCommand extends Command
         $manifest = AkubicaUatFixtureManifest::query()->where('namespace', self::NAMESPACE)->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)->first();
         $primaryCustomerId = (int) Arr::get((array) ($manifest?->metadata ?? []), 'ids.customers.primary', 0);
         $item = LaboratoryCartItem::query()->with('laboratoryTest')->find($resourceId);
-        if (! $manifest || $primaryCustomerId < 1 || $owner !== 'customer:primary' || ! $item || (int) $item->customer_id !== $primaryCustomerId || ! $item->laboratoryTest || ! str_starts_with((string) $item->laboratoryTest->gda_id, 'RC2-PRICE-FIX-'.self::NAMESPACE.'-')) throw new \DomainException('RESOURCE_NOT_WINDOW_CREATED');
+        $ownerCustomerId = $this->customerIdForOwner($owner, (array) ($manifest?->metadata['ids'] ?? []));
+        if (! $manifest || $ownerCustomerId < 1 || ! $item || (int) $item->customer_id !== $ownerCustomerId || ! $item->laboratoryTest || ! str_starts_with((string) $item->laboratoryTest->gda_id, 'RC2-PRICE-FIX-'.self::NAMESPACE.'-')) throw new \DomainException('RESOURCE_NOT_WINDOW_CREATED');
+    }
+
+    private function customerIdForOwner(string $owner, array $ids): int
+    {
+        if ($owner === 'customer-dedicated' || $owner === 'customer:primary') return (int) Arr::get($ids, 'customers.primary', 0);
+        if (str_starts_with($owner, 'customer:')) return (int) Arr::get($ids, 'customers.'.substr($owner, strlen('customer:')), 0);
+        return 0;
     }
 
     /** @return array{sha:string,release:string} */
