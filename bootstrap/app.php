@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\RunAkubicaUatCommand::class,
         \App\Console\Commands\FunctionalWindow2CustodyCommand::class,
         \App\Console\Commands\FunctionalWindow2InventoryCommand::class,
+        \App\Console\Commands\Rc2CatalogFixturesCommand::class,
         \App\Console\Commands\RepairRegisterSmsPhoneVerificationCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
