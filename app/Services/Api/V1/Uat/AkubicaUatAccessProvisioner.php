@@ -211,6 +211,7 @@ final class AkubicaUatAccessProvisioner
                 'expires_at' => $expiresAt->toIso8601String(),
             ];
             $this->writeState($namespace, $state);
+            $this->writeInventory($namespace, $state, 'active');
 
             return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'created' => ['consumers' => 2, 'channels' => 2, 'delegations' => 4 + count($created['scenario_delegations']), 'credentials' => 2, 'bindings' => 4 + count($created['scenario_bindings']), 'tokens' => count($created['tokens']) + count($created['scenario_tokens'])], 'external_calls' => 0];
         } catch (\Throwable $exception) {
@@ -224,7 +225,7 @@ final class AkubicaUatAccessProvisioner
     {
         $this->assertNamespace($namespace);
         Gate::forUser($operator)->authorize('manageApiConsumerRegistry');
-        $state = $this->readState($namespace);
+        $state = $this->readState($namespace) ?? $this->readInventory($namespace);
         if ($state === null) {
             return ['status' => 'empty', 'namespace' => $namespace, 'deleted' => 0];
         }
@@ -241,6 +242,7 @@ final class AkubicaUatAccessProvisioner
         foreach ($state['channel_ids'] as $id) $this->revokeModel($operator, ApiConsumerChannel::class, $id, $lifecycle);
         foreach ($state['consumer_ids'] as $id) $this->revokeModel($operator, ApiConsumer::class, $id, $lifecycle);
         $this->assertCleanupComplete($state);
+        $this->writeInventory($namespace, $state, 'completed');
         Storage::disk('local')->delete($this->statePath($namespace));
 
         return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'deleted' => 2 + 2 + 4 + 2 + 4 + 6 + count($state['scenario_binding_ids'] ?? []) + count($state['scenario_delegation_ids'] ?? []) + count($state['scenario_token_ids'] ?? [])];
@@ -357,12 +359,51 @@ final class AkubicaUatAccessProvisioner
         return json_decode((string) Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR);
     }
 
+    private function readInventory(string $namespace): ?array
+    {
+        $path = $this->inventoryPath($namespace);
+        if (! Storage::disk('local')->exists($path)) return null;
+        $inventory = json_decode((string) Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR);
+        if (! is_array($inventory) || ($inventory['namespace'] ?? null) !== $namespace || ($inventory['scenario'] ?? null) !== self::WINDOW2_SCENARIO || ($inventory['status'] ?? null) !== 'active') {
+            throw new \DomainException('UAT_ACCESS_INVENTORY_INVALID');
+        }
+
+        return $inventory['state'] ?? null;
+    }
+
+    private function writeInventory(string $namespace, array $state, string $status): void
+    {
+        $inventory = [
+            'namespace' => $namespace,
+            'scenario' => $state['scenario'] ?? null,
+            'status' => $status,
+            'recorded_at' => now()->toIso8601String(),
+            'state' => [
+                'namespace' => $state['namespace'] ?? null,
+                'scenario' => $state['scenario'] ?? null,
+                'user_ids' => $state['user_ids'] ?? [],
+                'consumer_ids' => $state['consumer_ids'] ?? [],
+                'channel_ids' => $state['channel_ids'] ?? [],
+                'delegation_ids' => $state['delegation_ids'] ?? [],
+                'credential_ids' => $state['credential_ids'] ?? [],
+                'binding_ids' => $state['binding_ids'] ?? [],
+                'token_ids' => $state['token_ids'] ?? [],
+                'scenario_delegation_ids' => $state['scenario_delegation_ids'] ?? [],
+                'scenario_binding_ids' => $state['scenario_binding_ids'] ?? [],
+                'scenario_token_ids' => $state['scenario_token_ids'] ?? [],
+                'expires_at' => $state['expires_at'] ?? null,
+            ],
+        ];
+        Storage::disk('local')->put($this->inventoryPath($namespace), json_encode($inventory, JSON_THROW_ON_ERROR));
+    }
+
     private function writeState(string $namespace, array $state): void
     {
         Storage::disk('local')->put($this->statePath($namespace), json_encode($state, JSON_THROW_ON_ERROR));
     }
 
     private function statePath(string $namespace): string { return AkubicaUatFixtureContract::storagePath('access-state.json', $namespace); }
+    private function inventoryPath(string $namespace): string { return AkubicaUatFixtureContract::storagePath('access-inventory.json', $namespace); }
     private function ttlMinutes(): int { return max(1, min(45, (int) config('akubica_uat.access_ttl_minutes', 30))); }
     private function assertNamespace(string $namespace): void { if ($namespace !== AkubicaUatFixtureContract::DEDICATED_NAMESPACE) throw new \DomainException('UAT_ACCESS_NAMESPACE_NOT_ALLOWED'); }
 }

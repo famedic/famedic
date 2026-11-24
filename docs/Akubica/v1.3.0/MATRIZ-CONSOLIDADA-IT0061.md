@@ -118,3 +118,7 @@ declararse PASS por revocación: la variante pendiente es expiración natural.
   verificables. R02b/R03b siguen siendo incidentales. B24, OTP/step-up,
   ATIX, R05 y R08 requieren intervención externa y permanecen separados.
 - Evidencia detallada: `RESULTADOS-CONCILIACION-PAT-B09-B26-20261124.md`.
+- Corrección local de recuperabilidad preparada en `AkubicaUatAccessProvisioner`
+  y `FunctionalWindow2CustodyCommand`; valida pérdida de state con inventario
+  durable sanitizado en MySQL sintético. B09/B14/B23/B26 siguen BLOCKED en QA
+  hasta publicar/desplegarla.

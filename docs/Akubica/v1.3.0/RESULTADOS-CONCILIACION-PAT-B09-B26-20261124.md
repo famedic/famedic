@@ -91,3 +91,56 @@ presenta un precheck histórico ni una respuesta sin bearer como PASS funcional.
 `PAT_RECONCILIATION_LIMITED / ACCESS_ISSUANCE_BLOCKED`.
 No es `STAGING_PASS` ni certificación de Batch 2.
 
+## Verificación read-only del estado actual QA
+
+Consulta ejecutada sobre el release activo, sin escrituras:
+
+- `current` → release `83882430`; `REVISION` e `inventory identity` devuelven
+  SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73`.
+- Manifest dedicado activo: presente; 6 usuarios y 6 customers del manifest
+  fueron la fuente de la consulta. No se adoptaron filas por prefijo de token.
+- PAT asociados a esos usuarios, incluidos expirados que aún existieran: `0`.
+- `access-state.json`: ausente.
+- Delegaciones relacionadas por los usuarios del manifest: `142`; activas:
+  `0`. Bindings relacionados por esas delegaciones: `142`; activos: `0`.
+- Consumers relacionados: `50`; todos `enabled=0` y con `revoked_at`.
+  Channels relacionados: `50`; todos `enabled=0` y con `revoked_at`.
+  Credenciales machine relacionadas: `50`; todas `enabled=0` y con
+  `revoked_at`. No se encontraron PAT machine asociados a esos consumers.
+
+El alcance de esta conciliación es el grafo alcanzable desde los usuarios y
+customers del manifest; no prueba la pertenencia histórica de cada fila a una
+ventana concreta porque el release no conserva un ledger de namespace para
+ellas. Como todas las filas encontradas están revocadas/deshabilitadas, no hay
+un recurso activo ambiguo que requiera adopción o DELETE. La ambigüedad
+histórica queda documentada y no bloquea por sí sola; sí bloquea la emisión
+porque el release desplegado aún no tiene recuperación durable.
+
+## Corrección local de recuperabilidad
+
+Se preparó localmente una corrección mínima en el candidato actual:
+
+- `AkubicaUatAccessProvisioner` escribe `access-inventory.json` con namespace,
+  escenario, usuarios, consumers, channels, delegaciones, credenciales,
+  bindings, PAT IDs, expiración y estado; nunca incluye secretos.
+- El reset puede recuperar un state perdido usando ese inventario sólo cuando
+  está `active`; al completar cleanup lo conserva como `completed` y elimina
+  sólo `access-state.json`.
+- El bridge privado de custody puede revocar usando el inventario activo si
+  falta el state; la lectura de secretos sigue exigiendo el state cifrado.
+- El inventario se valida por namespace/escenario y no puede adoptar otro
+  namespace.
+
+Prueba de regresión local en MySQL sintético aislado:
+
+`vendor/bin/pest --configuration=phpunit.rc2.mysql.window2.xml tests/Feature/Console/AkubicaUatWindow2AccessTest.php tests/Feature/Console/ResetStateInventoryRecoveryTest.php --colors=never`
+
+Resultado: `24 assertions`, código `0`. Incluye apply de 9 PAT, pérdida
+inyectada de `access-state.json`, reset recuperado desde el inventario,
+comprobación BD de cero PAT, inventario `completed`, manifest conservado y
+cleanup de fixtures. Las dos advertencias son únicamente la ausencia de
+`.env` en el worktree temporal; no afectaron assertions ni código de salida.
+
+La corrección requiere publicación y nuevo deploy antes de abrir B09/B14/B23/B26.
+No se hizo merge, push, deploy ni emisión QA.
+
