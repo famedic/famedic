@@ -9,6 +9,7 @@ use Laravel\Sanctum\PersonalAccessToken;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Artisan;
 use App\Services\Api\V1\Uat\AkubicaUatAccessProvisioner;
+use App\Models\MedicalAttentionSubscription;
 function window2ConfigureIdentities(): void
 {
     foreach (['primary', 'foreign', 'disposable', 'membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $index => $role) {
@@ -38,6 +39,15 @@ test('window 2 access provisions scenario bearers idempotently and resets all to
         '--namespace' => 'akubica-uat-batch2-a4-v1',
     ]);
     expect($fixtureCode)->toBe(0);
+
+    $manifest = AkubicaUatFixtureManifest::query()
+        ->where('namespace', 'akubica-uat-batch2-a4-v1')
+        ->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)
+        ->firstOrFail();
+    $membershipNoneCustomerId = (int) data_get($manifest->metadata, 'ids.customers.membership_none');
+    expect($membershipNoneCustomerId)->toBeGreaterThan(0)
+        ->and(MedicalAttentionSubscription::withTrashed()->where('customer_id', $membershipNoneCustomerId)->count())
+        ->toBe(0);
 
     $operator = User::factory()->create();
     $administrator = Administrator::create(['user_id' => $operator->id]);
