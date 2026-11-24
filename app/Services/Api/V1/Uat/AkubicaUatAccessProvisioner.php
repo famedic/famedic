@@ -56,6 +56,7 @@ final class AkubicaUatAccessProvisioner
     ];
 
     private const WINDOW2_SCENARIO = 'functional-window-2';
+    private const WINDOW2_MEMBERSHIP_SCENARIO = 'functional-window-2-memberships';
 
     /** @var array<string, list<string>> */
     private const WINDOW2_CAPABILITIES = [
@@ -81,8 +82,8 @@ final class AkubicaUatAccessProvisioner
         $context = $this->context($namespace);
         $authorized = $operator !== null && Gate::forUser($operator)->allows('manageApiConsumerRegistry');
 
-        $scenarioIdentities = $scenario === self::WINDOW2_SCENARIO
-            ? $this->scenarioContext($namespace)['user_ids']
+        $scenarioIdentities = $this->isScenario($scenario)
+            ? $this->scenarioContext($namespace, $scenario)['user_ids']
             : [];
 
         return [
@@ -98,20 +99,24 @@ final class AkubicaUatAccessProvisioner
                 'delegations' => ['primary', 'foreign'],
             ])->values()->all(),
             'scenario' => $scenario,
-            'scenario_bindings' => $scenario === self::WINDOW2_SCENARIO ? [
-                ['alias' => $namespace.'-native-membership-regular', 'profile' => 'native', 'role' => 'membership_regular', 'capabilities' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'laboratory_brands' => []],
-                ['alias' => $namespace.'-native-membership-none', 'profile' => 'native', 'role' => 'membership_none', 'capabilities' => self::WINDOW2_CAPABILITIES['native_membership_none'], 'laboratory_brands' => []],
-                ['alias' => $namespace.'-leo-membership-none', 'profile' => 'leo', 'role' => 'membership_none', 'capabilities' => self::WINDOW2_CAPABILITIES['leo_membership_none'], 'laboratory_brands' => ['swisslab']],
-            ] : [],
+            'scenario_bindings' => $this->isScenario($scenario)
+                ? collect($this->scenarioDefinitions($scenario))->map(fn (array $definition): array => [
+                    'alias' => $this->scenarioAlias($namespace, $definition['key']),
+                    'profile' => $definition['kind'],
+                    'role' => $definition['role'],
+                    'capabilities' => $definition['caps'],
+                    'laboratory_brands' => $definition['brands'],
+                ])->values()->all()
+                : [],
             'effects' => [
                 'creates' => ['2 consumers', '2 channels', '4 delegations', '2 machine credentials', '4 delegated bindings'],
                 'external_calls' => 0,
                 'sms' => 0,
                 'email' => 0,
                 'payments' => 0,
-                'scenario_delegations' => $scenario === self::WINDOW2_SCENARIO ? 3 : 0,
-                'scenario_bindings' => $scenario === self::WINDOW2_SCENARIO ? 3 : 0,
-                'scenario_tokens' => $scenario === self::WINDOW2_SCENARIO ? 3 : 0,
+                'scenario_delegations' => $this->isScenario($scenario) ? count($this->scenarioDefinitions($scenario)) : 0,
+                'scenario_bindings' => $this->isScenario($scenario) ? count($this->scenarioDefinitions($scenario)) : 0,
+                'scenario_tokens' => $this->isScenario($scenario) ? count($this->scenarioDefinitions($scenario)) : 0,
             ],
             'credentials' => 'created only by apply; plaintext never emitted',
             'expires_at' => Carbon::now()->addMinutes($this->ttlMinutes())->toIso8601String(),
@@ -158,8 +163,8 @@ final class AkubicaUatAccessProvisioner
         $this->assertNoUnownedAccess($context['user_ids']);
         $expiresAt = Carbon::now()->addMinutes($this->ttlMinutes());
         $inventoryUserIds = $context['user_ids'];
-        if ($scenario === self::WINDOW2_SCENARIO) {
-            $inventoryUserIds = array_merge($inventoryUserIds, $this->scenarioContext($namespace)['user_ids']);
+        if ($this->isScenario($scenario)) {
+            $inventoryUserIds = array_merge($inventoryUserIds, $this->scenarioContext($namespace, $scenario)['user_ids']);
         }
         $created = ['consumers' => [], 'channels' => [], 'delegations' => [], 'credentials' => [], 'bindings' => [], 'tokens' => [], 'secrets' => [], 'scenario_delegations' => [], 'scenario_bindings' => [], 'scenario_tokens' => [], 'scenario_secrets' => []];
         // Establish a recoverable, secret-free ledger before the first write.
@@ -203,14 +208,10 @@ final class AkubicaUatAccessProvisioner
                 }
             }
 
-            if ($scenario === self::WINDOW2_SCENARIO) {
-                $scenarioContext = $this->scenarioContext($namespace);
+            if ($this->isScenario($scenario)) {
+                $scenarioContext = $this->scenarioContext($namespace, $scenario);
                 $this->assertNoUnownedAccess(array_values($scenarioContext['user_ids']));
-                foreach ([
-                    ['key' => 'native_membership_regular', 'kind' => 'native', 'role' => 'membership_regular', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'brands' => ['olab']],
-                    ['key' => 'native_membership_none', 'kind' => 'native', 'role' => 'membership_none', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_none'], 'brands' => ['olab']],
-                    ['key' => 'leo_membership_none', 'kind' => 'leo', 'role' => 'membership_none', 'caps' => self::WINDOW2_CAPABILITIES['leo_membership_none'], 'brands' => ['swisslab']],
-                ] as $definition) {
+                foreach ($this->scenarioDefinitions($scenario) as $definition) {
                     $kind = $definition['kind'];
                     $role = $definition['role'];
                     $user = User::query()->findOrFail($scenarioContext['user_ids'][$role]);
@@ -308,13 +309,50 @@ final class AkubicaUatAccessProvisioner
     }
 
     /** @return array{user_ids: array<string,int>} */
-    private function scenarioContext(string $namespace): array
+    private function scenarioContext(string $namespace, string $scenario): array
     {
         $manifest = AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)->firstOrFail();
         $ids = (array) data_get($manifest->metadata, 'ids.users', []);
-        $userIds = ['membership_regular' => (int) ($ids['membership_regular'] ?? 0), 'membership_none' => (int) ($ids['membership_none'] ?? 0)];
+        $roles = $scenario === self::WINDOW2_MEMBERSHIP_SCENARIO
+            ? ['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired']
+            : ['membership_regular', 'membership_none'];
+        $userIds = collect($roles)->mapWithKeys(fn (string $role): array => [$role => (int) ($ids[$role] ?? 0)])->all();
         if (in_array(0, $userIds, true)) throw new \DomainException('UAT_ACCESS_SCENARIO_IDENTITIES_INCOMPLETE');
         return ['user_ids' => $userIds];
+    }
+
+    private function isScenario(string $scenario): bool
+    {
+        return in_array($scenario, [self::WINDOW2_SCENARIO, self::WINDOW2_MEMBERSHIP_SCENARIO], true);
+    }
+
+    /** @return list<array{key:string,kind:string,role:string,caps:list<string>,brands:list<string>}> */
+    private function scenarioDefinitions(string $scenario): array
+    {
+        $definitions = [
+            ['key' => 'native_membership_regular', 'kind' => 'native', 'role' => 'membership_regular', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'brands' => ['olab']],
+            ['key' => 'native_membership_none', 'kind' => 'native', 'role' => 'membership_none', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_none'], 'brands' => ['olab']],
+        ];
+
+        if ($scenario === self::WINDOW2_MEMBERSHIP_SCENARIO) {
+            return [
+                $definitions[1],
+                $definitions[0],
+                ['key' => 'native_membership_institutional', 'kind' => 'native', 'role' => 'membership_institutional', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'brands' => ['olab']],
+                ['key' => 'native_membership_expired', 'kind' => 'native', 'role' => 'membership_expired', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'brands' => ['olab']],
+            ];
+        }
+
+        return [
+            $definitions[0],
+            $definitions[1],
+            ['key' => 'leo_membership_none', 'kind' => 'leo', 'role' => 'membership_none', 'caps' => self::WINDOW2_CAPABILITIES['leo_membership_none'], 'brands' => ['swisslab']],
+        ];
+    }
+
+    private function scenarioAlias(string $namespace, string $key): string
+    {
+        return $namespace.'-'.str_replace('_', '-', $key);
     }
 
     private function assertNoUnownedAccess(array $userIds): void
@@ -420,7 +458,7 @@ final class AkubicaUatAccessProvisioner
         if (! Storage::disk('local')->exists($path)) return [];
         $inventory = json_decode((string) Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR);
         $allowedStatuses = $allowCompleted ? ['active', 'completed'] : ['active'];
-        if (! is_array($inventory) || ($inventory['namespace'] ?? null) !== $namespace || ($inventory['scenario'] ?? null) !== self::WINDOW2_SCENARIO || ! in_array(($inventory['status'] ?? null), $allowedStatuses, true)) {
+        if (! is_array($inventory) || ($inventory['namespace'] ?? null) !== $namespace || ! $this->isScenario((string) ($inventory['scenario'] ?? '')) || ! in_array(($inventory['status'] ?? null), $allowedStatuses, true)) {
             throw new \DomainException('UAT_ACCESS_INVENTORY_INVALID');
         }
 

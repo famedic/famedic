@@ -152,6 +152,35 @@ test('native membership none reaches checkout prepare only with the delegated ca
             ->assertJsonPath('data.can_continue_on_platform', true)
             ->assertJsonPath('data.can_continue_to_payment_platform', false);
 
+        $membershipHeaders = [
+            'Authorization' => 'Bearer '.$bearer,
+            'X-Synthetic-Machine-Credential' => $machine,
+            'Accept' => 'application/json',
+        ];
+        $added = $this->withHeaders($membershipHeaders)->postJson('/api/v1/cart/items', [
+            'service_line' => 'medical_services',
+            'item_type' => 'membership',
+            'membership_plan_code' => 'basic_annual',
+            'quantity' => 1,
+        ]);
+        $added->assertCreated()->assertJsonPath('data.items.0.membership_plan_code', 'basic_annual');
+        $cartItemId = (int) $added->json('data.items.0.id');
+        expect($cartItemId)->toBeGreaterThan(0);
+
+        $duplicate = $this->withHeaders($membershipHeaders)->postJson('/api/v1/cart/items', [
+            'service_line' => 'medical_services',
+            'item_type' => 'membership',
+            'membership_plan_code' => 'basic_annual',
+            'quantity' => 1,
+        ]);
+        $duplicate->assertStatus(409)->assertJsonPath('error.code', 'MEMBERSHIP_ALREADY_IN_CART');
+
+        $cart = $this->withHeaders($membershipHeaders)->getJson('/api/v1/cart?service_line=medical_services');
+        $cart->assertOk()->assertJsonPath('data.items.0.id', $cartItemId);
+
+        $removed = $this->withHeaders($membershipHeaders)->deleteJson('/api/v1/cart/items/'.$cartItemId.'?service_line=medical_services');
+        $removed->assertOk();
+
         $withoutCheckout = array_values(array_diff($scenarioDelegation->capabilities, ['checkout:prepare']));
         $scenarioDelegation->forceFill(['capabilities' => $withoutCheckout])->save();
         $scenarioBinding->forceFill(['capabilities' => $withoutCheckout])->save();
@@ -168,6 +197,80 @@ test('native membership none reaches checkout prepare only with the delegated ca
             '--namespace' => 'akubica-uat-batch2-a4-v1',
             '--scenario' => 'functional-window-2',
             '--confirm' => 'akubica-uat-batch2-a4-v1',
+        ])->assertSuccessful();
+    }
+});
+
+test('membership variants are namespace-scoped and idempotent without OTP', function () {
+    window2ConfigureIdentities();
+    $namespace = 'akubica-uat-batch2-a4-v1';
+    $scenario = 'functional-window-2-memberships';
+    $this->artisan('akubica:uat-access', [
+        '--reset' => true,
+        '--namespace' => $namespace,
+        '--scenario' => $scenario,
+        '--confirm' => $namespace,
+    ])->run();
+    $this->artisan('akubica:uat-fixtures', [
+        '--apply' => true,
+        '--confirm' => $namespace,
+        '--namespace' => $namespace,
+    ])->assertSuccessful();
+
+    $operator = User::factory()->create();
+    $administrator = Administrator::create(['user_id' => $operator->id]);
+    $administrator->givePermissionTo(Permission::firstOrCreate(['name' => 'api-consumers.manage', 'guard_name' => 'web']));
+    config()->set('akubica_uat.operator_id', $operator->id);
+
+    try {
+        $dryRun = app(AkubicaUatAccessProvisioner::class)->dryRun($namespace, $operator, $scenario);
+        expect(collect($dryRun['scenario_bindings'])->pluck('role')->all())
+            ->toBe(['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'])
+            ->and(collect($dryRun['scenario_bindings'])->pluck('profile')->unique()->values()->all())
+            ->toBe(['native']);
+
+        $before = PersonalAccessToken::query()->count();
+        $this->artisan('akubica:uat-access', [
+            '--apply' => true,
+            '--namespace' => $namespace,
+            '--scenario' => $scenario,
+            '--confirm' => $namespace,
+        ])->assertSuccessful();
+        $afterApply = PersonalAccessToken::query()->count();
+        expect($afterApply - $before)->toBe(10);
+
+        $state = json_decode(Storage::disk('local')->get(
+            AkubicaUatFixtureContract::storagePath('access-state.json', $namespace)
+        ), true, 512, JSON_THROW_ON_ERROR);
+        $machine = Crypt::decryptString($state['encrypted_secrets']['machine_native']);
+        foreach (['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $role) {
+            $bearer = Crypt::decryptString($state['scenario_encrypted_secrets']['native_'.$role]);
+            $response = $this->withHeaders([
+                'Authorization' => 'Bearer '.$bearer,
+                'X-Synthetic-Machine-Credential' => $machine,
+                'Accept' => 'application/json',
+            ])->getJson('/api/v1/memberships/status');
+            $response->assertOk();
+        }
+
+        $this->artisan('akubica:uat-access', [
+            '--apply' => true,
+            '--namespace' => $namespace,
+            '--scenario' => $scenario,
+            '--confirm' => $namespace,
+        ])->assertSuccessful();
+        expect(PersonalAccessToken::query()->count())->toBe($afterApply);
+    } finally {
+        $this->artisan('akubica:uat-access', [
+            '--reset' => true,
+            '--namespace' => $namespace,
+            '--scenario' => $scenario,
+            '--confirm' => $namespace,
+        ])->assertSuccessful();
+        $this->artisan('akubica:uat-fixtures', [
+            '--reset' => true,
+            '--confirm' => $namespace,
+            '--namespace' => $namespace,
         ])->assertSuccessful();
     }
 });
