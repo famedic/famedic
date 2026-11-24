@@ -31,6 +31,21 @@ permisos o deploy.
 La revalidación de B25 no convierte ni borra el FAIL histórico: son corridas
 distintas sobre el mismo SHA.
 
+## Ventana memberships — release 83916495
+
+La corrida `functional-window-2-memberships` sobre
+`55fecce944a5cc2c20e08d061f862cd21809af5a` acreditó `PASS_QA` para B07,
+B08, B10 y B11, con cuatro requests HTTP reales, assertions contractuales,
+custody privado, revocación y reset verificados. B12, B12r, B13, B16 y B17
+quedan `BLOCKED` porque el inventory helper desplegado no admite el tipo de
+recurso dinámico de carrito de membresía necesario para acreditar ownership y
+cleanup antes de escribir. Evidencia: `RESULTADOS-VENTANA-MEMBERSHIPS-55fecce9-20261124.md`.
+
+Preparación local posterior: el candidato añade validación específica para
+`MedicalServiceCartItem` y el plan `functional-window-2-memberships-cart-qa-plan.json`.
+Los cinco casos siguen bloqueados en QA hasta publicación/despliegue y una
+corrida autorizada; no se reclasifican por pruebas locales.
+
 ## Próximo bloque priorizado
 
 | Escenario | Estado actual | Precondición faltante | Escrituras necesarias | Preparación soportada | Cleanup |
