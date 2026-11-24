@@ -67,7 +67,7 @@ final class AkubicaUatAccessProvisioner
         // Keep the exact native capability set; only the fixture role differs.
         'native_membership_none' => [
             'memberships:read', 'cart:read', 'cart:membership:write',
-            'cart:laboratory:read', 'cart:laboratory:write',
+            'cart:laboratory:read', 'cart:laboratory:write', 'checkout:prepare',
         ],
         'leo_membership_none' => [
             'memberships:read', 'cart:read', 'cart:laboratory:read', 'cart:membership:write',
