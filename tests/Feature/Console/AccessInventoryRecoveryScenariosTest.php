@@ -36,6 +36,7 @@ function recoveryScenarioSetup(): array
 
 test('records partial apply before the first failure and never records secrets', function () {
     [$namespace, $operator] = recoveryScenarioSetup();
+    $beforePatCount = PersonalAccessToken::query()->count();
     $inventoryPath = AkubicaUatFixtureContract::storagePath('access-inventory.json', $namespace);
     $consumerInserts = 0;
     DB::listen(function (QueryExecuted $query) use (&$consumerInserts): void {
@@ -52,6 +53,7 @@ test('records partial apply before the first failure and never records secrets',
         ->and($inventory['state']['consumer_ids'])->not->toBeEmpty()
         ->and($inventory)->not->toHaveKey('encrypted_secrets')
         ->and(json_encode($inventory))->not->toContain('plainTextToken')
+        ->and(PersonalAccessToken::query()->count())->toBe($beforePatCount)
         ->and(glob(Storage::disk('local')->path($inventoryPath).'.tmp.*'))->toBe([]);
 
     Artisan::call('akubica:uat-fixtures', ['--reset' => true, '--confirm' => $namespace, '--namespace' => $namespace]);
@@ -114,6 +116,7 @@ test('keeps active inventory after interrupted deletion and completes on retry',
 
 test('supports reset, repeated reset, new apply and reset again', function () {
     [$namespace, $operator] = recoveryScenarioSetup();
+    $beforePatCount = PersonalAccessToken::query()->count();
     $provisioner = app(AkubicaUatAccessProvisioner::class);
 
     expect($provisioner->apply($namespace, $operator, 'functional-window-2')['status'])->toBe('ok');
@@ -123,7 +126,7 @@ test('supports reset, repeated reset, new apply and reset again', function () {
 
     expect($provisioner->apply($namespace, $operator, 'functional-window-2')['status'])->toBe('ok');
     expect($provisioner->reset($namespace, $operator, 'functional-window-2')['status'])->toBe('ok');
-    expect(PersonalAccessToken::query()->count())->toBe(0)
+    expect(PersonalAccessToken::query()->count())->toBe($beforePatCount)
         ->and(AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->where('status', 'active')->exists())->toBeTrue();
 
     Artisan::call('akubica:uat-fixtures', ['--reset' => true, '--confirm' => $namespace, '--namespace' => $namespace]);
@@ -131,6 +134,7 @@ test('supports reset, repeated reset, new apply and reset again', function () {
 
 test('keeps a scenario PAT in the ledger when binding preparation fails', function () {
     [$namespace, $operator] = recoveryScenarioSetup();
+    $beforePatCount = PersonalAccessToken::query()->count();
     $inventoryPath = AkubicaUatFixtureContract::storagePath('access-inventory.json', $namespace);
     $captured = null;
     $patLocks = 0;
@@ -143,10 +147,13 @@ test('keeps a scenario PAT in the ledger when binding preparation fails', functi
     });
 
     $code = Artisan::call('akubica:uat-access', ['--apply' => true, '--namespace' => $namespace, '--scenario' => 'functional-window-2', '--confirm' => $namespace]);
+    $inventoryAfterFailure = json_decode(Storage::disk('local')->get($inventoryPath), true, 512, JSON_THROW_ON_ERROR);
+    $windowTokenIds = array_merge(array_values($inventoryAfterFailure['state']['token_ids'] ?? []), array_values($inventoryAfterFailure['state']['scenario_token_ids'] ?? []));
     expect($code)->not->toBe(0, Artisan::output())
         ->and($captured['status'] ?? null)->toBe('active')
         ->and($captured['state']['scenario_token_ids'] ?? [])->not->toBeEmpty()
-        ->and(PersonalAccessToken::query()->count())->toBe(0);
+        ->and(PersonalAccessToken::query()->whereIn('id', $windowTokenIds)->count())->toBe(0)
+        ->and(PersonalAccessToken::query()->count())->toBe($beforePatCount);
 
     $inventory = json_decode(Storage::disk('local')->get($inventoryPath), true, 512, JSON_THROW_ON_ERROR);
     expect($inventory['status'])->toBe('completed')

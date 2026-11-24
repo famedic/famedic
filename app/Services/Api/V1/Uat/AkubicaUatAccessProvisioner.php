@@ -136,8 +136,16 @@ final class AkubicaUatAccessProvisioner
             }
         }
         if ($state === null) {
-            $state = $this->readInventory($namespace);
-            $stateFromInventory = $state !== null;
+            $inventory = $this->readInventoryRecord($namespace, true);
+            if (($inventory['status'] ?? null) === 'completed') {
+                $completedState = $inventory['state'] ?? null;
+                if (! is_array($completedState)) throw new \DomainException('UAT_ACCESS_INVENTORY_INVALID');
+                $this->assertState($completedState, $namespace, true);
+                $this->assertCleanupComplete($completedState);
+            } elseif (($inventory['status'] ?? null) === 'active') {
+                $state = $inventory['state'] ?? null;
+                $stateFromInventory = $state !== null;
+            }
         }
         if ($state !== null) {
             $this->assertState($state, $namespace, $stateFromInventory);
@@ -401,8 +409,8 @@ final class AkubicaUatAccessProvisioner
 
     private function readInventory(string $namespace): ?array
     {
-        $inventory = $this->readInventoryRecord($namespace);
-        if ($inventory === []) return null;
+        $inventory = $this->readInventoryRecord($namespace, true);
+        if ($inventory === [] || ($inventory['status'] ?? null) === 'completed') return null;
         return $inventory['state'] ?? null;
     }
 
