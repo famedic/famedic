@@ -2,6 +2,7 @@
 
 Estado: VALIDADO_LOCALMENTE_CON_LIMITACION_DE_INTEGRACION
 Base: `97cbb543cc722c4be1b6ef0ac03d2c43a39f2341`
+Candidate final: `33ae9318e858d0e5f0b405e25f11062bf29c02a0`
 Entorno: MySQL sintético dedicado en `127.0.0.1:13307`; no QA, Forge ni servicios externos.
 
 ## Correcciones
