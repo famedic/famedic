@@ -22,7 +22,6 @@ TEMPLATE = ROOT / "docs/Akubica/v1.3.0/functional-window-2-qa-plan.json"
 class Window2IntegrationTests(unittest.TestCase):
     def test_generated_plan_runner_inventory_and_custody_cover_22_requests(self):
         calls = []
-        membership_attempts = [0]
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *_args):
@@ -61,12 +60,10 @@ class Window2IntegrationTests(unittest.TestCase):
                 if path == "/cart/items" and body.get("laboratory_test_id") == 930020: return self.send_json(201, {"data": {"id": 930020}})
                 if path == "/cart/items" and body.get("laboratory_test_id") == 930022: return self.send_json(403, {"error": {"code": "CONSUMER_NOT_AUTHORIZED"}})
                 if path == "/cart/items" and body.get("service_line") == "pharmacy": return self.send_json(503, {"error": {"code": "PHARMACY_SUSPENDED"}})
-                if path == "/cart/items" and body.get("membership_plan_code") == "basic_annual":
-                    membership_attempts[0] += 1
-                    return self.send_json(409, {"error": {"code": "MEMBERSHIP_ALREADY_ACTIVE"}}) if membership_attempts[0] == 1 else self.send_json(201, {"data": {"id": 930019}})
+                if path == "/cart/items" and body.get("membership_plan_code") == "basic_annual": return self.send_json(409, {"error": {"code": "MEMBERSHIP_ALREADY_ACTIVE"}})
                 if path == "/cart/items" and body.get("membership_plan_code") == "plan_inexistente": return self.send_json(422, {"error": {"code": "VALIDATION_ERROR"}})
                 if path == "/cart/items" and body.get("service_line") == "medical_services": return self.send_json(403, {"error": {"code": "CONSUMER_NOT_AUTHORIZED"}})
-                if path == "/checkout/payment-link": return self.send_json(403, {"error": {"code": "CONSUMER_NOT_AUTHORIZED"}})
+                if path == "/checkout/payment-link": return self.send_json(403, {"error": {"code": "LEO_PAYMENT_LINK_FORBIDDEN"}})
                 return self.send_json(401, {"error": {"code": "UNAUTHENTICATED"}})
 
             do_GET = do_any

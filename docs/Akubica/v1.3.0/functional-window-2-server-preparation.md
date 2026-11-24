@@ -10,7 +10,8 @@ sin opciones adicionales. La opción explícita `--scenario=functional-window-2`
 añade sólo al namespace dedicado:
 
 - bearer native para `membership_regular`, con `memberships:read`,
-  `cart:read` y `cart:membership:write`;
+  `cart:read`, `cart:membership:write`, `cart:laboratory:read` y
+  `cart:laboratory:write`, limitado al binding `olab`;
 - bearer Leo para `membership_none`, sin capacidades de pago y con
   `cart:laboratory:read` pero sin `cart:laboratory:write`;
 - binding Leo con marca `swisslab`, distinta de `olab`, para que B21x alcance
@@ -26,6 +27,19 @@ php artisan akubica:uat-access --dry-run --namespace=akubica-uat-batch2-a4-v1 --
 php artisan akubica:uat-access --apply --namespace=akubica-uat-batch2-a4-v1 --scenario=functional-window-2 --confirm=akubica-uat-batch2-a4-v1 --no-ansi
 php artisan akubica:uat-access --reset --namespace=akubica-uat-batch2-a4-v1 --scenario=functional-window-2 --confirm=akubica-uat-batch2-a4-v1 --no-ansi
 ```
+
+El fixture de precio B03/B06 usa una interfaz namespace-scoped en QA; el
+manifest dedicado debe estar activo antes de cualquier escritura:
+
+```text
+php artisan akubica:rc2-price-fixtures --dry-run --namespace=akubica-uat-batch2-a4-v1 --no-ansi
+php artisan akubica:rc2-price-fixtures --apply --namespace=akubica-uat-batch2-a4-v1 --confirm=rc2-price-fixtures --no-ansi
+php artisan akubica:rc2-price-fixtures --cleanup --namespace=akubica-uat-batch2-a4-v1 --confirm=rc2-price-fixtures --no-ansi
+```
+
+El modo con namespace deriva prefijo, categoría y cleanup propios; rechaza
+otros namespaces y no adopta registros legacy. El modo sin namespace sólo se
+usa en el arnés local histórico.
 
 La limpieza verifica consumers, channels, credentials, delegations, bindings y
 tokens por los IDs del estado. Si queda un recurso activo o un token presente,

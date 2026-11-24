@@ -16,8 +16,8 @@ del release 83814060 / SHA `5d0769850941f8fc93da423426e79249d7c0ed97` y registra
 | B20 | 403 | acceso | Mismo déficit de capacidad native laboratory | Misma corrección de binding, sin wildcard ni permisos financieros |
 | B21 | 403 | acceso/plan | El DELETE no identificaba la línea laboratory y el perfil no tenía la capacidad explícita | Capacidad laboratory native y `?brand=olab` como discriminador |
 | B21r | 422 | plan/dependencia | La lectura no indicaba `service_line=medical_services`; además B21 no había podido ejecutarse | Usar `GET /cart?service_line=medical_services`; queda dependiente de B21 |
-| B19 | 409, envelope de error válido | plan | OpenAPI permite `201/409`; con membresía activa el contrato devuelve `MEMBERSHIP_ALREADY_ACTIVE`, no `data` | Assertion alternativa estricta para los dos envelopes contractuales |
-| B25 | 403, código específico | plan | Rev7 exige 403 para Leo; la implementación específica devuelve `LEO_PAYMENT_LINK_FORBIDDEN` | Aceptar sólo los códigos de denegación contractualmente equivalentes, manteniendo status 403 |
+| B19 | 409, envelope de error válido | plan | B09 fija membresía activa en esta ventana; por ello el resultado determinista es `409/MEMBERSHIP_ALREADY_ACTIVE` | Plan fijado a ese estado inicial; el caso 201 permanece cubierto por la prueba local de fixture sin membresía |
+| B25 | 403, código específico | plan | El perfil Leo y la ruta son deterministas; la implementación devuelve `LEO_PAYMENT_LINK_FORBIDDEN` | Plan fijado al código específico, manteniendo status 403 |
 
 ## Cambios locales
 
@@ -29,6 +29,7 @@ del release 83814060 / SHA `5d0769850941f8fc93da423426e79249d7c0ed97` y registra
   con query string; timeout mínimo independiente para cleanup; conserva el
   transporte `X-Consumer-Credential` y el User-Agent del commit `84295dfb`.
 - Plan: filtros de carrito, discriminador de B21 y assertions contractuales.
+- B03 QA: el comando de precios admite ahora `--namespace=akubica-uat-batch2-a4-v1`; el modo namespace exige manifest activo y usa prefijo/categoría propios para apply, mutate y cleanup. El modo sin namespace queda limitado al arnés local histórico.
 - Arnés: allowlist explícita para las bases sintéticas IT-0061 y fixture HTTP
   con totals de carrito; no se relaja hacia QA ni producción.
 
