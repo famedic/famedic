@@ -1,11 +1,12 @@
 {
-  "schema": "it0061-functional-window-2-memberships-cart-qa-plan.v1",
+  "schema": "it0061-functional-window-2-memberships-cart-template.v1",
+  "template": true,
   "namespace": "akubica-uat-batch2-a4-v1",
   "credential_scenario": "functional-window-2-memberships",
   "id_source": "runtime-inventory",
   "qa_guards": {
     "target_env": "staging",
-    "expected_release_sha": "55fecce944a5cc2c20e08d061f862cd21809af5a",
+    "expected_release_sha": "{{RELEASE_SHA_FROM_IDENTITY}}",
     "https_verified": true,
     "qa_writes_authorized": "1",
     "leo_negative_writes_authorized": "0"
@@ -35,7 +36,7 @@
       "path": "/api/v1/cart/items",
       "json": {"service_line": "medical_services", "item_type": "membership", "membership_plan_code": "basic_annual", "quantity": 1},
       "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
-      "headers": {"Idempotency-Key": "it0061-membership-B12-001"},
+      "headers": {"Idempotency-Key": "{{B12_IDEMPOTENCY_KEY}}"},
       "expected_status": 201,
       "writes": true,
       "assertions": {"required_paths": ["data.items.0.id", "data.items.0.membership_plan_code"], "equals": {"data.items.0.membership_plan_code": "basic_annual"}},
@@ -57,7 +58,7 @@
       "path": "/api/v1/cart/items",
       "json": {"service_line": "medical_services", "item_type": "membership", "membership_plan_code": "basic_annual", "quantity": 1},
       "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
-      "headers": {"Idempotency-Key": "it0061-membership-B13-duplicate"},
+      "headers": {"Idempotency-Key": "{{B13_IDEMPOTENCY_KEY}}"},
       "expected_status": 409,
       "writes": true,
       "assertions": {"equals": {"error.code": "MEMBERSHIP_ALREADY_IN_CART"}}
@@ -68,7 +69,7 @@
       "path": "/api/v1/cart/items",
       "json": {"service_line": "medical_services", "item_type": "membership", "membership_plan_code": "basic_annual", "quantity": 1},
       "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
-      "headers": {"Idempotency-Key": "it0061-membership-B12-001"},
+      "headers": {"Idempotency-Key": "{{B12_IDEMPOTENCY_KEY}}"},
       "expected_status": 201,
       "writes": true,
       "assertions": {"required_paths": ["data.items.0.id"], "headers_equals": {"Idempotency-Replayed": "true"}}
@@ -82,6 +83,7 @@
       "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
       "expected_status": 200,
       "writes": true,
+      "functional_case": true,
       "assertions": {"required_paths": ["data"]},
       "inventory_ref": "B12",
       "source_case": "B12",

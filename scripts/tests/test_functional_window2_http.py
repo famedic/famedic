@@ -84,6 +84,17 @@ class HttpRunnerTests(unittest.TestCase):
         self.assertTrue(all(x["ok"] for x in report["requests"] + report["cleanup"]))
         self.assertEqual(report["cleanup_status"], "PASS")
 
+    def test_functional_cleanup_case_is_reported_separately_and_as_functional_result(self):
+        proc, report = self.run_plan({
+            "requests": [{"id": "B12", "method": "POST", "path": "/b", "expected_status": 204}],
+            "cleanup": [{"id": "B16", "method": "POST", "path": "/cleanup", "expected_status": 204, "functional_case": True}],
+        })
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(report["cleanup"][0]["id"], "B16")
+        self.assertEqual(report["cleanup"][0]["ok"], True)
+        self.assertEqual([item["id"] for item in report["requests"]], ["B12", "B16"])
+        self.assertEqual(report["requests"][1]["phase"], "cleanup")
+
     def test_http_failure_keeps_failure_and_runs_cleanup(self):
         proc, report = self.run_plan({"requests": [{"id": "B22", "method": "GET", "path": "/fail", "expected_status": 200}], "cleanup": [{"id": "cleanup", "method": "POST", "path": "/cleanup", "expected_status": 204}]})
         self.assertEqual(proc.returncode, 1)

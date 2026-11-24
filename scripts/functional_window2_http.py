@@ -170,6 +170,7 @@ class Case:
     unregister_after_success: bool = False
     headers: dict[str, str] | None = None
     register_id_path: str | None = None
+    functional_case: bool = False
 
 
 def _origin(url: str) -> tuple[str, str, int | None]:
@@ -256,7 +257,10 @@ def load_plan(path: Path) -> tuple[list[Case], list[Case]]:
             register_id_path = raw.get("register_id_path")
             if register_id_path is not None and (not isinstance(register_id_path, str) or not re.fullmatch(r"[A-Za-z0-9_.]+", register_id_path)):
                 raise RunnerError("REGISTER_ID_PATH_INVALID")
-            result.append(Case(case_id, method.upper(), path_value, tuple(expected), body, writes, bearer_alias, machine_alias, assertions, inventory_ref, source_case, register_after_success, unregister_after_success, headers, register_id_path))
+            functional_case = raw.get("functional_case", False)
+            if type(functional_case) is not bool:
+                raise RunnerError("FUNCTIONAL_CASE_FLAG_INVALID")
+            result.append(Case(case_id, method.upper(), path_value, tuple(expected), body, writes, bearer_alias, machine_alias, assertions, inventory_ref, source_case, register_after_success, unregister_after_success, headers, register_id_path, functional_case))
             seen.add(case_id)
         return result
 
@@ -513,23 +517,32 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
             try:
                 cleanup_case = case
                 if case.source_case and case.source_case not in response_bodies:
-                    cleanup_results.append({"id": case.case_id, "ok": True, "status": "NOT_RUN", "omitted": "RESOURCE_NOT_CREATED"})
+                    omitted = {"id": case.case_id, "ok": True, "status": "NOT_RUN", "omitted": "RESOURCE_NOT_CREATED"}
+                    cleanup_results.append(omitted)
+                    if case.functional_case:
+                        results.append({**omitted, "phase": "cleanup"})
                     continue
                 if "{{" in case.path:
                     try:
                         resolved = _resolve_path(case.path, response_bodies)
                     except RunnerError as exc:
                         if str(exc) == "CLEANUP_SOURCE_ID_MISSING":
-                            cleanup_results.append({"id": case.case_id, "ok": True, "status": "NOT_RUN", "omitted": "RESOURCE_NOT_CREATED"})
+                            omitted = {"id": case.case_id, "ok": True, "status": "NOT_RUN", "omitted": "RESOURCE_NOT_CREATED"}
+                            cleanup_results.append(omitted)
+                            if case.functional_case:
+                                results.append({**omitted, "phase": "cleanup"})
                             continue
                         raise
-                    cleanup_case = Case(case.case_id, case.method, resolved, case.expected, case.body, case.writes, case.bearer_alias, case.machine_alias, case.assertions, case.inventory_ref, case.source_case, case.register_after_success, case.unregister_after_success, case.headers, case.register_id_path)
+                    cleanup_case = Case(case.case_id, case.method, resolved, case.expected, case.body, case.writes, case.bearer_alias, case.machine_alias, case.assertions, case.inventory_ref, case.source_case, case.register_after_success, case.unregister_after_success, case.headers, case.register_id_path, case.functional_case)
                 if cleanup_case.method == "DELETE":
                     ref = data.get("inventory_records", {}).get(case.inventory_ref or "")
                     if not isinstance(ref, dict):
                         raise InventoryProviderError("INVENTORY_RECORD_MISSING")
                     if not case.source_case and ref.get("created") is False:
-                        cleanup_results.append({"id": case.case_id, "ok": True, "status": "NOT_RUN", "omitted": "RESOURCE_NOT_CREATED"})
+                        omitted = {"id": case.case_id, "ok": True, "status": "NOT_RUN", "omitted": "RESOURCE_NOT_CREATED"}
+                        cleanup_results.append(omitted)
+                        if case.functional_case:
+                            results.append({**omitted, "phase": "cleanup"})
                         continue
                     if inventory_provider is None:
                         raise InventoryProviderError("INVENTORY_PROVIDER_REQUIRED")
@@ -547,7 +560,10 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                         raise InventoryProviderError("INVENTORY_RECORD_MISSING")
                     resource_id = int(urlsplit(cleanup_case.path).path.rsplit("/", 1)[-1])
                     inventory_provider.unregister(data.get("inventory", {}).get("namespace", ""), resource_id, ref, metadata.get("expected_release_sha", ""))
-                cleanup_results.append({"id": case.case_id, "http_status": status, "ok": ok, "duration_ms": duration})
+                cleanup_result = {"id": case.case_id, "http_status": status, "ok": ok, "duration_ms": duration}
+                cleanup_results.append(cleanup_result)
+                if case.functional_case:
+                    results.append({"id": case.case_id, "phase": "cleanup", "method": case.method, "path": cleanup_case.path, "http_status": status, "ok": ok, "duration_ms": duration})
                 if not ok and exit_code == 0:
                     exit_code = 1
             except BaseException as exc:
