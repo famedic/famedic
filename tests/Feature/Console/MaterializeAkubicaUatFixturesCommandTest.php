@@ -233,6 +233,20 @@ test('apply requires complete configured identities', function () {
         ->assertFailed();
 });
 
+test('invalid phone identity is rejected before any partial persistence', function () {
+    $identities = eulU01Identities();
+    $identities['primary']['phone'] = '8510000001';
+    eulU01ConfigureIdentities($identities);
+
+    $this->artisan('akubica:uat-fixtures', ['--apply' => true, '--confirm' => AkubicaUatFixtureContract::NAMESPACE])
+        ->expectsOutputToContain('UAT_CONFIG_INVALID')
+        ->assertFailed();
+
+    expect(AkubicaUatFixtureManifest::query()->count())->toBe(0)
+        ->and(User::query()->where('email', $identities['primary']['email'])->exists())->toBeFalse()
+        ->and(Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK)->allFiles())->toBe([]);
+});
+
 test('identity collision is rejected without manifest writes', function () {
     $identity = eulU01Identities()['primary'];
     $user = User::factory()->create([

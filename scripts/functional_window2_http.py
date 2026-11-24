@@ -14,6 +14,7 @@ import json
 import re
 import signal
 import shlex
+import shutil
 import subprocess
 import ssl
 import sys
@@ -39,6 +40,10 @@ class CredentialProviderError(RunnerError):
     pass
 
 
+class InventoryProviderError(RunnerError):
+    pass
+
+
 class CredentialProvider:
     """Read short-lived credentials from a custody command without exposing them."""
 
@@ -47,6 +52,10 @@ class CredentialProvider:
         self._values = values
         if command is None and values is None:
             raise CredentialProviderError("CREDENTIAL_PROVIDER_REQUIRED")
+        if command is not None:
+            argv = shlex.split(command, posix=sys.platform != "win32")
+            if not argv or (not Path(argv[0]).exists() and shutil.which(argv[0]) is None):
+                raise CredentialProviderError("CREDENTIAL_PROVIDER_UNAVAILABLE")
 
     def load(self, aliases: set[str]) -> dict[str, str]:
         if self._values is not None:
@@ -92,6 +101,40 @@ class CredentialProvider:
         return result
 
 
+class InventoryProvider:
+    """Verify ownership immediately before a DELETE, without exposing secrets."""
+
+    def __init__(self, command: str | None = None):
+        self._command = command
+        if not command:
+            raise InventoryProviderError("INVENTORY_PROVIDER_REQUIRED")
+        argv = shlex.split(command, posix=sys.platform != "win32")
+        if not argv or (not Path(argv[0]).exists() and shutil.which(argv[0]) is None):
+            raise InventoryProviderError("INVENTORY_PROVIDER_UNAVAILABLE")
+
+    def verify(self, namespace: str, resource_id: int, purpose: str, owner: str, expected_sha: str) -> None:
+        result = self._invoke({"action": "verify", "namespace": namespace, "resource_id": resource_id, "purpose": purpose, "owner": owner, "expected_sha": expected_sha})
+        if result != {"status": "verified", "namespace": namespace, "resource_id": resource_id, "purpose": purpose, "owner": owner}:
+            raise InventoryProviderError("INVENTORY_OWNERSHIP_UNCONFIRMED")
+
+    def _invoke(self, request: dict[str, Any]) -> dict[str, Any]:
+        try:
+            completed = subprocess.run(
+                shlex.split(self._command or "", posix=sys.platform != "win32"),
+                input=json.dumps(request), text=True, capture_output=True, timeout=10, check=False,
+            )
+        except (OSError, subprocess.SubprocessError, ValueError):
+            raise InventoryProviderError("INVENTORY_PROVIDER_FAILED") from None
+        if completed.returncode != 0:
+            raise InventoryProviderError("INVENTORY_PROVIDER_FAILED")
+        try:
+            result = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            raise InventoryProviderError("INVENTORY_PROVIDER_INVALID") from None
+        if not isinstance(result, dict):
+            raise InventoryProviderError("INVENTORY_PROVIDER_INVALID")
+        return result
+
 class NoRedirects(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise RunnerError("REDIRECT_FORBIDDEN")
@@ -108,6 +151,8 @@ class Case:
     bearer_alias: str | None = None
     machine_alias: str | None = None
     assertions: dict[str, Any] | None = None
+    inventory_ref: str | None = None
+    source_case: str | None = None
 
 
 def _origin(url: str) -> tuple[str, str, int | None]:
@@ -167,7 +212,13 @@ def load_plan(path: Path) -> tuple[list[Case], list[Case]]:
             assertions = raw.get("assertions")
             if assertions is not None and not isinstance(assertions, dict):
                 raise RunnerError("ASSERTIONS_INVALID")
-            result.append(Case(case_id, method.upper(), path_value, tuple(expected), body, writes, bearer_alias, machine_alias, assertions))
+            inventory_ref = raw.get("inventory_ref")
+            if inventory_ref is not None and (not isinstance(inventory_ref, str) or not inventory_ref):
+                raise RunnerError("INVENTORY_REF_INVALID")
+            source_case = raw.get("source_case")
+            if source_case is not None and (not isinstance(source_case, str) or not source_case):
+                raise RunnerError("SOURCE_CASE_INVALID")
+            result.append(Case(case_id, method.upper(), path_value, tuple(expected), body, writes, bearer_alias, machine_alias, assertions, inventory_ref, source_case))
             seen.add(case_id)
         return result
 
@@ -216,6 +267,8 @@ def validate_mode(mode: str, base_url: str, metadata: dict[str, Any]) -> ssl.SSL
 
 
 def _project_error(exc: BaseException) -> str:
+    if isinstance(exc, RunnerError):
+        return str(exc)
     if isinstance(exc, HTTPError):
         return f"HTTP_{exc.code}"
     if isinstance(exc, TimeoutError):
@@ -301,7 +354,17 @@ def _request(base_url: str, case: Case, timeout: float, tls_context: ssl.SSLCont
     return status, round((time.monotonic() - started) * 1000), body, assertion_error
 
 
-def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str = "local", credential_command: str | None = None, credential_values: dict[str, str] | None = None) -> int:
+def _resolve_path(path: str, bodies: dict[str, Any]) -> str:
+    pattern = re.compile(r"\{\{([A-Za-z0-9_-]+)\.([A-Za-z0-9_.]+)\}\}")
+    def replace(match: re.Match[str]) -> str:
+        value = _path_value(bodies.get(match.group(1)), match.group(2))
+        if type(value) is not int or value <= 0:
+            raise RunnerError("CLEANUP_SOURCE_ID_MISSING")
+        return str(value)
+    return pattern.sub(replace, path)
+
+
+def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str = "local", credential_command: str | None = None, credential_values: dict[str, str] | None = None, release_source: Path | None = None, inventory_command: str | None = None) -> int:
     data = json.loads(plan.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise RunnerError("PLAN_INVALID")
@@ -310,9 +373,21 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
     requests, cleanup = load_plan(plan)
     metadata = data.get("qa_guards", {}) if isinstance(data.get("qa_guards", {}), dict) else {}
     tls_context = validate_mode(mode, base_url, metadata)
+    if mode == "qa":
+        if release_source is None or not release_source.is_file():
+            raise RunnerError("RELEASE_SOURCE_REQUIRED")
+        source = json.loads(release_source.read_text(encoding="utf-8"))
+        if source.get("active_sha", "").lower() != metadata.get("expected_release_sha", "").lower():
+            raise RunnerError("RELEASE_SHA_MISMATCH")
+    if any(case.method == "DELETE" for case in requests + cleanup):
+        if mode == "qa" and inventory_command is None:
+            raise RunnerError("INVENTORY_PROVIDER_REQUIRED")
+    inventory_provider = InventoryProvider(inventory_command) if inventory_command else None
     if mode == "qa" and any(case.writes for case in requests):
         if metadata.get("qa_writes_authorized") != "1":
             raise RunnerError("QA_WRITES_NOT_AUTHORIZED")
+    if mode == "qa" and any(not case.assertions for case in requests):
+        raise RunnerError("ASSERTIONS_REQUIRED")
     if any(case.case_id == "B25" and case.writes for case in requests):
         if metadata.get("leo_negative_writes_authorized") != "1":
             raise RunnerError("LEO_NEGATIVE_WRITES_NOT_AUTHORIZED")
@@ -323,6 +398,7 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
     credentials = credential_provider.load(aliases) if credential_provider else None
     results: list[dict[str, Any]] = []
     cleanup_results: list[dict[str, Any]] = []
+    response_bodies: dict[str, Any] = {}
     exit_code = 0
     interrupted = False
 
@@ -335,7 +411,16 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
     try:
         for case in requests:
             try:
-                status, duration, _body, assertion_error = _request(base_url, case, timeout, tls_context, credentials)
+                if case.method == "DELETE":
+                    if inventory_provider is None or not case.inventory_ref:
+                        raise InventoryProviderError("INVENTORY_PROVIDER_REQUIRED")
+                    ref = data.get("inventory_records", {}).get(case.inventory_ref)
+                    if not isinstance(ref, dict):
+                        raise InventoryProviderError("INVENTORY_RECORD_MISSING")
+                    resource_id = int(case.path.rsplit("/", 1)[-1])
+                    inventory_provider.verify(data.get("inventory", {}).get("namespace", ""), resource_id, ref.get("purpose", ""), ref.get("owner", ""), metadata.get("expected_release_sha", ""))
+                status, duration, body, assertion_error = _request(base_url, case, timeout, tls_context, credentials)
+                response_bodies[case.case_id] = body
                 ok = status in case.expected and assertion_error is None
                 result = {"id": case.case_id, "method": case.method, "path": case.path, "http_status": status, "ok": ok, "duration_ms": duration}
                 if assertion_error:
@@ -355,7 +440,31 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
     finally:
         for case in cleanup:
             try:
-                status, duration, _body, assertion_error = _request(base_url, case, timeout, tls_context, credentials)
+                cleanup_case = case
+                if case.source_case and case.source_case not in response_bodies:
+                    cleanup_results.append({"id": case.case_id, "ok": True, "status": "NOT_RUN", "omitted": "RESOURCE_NOT_CREATED"})
+                    continue
+                if "{{" in case.path:
+                    try:
+                        resolved = _resolve_path(case.path, response_bodies)
+                    except RunnerError as exc:
+                        if str(exc) == "CLEANUP_SOURCE_ID_MISSING":
+                            cleanup_results.append({"id": case.case_id, "ok": True, "status": "NOT_RUN", "omitted": "RESOURCE_NOT_CREATED"})
+                            continue
+                        raise
+                    cleanup_case = Case(case.case_id, case.method, resolved, case.expected, case.body, case.writes, case.bearer_alias, case.machine_alias, case.assertions, case.inventory_ref, case.source_case)
+                if cleanup_case.method == "DELETE":
+                    ref = data.get("inventory_records", {}).get(case.inventory_ref or "")
+                    if not isinstance(ref, dict):
+                        raise InventoryProviderError("INVENTORY_RECORD_MISSING")
+                    if not case.source_case and ref.get("created") is False:
+                        cleanup_results.append({"id": case.case_id, "ok": True, "status": "NOT_RUN", "omitted": "RESOURCE_NOT_CREATED"})
+                        continue
+                    if inventory_provider is None:
+                        raise InventoryProviderError("INVENTORY_PROVIDER_REQUIRED")
+                    resource_id = int(urlsplit(cleanup_case.path).path.rsplit("/", 1)[-1])
+                    inventory_provider.verify(data.get("inventory", {}).get("namespace", ""), resource_id, ref.get("purpose", ""), ref.get("owner", ""), metadata.get("expected_release_sha", ""))
+                status, duration, _body, assertion_error = _request(base_url, cleanup_case, timeout, tls_context, credentials)
                 ok = status in case.expected and assertion_error is None
                 cleanup_results.append({"id": case.case_id, "http_status": status, "ok": ok, "duration_ms": duration})
                 if not ok and exit_code == 0:
@@ -388,9 +497,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--mode", choices=("local", "qa"), default="local")
     parser.add_argument("--credential-command", help="Custody helper; receives aliases on stdin and returns secret values on stdout")
+    parser.add_argument("--release-source", type=Path, help="Verified JSON source containing active_sha; required in QA")
+    parser.add_argument("--inventory-command", help="Inventory verifier used before every DELETE")
     args = parser.parse_args(argv)
     try:
-        return run(args.plan, args.base_url, args.output, args.timeout, args.mode, args.credential_command)
+        return run(args.plan, args.base_url, args.output, args.timeout, args.mode, args.credential_command, None, args.release_source, args.inventory_command)
     except (OSError, RunnerError, json.JSONDecodeError) as exc:
         print(f"BLOCKED: {type(exc).__name__}", file=sys.stderr)
         return 2

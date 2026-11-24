@@ -14,6 +14,9 @@ return [
         'disk' => AkubicaUatFixtureContract::STORAGE_DISK,
         'prefix' => AkubicaUatFixtureContract::STORAGE_PREFIX,
     ],
+    // Optional release metadata file written by the deploy process; never use
+    // the runner checkout HEAD as the deployed SHA source.
+    'release_metadata_path' => env('AKUBICA_UAT_RELEASE_METADATA_PATH'),
     'identities' => [
         'primary' => [
             'email' => env('AKUBICA_UAT_PRIMARY_EMAIL'),

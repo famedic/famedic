@@ -38,6 +38,7 @@ use App\Models\TaxProfile;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Propaganistas\LaravelPhone\PhoneNumber;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -763,6 +764,10 @@ class AkubicaUatFixtureMaterializer
             }
 
             if ($country !== 'MX' || strlen($phone) !== 10) {
+                throw new AkubicaUatFixtureException('UAT_CONFIG_INVALID');
+            }
+
+            if ((new PhoneNumber($phone, $country))->getCountry() !== $country) {
                 throw new AkubicaUatFixtureException('UAT_CONFIG_INVALID');
             }
 
