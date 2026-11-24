@@ -317,7 +317,7 @@ def _request(base_url: str, case: Case, timeout: float, tls_context: ssl.SSLCont
     if not _same_origin(base_url, target):
         raise RunnerError("DESTINATION_NOT_ALLOWED")
     payload = None
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": "application/json", "User-Agent": "Famedic-IT0061-Runner/1.0"}
     if case.bearer_alias:
         if credentials is None or case.bearer_alias not in credentials:
             raise CredentialProviderError("CREDENTIAL_ALIAS_UNAVAILABLE")
@@ -325,7 +325,7 @@ def _request(base_url: str, case: Case, timeout: float, tls_context: ssl.SSLCont
     if case.machine_alias:
         if credentials is None or case.machine_alias not in credentials:
             raise CredentialProviderError("CREDENTIAL_ALIAS_UNAVAILABLE")
-        headers["X-Api-Consumer-Credential"] = credentials[case.machine_alias]
+        headers["X-Consumer-Credential"] = credentials[case.machine_alias]
     if case.body is not None:
         payload = json.dumps(case.body, separators=(",", ":")).encode("utf-8")
         headers["Content-Type"] = "application/json"

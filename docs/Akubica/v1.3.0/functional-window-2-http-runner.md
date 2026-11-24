@@ -59,7 +59,7 @@ El runner admite `--credential-command <programa>`. El programa no recibe secret
 por argumentos: recibe por stdin JSON con los aliases solicitados y devuelve por
 stdout únicamente un objeto JSON alias→secreto. El runner captura stdout/stderr,
 usa los valores sólo en memoria para construir `Authorization: Bearer` y
-`X-Api-Consumer-Credential`, y nunca copia secretos al reporte, logs, archivos
+`X-Consumer-Credential`, y nunca copia secretos al reporte, logs, archivos
 temporales o mensajes de error. El helper debe ser un mecanismo seguro existente;
 un script de prueba sintético no acredita custodia QA. Al finalizar el bloque
 HTTP, el runner llama al mismo helper con `{"action":"revoke","aliases":[...]}`
