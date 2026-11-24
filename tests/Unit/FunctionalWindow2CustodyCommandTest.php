@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\Process\Process;
 
+// This suite exercises Artisan, config, Storage and MySQL; it is a Laravel
+// integration suite despite its historical Unit directory location.
+uses(Tests\TestCase::class);
+
 function custodyWindow2ConfigureIdentities(): void
 {
     foreach (['primary', 'foreign', 'disposable', 'membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $index => $role) {
@@ -81,4 +85,119 @@ test('real custody helper reads and revokes all window aliases in isolated mysql
     Artisan::call('akubica:uat-access', ['--reset' => true, '--namespace' => $namespace, '--scenario' => 'functional-window-2', '--confirm' => $namespace]);
     expect(AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->where('status', 'active')->exists())->toBeTrue();
     Artisan::call('akubica:uat-fixtures', ['--reset' => true, '--confirm' => $namespace, '--namespace' => $namespace]);
+});
+
+test('real custody helper supports the dedicated membership scenario and rejects foreign scope', function () {
+    custodyWindow2ConfigureIdentities();
+    $namespace = 'akubica-uat-batch2-a4-v1';
+    $scenario = 'functional-window-2-memberships';
+    $this->artisan('akubica:uat-fixtures', [
+        '--apply' => true,
+        '--confirm' => $namespace,
+        '--namespace' => $namespace,
+    ])->assertSuccessful();
+    $initialPatCount = PersonalAccessToken::query()->count();
+    expect(AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->where('status', 'active')->exists())->toBeTrue();
+
+    $operator = User::factory()->create();
+    $administrator = Administrator::create(['user_id' => $operator->id]);
+    $administrator->givePermissionTo(Permission::firstOrCreate(['name' => 'api-consumers.manage', 'guard_name' => 'web']));
+    config()->set('akubica_uat.operator_id', $operator->id);
+
+    // Recover stale local state from either supported scenario without
+    // adopting it: the state itself supplies the scenario selector.
+    $statePath = AkubicaUatFixtureContract::storagePath('access-state.json', $namespace);
+    if (Storage::disk('local')->exists($statePath)) {
+        $existing = json_decode((string) Storage::disk('local')->get($statePath), true, 512, JSON_THROW_ON_ERROR);
+        $existingScenario = $existing['scenario'] ?? '';
+        if (is_string($existingScenario) && $existingScenario !== '') {
+            app(App\Services\Api\V1\Uat\AkubicaUatAccessProvisioner::class)->reset($namespace, $operator, $existingScenario);
+        }
+    }
+
+    $aliases = [
+        'machine_native',
+        'native_membership_none',
+        'native_membership_regular',
+        'native_membership_institutional',
+        'native_membership_expired',
+    ];
+    $childEnv = array_filter([
+        'APP_ENV' => getenv('APP_ENV') ?: 'testing',
+        'APP_KEY' => getenv('APP_KEY') ?: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+        'DB_CONNECTION' => getenv('DB_CONNECTION') ?: 'mysql',
+        'DB_HOST' => getenv('DB_HOST') ?: '127.0.0.1',
+        'DB_PORT' => getenv('DB_PORT') ?: '13307',
+        'DB_DATABASE' => getenv('DB_DATABASE') ?: 'famedic_rc2_it0061_window2_testing',
+        'DB_USERNAME' => getenv('DB_USERNAME') ?: 'famedic_rc2_test',
+        'DB_PASSWORD' => getenv('DB_PASSWORD') ?: 'famedic_rc2_test_pw',
+        'CACHE_STORE' => 'array',
+        'SESSION_DRIVER' => 'array',
+        'QUEUE_CONNECTION' => 'sync',
+    ], static fn ($value): bool => $value !== false && $value !== null);
+
+    try {
+        $this->artisan('akubica:uat-access', [
+            '--apply' => true,
+            '--namespace' => $namespace,
+            '--scenario' => $scenario,
+            '--confirm' => $namespace,
+        ])->assertSuccessful();
+
+        $read = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--private', '--no-ansi'], base_path(), $childEnv);
+        $read->setInput(json_encode(['action' => 'read', 'scenario' => $scenario, 'aliases' => $aliases], JSON_THROW_ON_ERROR));
+        $read->run();
+        expect($read->getExitCode())->toBe(0);
+        $secrets = json_decode(trim($read->getOutput()), true, 512, JSON_THROW_ON_ERROR);
+        expect(array_keys($secrets))->toBe($aliases);
+
+        $expectedMemberships = [
+            'membership_none' => ['status' => 'none', 'source' => null, 'purchase_eligible' => true, 'ineligibility_reason' => null, 'plan_code' => null],
+            'membership_regular' => ['status' => 'active', 'source' => 'individual', 'purchase_eligible' => false, 'ineligibility_reason' => 'membership_already_active', 'plan_code' => 'basic_annual'],
+            'membership_institutional' => ['status' => 'active', 'source' => 'sponsored', 'purchase_eligible' => false, 'ineligibility_reason' => 'sponsored_membership_active', 'plan_code' => null],
+            'membership_expired' => ['status' => 'expired', 'source' => 'individual', 'purchase_eligible' => true, 'ineligibility_reason' => null, 'plan_code' => 'basic_annual'],
+        ];
+        foreach ($expectedMemberships as $role => $expected) {
+            $response = $this->withHeaders([
+                'Authorization' => 'Bearer '.$secrets['native_'.$role],
+                'X-Synthetic-Machine-Credential' => $secrets['machine_native'],
+                'Accept' => 'application/json',
+            ])->getJson('/api/v1/memberships/status');
+            $response->assertOk()
+                ->assertJsonPath('data.status', $expected['status'])
+                ->assertJsonPath('data.source', $expected['source'])
+                ->assertJsonPath('data.purchase_eligible', $expected['purchase_eligible'])
+                ->assertJsonPath('data.ineligibility_reason', $expected['ineligibility_reason'])
+                ->assertJsonPath('data.plan_code', $expected['plan_code']);
+            if (in_array($role, ['membership_regular', 'membership_institutional', 'membership_expired'], true)) {
+                expect($response->json('data.expires_at'))->not->toBeNull();
+            }
+        }
+
+        $foreign = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--private', '--no-ansi'], base_path(), $childEnv);
+        $foreign->setInput(json_encode(['action' => 'read', 'scenario' => 'functional-window-2', 'aliases' => ['native_membership_none']], JSON_THROW_ON_ERROR));
+        $foreign->run();
+        expect($foreign->getExitCode())->not->toBe(0);
+
+        $foreignAlias = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--private', '--no-ansi'], base_path(), $childEnv);
+        $foreignAlias->setInput(json_encode(['action' => 'read', 'scenario' => $scenario, 'aliases' => ['leo_membership_none']], JSON_THROW_ON_ERROR));
+        $foreignAlias->run();
+        expect($foreignAlias->getExitCode())->not->toBe(0);
+
+        $revoke = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--no-ansi'], base_path(), $childEnv);
+        $revoke->setInput(json_encode(['action' => 'revoke', 'scenario' => $scenario, 'aliases' => $aliases], JSON_THROW_ON_ERROR));
+        $revoke->run();
+        expect($revoke->getExitCode())->toBe(0)->and($revoke->getOutput())->toContain('"revoked"');
+    } finally {
+        $resetResult = app(App\Services\Api\V1\Uat\AkubicaUatAccessProvisioner::class)->reset($namespace, $operator, $scenario);
+        expect($resetResult['status'] ?? null)->toBeIn(['ok', 'empty']);
+        $this->artisan('akubica:uat-fixtures', [
+            '--reset' => true,
+            '--confirm' => $namespace,
+            '--namespace' => $namespace,
+        ])->assertSuccessful();
+        expect(PersonalAccessToken::query()->count())->toBe($initialPatCount)
+            ->and(Storage::disk('local')->exists($statePath))->toBeFalse()
+            ->and(json_decode((string) Storage::disk('local')->get(AkubicaUatFixtureContract::storagePath('access-inventory.json', $namespace)), true)['status'] ?? null)->toBe('completed');
+    }
 });

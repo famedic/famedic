@@ -174,6 +174,28 @@ class HttpRunnerTests(unittest.TestCase):
             self.assertNotIn("synthetic-secret", serialized)
             self.assertNotIn("synthetic-stderr-secret", proc.stderr)
 
+    def test_membership_scenario_is_sent_to_custody_read_and_revoke(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            provider = root / "provider.py"
+            provider.write_text(
+                "import json,sys; x=json.load(sys.stdin); "
+                "assert x['scenario']=='functional-window-2-memberships'; "
+                "print(json.dumps({'revoked':x['aliases']} if x['action']=='revoke' else {'bearer':'synthetic-bearer','machine':'synthetic-machine'}))\n",
+                encoding="utf-8",
+            )
+            proc, report = self.run_plan({
+                "credential_scenario": "functional-window-2-memberships",
+                "requests": [{
+                    "id": "B08", "method": "GET", "path": "/assert", "expected_status": 200,
+                    "auth": {"bearer_alias": "bearer", "machine_alias": "machine"},
+                    "assertions": {"equals": {"data.status": "ok"}},
+                }],
+                "cleanup": [],
+            }, provider=f"{sys.executable} {provider}")
+            self.assertEqual(proc.returncode, 0)
+            self.assertTrue(report["requests"][0]["ok"])
+
     def test_assertion_failure_is_not_pass(self):
         proc, report = self.run_plan({
             "requests": [{"id": "B09", "method": "GET", "path": "/assert", "expected_status": 200, "assertions": {"equals": {"data.status": "wrong"}}}],
