@@ -8,13 +8,16 @@ use App\Models\LaboratoryCartItem;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 /**
- * Read-only inventory bridge for functional-window-2 cleanup.
+ * Inventory bridge for functional-window-2 cleanup.
  *
  * It runs beside the Laravel release, reads the active manifest and MySQL,
- * and obtains the deployed SHA from release metadata/current. It never uses
- * the runner checkout and never mutates application data.
+ * and obtains the deployed SHA from release metadata/current. Dynamic HTTP
+ * resources are registered in a private, namespace-scoped ledger only after
+ * ownership and purpose have been verified; application rows are never
+ * adopted from another namespace.
  */
 final class FunctionalWindow2InventoryCommand extends Command
 {
@@ -30,7 +33,7 @@ final class FunctionalWindow2InventoryCommand extends Command
         'cart-item-created-by-B20' => 'B20',
         'cart-item-created-by-B21' => 'B21',
     ];
-    private const OWNERS = ['customer-dedicated', 'customer:primary'];
+    private const OWNERS = ['customer-dedicated', 'customer:primary', 'customer:membership_regular', 'customer:membership_none'];
 
     public function handle(): int
     {
@@ -40,7 +43,7 @@ final class FunctionalWindow2InventoryCommand extends Command
 
         try {
             $input = json_decode((string) stream_get_contents(STDIN), true, 32, JSON_THROW_ON_ERROR);
-            if (! is_array($input) || ! in_array($input['action'] ?? null, ['identity', 'verify'], true)) {
+            if (! is_array($input) || ! in_array($input['action'] ?? null, ['identity', 'verify', 'register', 'unregister'], true)) {
                 return $this->failSafe('REQUEST_INVALID');
             }
             if (($input['action'] ?? null) === 'identity') {
@@ -72,6 +75,16 @@ final class FunctionalWindow2InventoryCommand extends Command
             $release = $this->releaseIdentity();
             if (! hash_equals(strtolower($release['sha']), strtolower($expectedSha))) {
                 return $this->failSafe('RELEASE_SHA_MISMATCH');
+            }
+            if (($input['action'] ?? null) === 'register') {
+                $this->registerResource((int) $resourceId, $purpose, $owner, (string) ($input['source_case'] ?? ''));
+                return $this->json(['status' => 'registered', 'namespace' => self::NAMESPACE, 'resource_id' => (int) $resourceId, 'purpose' => $purpose, 'owner' => $owner]);
+            }
+            if (($input['action'] ?? null) === 'unregister') {
+                $this->verifyLedger((int) $resourceId, $purpose, $owner);
+                $this->assertResourceGone((int) $resourceId);
+                $this->removeLedger((int) $resourceId);
+                return $this->json(['status' => 'unregistered', 'namespace' => self::NAMESPACE, 'resource_id' => (int) $resourceId]);
             }
             $this->verifyResource((int) $resourceId, $purpose, $owner);
 
@@ -105,6 +118,8 @@ final class FunctionalWindow2InventoryCommand extends Command
 
         $ids = (array) Arr::get((array) $manifest->metadata, 'ids', []);
         $primaryCustomerId = (int) Arr::get($ids, 'customers.primary', 0);
+        $temporaryPurpose = str_starts_with($purpose, 'cart-item-created-by-');
+        $ownerCustomerId = $temporaryPurpose ? $this->customerIdForOwner($owner, $ids) : $primaryCustomerId;
         $testIds = array_map('intval', array_values((array) Arr::get($ids, 'tests', [])));
         if ($primaryCustomerId < 1 || $testIds === []) {
             throw new \DomainException('MANIFEST_INVENTORY_INCOMPLETE');
@@ -114,10 +129,10 @@ final class FunctionalWindow2InventoryCommand extends Command
         if ($item === null) {
             throw new \DomainException('RESOURCE_NOT_FOUND');
         }
-        if ((int) $item->customer_id !== $primaryCustomerId) {
+        if ((int) $item->customer_id !== $ownerCustomerId) {
             throw new \DomainException('RESOURCE_OWNER_MISMATCH');
         }
-        if (! in_array((int) $item->laboratory_test_id, $testIds, true)) {
+        if (! $temporaryPurpose && ! in_array((int) $item->laboratory_test_id, $testIds, true)) {
             throw new \DomainException('RESOURCE_NAMESPACE_MISMATCH');
         }
         $brand = $item->laboratoryTest?->brand;
@@ -128,11 +143,92 @@ final class FunctionalWindow2InventoryCommand extends Command
         if ($scenario === null) {
             throw new \DomainException('RESOURCE_PURPOSE_MISMATCH');
         }
+        if ($temporaryPurpose) {
+            $this->verifyLedger($resourceId, $purpose, $owner);
+            $prefix = 'RC2-PRICE-FIX-'.self::NAMESPACE.'-';
+            if (! str_starts_with((string) $item->laboratoryTest->gda_id, $prefix)) {
+                throw new \DomainException('RESOURCE_NOT_WINDOW_CREATED');
+            }
+        }
     }
 
     private function scenarioFromPurpose(string $purpose): ?string
     {
         return self::PURPOSES[$purpose] ?? null;
+    }
+
+    private function ledgerPath(): string
+    {
+        return AkubicaUatFixtureContract::storagePath('window2-inventory.json', self::NAMESPACE);
+    }
+
+    private function readLedger(): array
+    {
+        $path = $this->ledgerPath();
+        if (! Storage::disk('local')->exists($path)) return [];
+        $value = json_decode((string) Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR);
+        return is_array($value) && isset($value['namespace'], $value['resources']) && $value['namespace'] === self::NAMESPACE
+            ? (array) $value['resources'] : throw new \DomainException('INVENTORY_LEDGER_INVALID');
+    }
+
+    private function writeLedger(array $resources): void
+    {
+        $disk = Storage::disk('local');
+        $path = $this->ledgerPath();
+        $temporary = $path.'.tmp.'.bin2hex(random_bytes(6));
+        $disk->put($temporary, json_encode(['namespace' => self::NAMESPACE, 'resources' => $resources], JSON_THROW_ON_ERROR));
+        $disk->move($temporary, $path);
+    }
+
+    private function registerResource(int $resourceId, string $purpose, string $owner, string $sourceCase): void
+    {
+        if (! in_array($purpose, ['cart-item-created-by-B06b', 'cart-item-created-by-B20', 'cart-item-created-by-B21'], true)) throw new \DomainException('RESOURCE_PURPOSE_NOT_REGISTERABLE');
+        if ($sourceCase !== substr($purpose, strlen('cart-item-created-by-'))) throw new \DomainException('RESOURCE_SOURCE_MISMATCH');
+        $this->verifyTemporaryResource($resourceId, $owner);
+        $resources = $this->readLedger();
+        $key = (string) $resourceId;
+        if (isset($resources[$key]) && $resources[$key] !== ['purpose' => $purpose, 'owner' => $owner]) throw new \DomainException('RESOURCE_LEDGER_COLLISION');
+        $resources[$key] = ['purpose' => $purpose, 'owner' => $owner];
+        $this->writeLedger($resources);
+    }
+
+    private function verifyLedger(int $resourceId, string $purpose, string $owner): void
+    {
+        $record = $this->readLedger()[(string) $resourceId] ?? null;
+        if ($record !== ['purpose' => $purpose, 'owner' => $owner]) throw new \DomainException('RESOURCE_PROVENANCE_UNCONFIRMED');
+    }
+
+    private function removeLedger(int $resourceId): void
+    {
+        $resources = $this->readLedger();
+        unset($resources[(string) $resourceId]);
+        if ($resources === []) {
+            Storage::disk('local')->delete($this->ledgerPath());
+            return;
+        }
+        $this->writeLedger($resources);
+    }
+
+    private function assertResourceGone(int $resourceId): void
+    {
+        $item = LaboratoryCartItem::withTrashed()->find($resourceId);
+        if ($item !== null && $item->deleted_at === null) throw new \DomainException('RESOURCE_STILL_PRESENT');
+    }
+
+    private function verifyTemporaryResource(int $resourceId, string $owner): void
+    {
+        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', self::NAMESPACE)->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)->first();
+        $primaryCustomerId = (int) Arr::get((array) ($manifest?->metadata ?? []), 'ids.customers.primary', 0);
+        $item = LaboratoryCartItem::query()->with('laboratoryTest')->find($resourceId);
+        $ownerCustomerId = $this->customerIdForOwner($owner, (array) ($manifest?->metadata['ids'] ?? []));
+        if (! $manifest || $ownerCustomerId < 1 || ! $item || (int) $item->customer_id !== $ownerCustomerId || ! $item->laboratoryTest || ! str_starts_with((string) $item->laboratoryTest->gda_id, 'RC2-PRICE-FIX-'.self::NAMESPACE.'-')) throw new \DomainException('RESOURCE_NOT_WINDOW_CREATED');
+    }
+
+    private function customerIdForOwner(string $owner, array $ids): int
+    {
+        if ($owner === 'customer-dedicated' || $owner === 'customer:primary') return (int) Arr::get($ids, 'customers.primary', 0);
+        if (str_starts_with($owner, 'customer:')) return (int) Arr::get($ids, 'customers.'.substr($owner, strlen('customer:')), 0);
+        return 0;
     }
 
     /** @return array{sha:string,release:string} */

@@ -183,6 +183,21 @@ class HttpRunnerTests(unittest.TestCase):
         self.assertFalse(report["requests"][0]["ok"])
         self.assertEqual(report["requests"][0]["assertion_error"], "ASSERTION_VALUE_MISMATCH")
 
+    def test_plan_rejects_unconsumed_body_key_before_http(self):
+        with tempfile.TemporaryDirectory() as d:
+            plan = Path(d) / "plan.json"
+            plan.write_text(json.dumps({
+                "requests": [{
+                    "id": "B19", "method": "POST", "path": "/cart/items",
+                    "body": {"service_line": "medical_services"}, "expected_status": 409,
+                }],
+                "cleanup": [],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(RunnerError, "JSON_BODY_KEY_INVALID"):
+                from scripts.functional_window2_http import load_plan
+                load_plan(plan)
+            self.assertEqual(Handler.calls, [])
+
     def test_interrupt_keeps_failure_and_runs_cleanup(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
