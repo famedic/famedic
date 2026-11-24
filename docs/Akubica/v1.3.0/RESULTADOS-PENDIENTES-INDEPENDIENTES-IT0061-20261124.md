@@ -193,3 +193,10 @@ runtime.
 El cambio requiere publicación/despliegue antes de usar el escenario nuevo en
 QA. Batch 2 permanece abierto y sin certificación.
 
+### Candidato final de esta iteración
+
+Commit publicado: `c55cc7f2` (SHA completo verificable en la rama remota).
+Comparación: https://github.com/famedic/famedic/compare/prep%2Fakubica-technical-integration-rc11...it0061%2Findependent-membership-preparation
+
+No se hizo merge, deploy ni acceso QA.
+
