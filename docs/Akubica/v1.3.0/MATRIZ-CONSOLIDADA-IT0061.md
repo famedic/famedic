@@ -179,3 +179,19 @@ requieren intervención externa. Batch 2 no está certificado.
 El escenario requiere publicación/despliegue antes de cualquier ejecución QA.
 Se conservan los resultados históricos. A4, OpenAPI, rev7, fixtures base y
 legacy permanecen sin cambios.
+
+### Assertions y transporte memberships — 2026-11-24
+
+| Validación | Resultado |
+|---|---|
+| `membership_none` contractual | PASS: `none`, elegible, sin plan ni motivo |
+| `membership_regular` contractual | PASS: `active/individual`, no elegible, `membership_already_active`, plan básico |
+| `membership_institutional` contractual | PASS: `active/sponsored`, no elegible, `sponsored_membership_active`, sin plan |
+| `membership_expired` contractual | PASS: `expired`, elegible, plan básico |
+| Custody CLI real → endpoint Laravel/MySQL → revoke/reset | PASS, 41 assertions, exit 0 |
+| Runner read/revoke con escenario explícito | PASS, 14 tests Python, exit 0 |
+| Inventario y cleanup | PASS: PAT sin incremento, state ausente, inventory completed |
+
+El plan operativo requiere `credential_scenario=functional-window-2-memberships`
+para este bloque y no puede reutilizar aliases Leo del escenario general. R08
+permanece pendiente por falta de decisión de alcance aprobada.

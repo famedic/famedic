@@ -96,6 +96,8 @@ test('real custody helper supports the dedicated membership scenario and rejects
         '--confirm' => $namespace,
         '--namespace' => $namespace,
     ])->assertSuccessful();
+    $initialPatCount = PersonalAccessToken::query()->count();
+    expect(AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->where('status', 'active')->exists())->toBeTrue();
 
     $operator = User::factory()->create();
     $administrator = Administrator::create(['user_id' => $operator->id]);
@@ -149,12 +151,27 @@ test('real custody helper supports the dedicated membership scenario and rejects
         $secrets = json_decode(trim($read->getOutput()), true, 512, JSON_THROW_ON_ERROR);
         expect(array_keys($secrets))->toBe($aliases);
 
-        foreach (['membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $role) {
-            $this->withHeaders([
+        $expectedMemberships = [
+            'membership_none' => ['status' => 'none', 'source' => null, 'purchase_eligible' => true, 'ineligibility_reason' => null, 'plan_code' => null],
+            'membership_regular' => ['status' => 'active', 'source' => 'individual', 'purchase_eligible' => false, 'ineligibility_reason' => 'membership_already_active', 'plan_code' => 'basic_annual'],
+            'membership_institutional' => ['status' => 'active', 'source' => 'sponsored', 'purchase_eligible' => false, 'ineligibility_reason' => 'sponsored_membership_active', 'plan_code' => null],
+            'membership_expired' => ['status' => 'expired', 'source' => 'individual', 'purchase_eligible' => true, 'ineligibility_reason' => null, 'plan_code' => 'basic_annual'],
+        ];
+        foreach ($expectedMemberships as $role => $expected) {
+            $response = $this->withHeaders([
                 'Authorization' => 'Bearer '.$secrets['native_'.$role],
                 'X-Synthetic-Machine-Credential' => $secrets['machine_native'],
                 'Accept' => 'application/json',
-            ])->getJson('/api/v1/memberships/status')->assertOk();
+            ])->getJson('/api/v1/memberships/status');
+            $response->assertOk()
+                ->assertJsonPath('data.status', $expected['status'])
+                ->assertJsonPath('data.source', $expected['source'])
+                ->assertJsonPath('data.purchase_eligible', $expected['purchase_eligible'])
+                ->assertJsonPath('data.ineligibility_reason', $expected['ineligibility_reason'])
+                ->assertJsonPath('data.plan_code', $expected['plan_code']);
+            if (in_array($role, ['membership_regular', 'membership_institutional', 'membership_expired'], true)) {
+                expect($response->json('data.expires_at'))->not->toBeNull();
+            }
         }
 
         $foreign = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--private', '--no-ansi'], base_path(), $childEnv);
@@ -179,5 +196,8 @@ test('real custody helper supports the dedicated membership scenario and rejects
             '--confirm' => $namespace,
             '--namespace' => $namespace,
         ])->assertSuccessful();
+        expect(PersonalAccessToken::query()->count())->toBe($initialPatCount)
+            ->and(Storage::disk('local')->exists($statePath))->toBeFalse()
+            ->and(json_decode((string) Storage::disk('local')->get(AkubicaUatFixtureContract::storagePath('access-inventory.json', $namespace)), true)['status'] ?? null)->toBe('completed');
     }
 });

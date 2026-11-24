@@ -47,9 +47,12 @@ class InventoryProviderError(RunnerError):
 class CredentialProvider:
     """Read short-lived credentials from a custody command without exposing them."""
 
-    def __init__(self, command: str | None = None, values: dict[str, str] | None = None):
+    def __init__(self, command: str | None = None, values: dict[str, str] | None = None, scenario: str = "functional-window-2"):
         self._command = command
         self._values = values
+        self._scenario = scenario
+        if scenario not in {"functional-window-2", "functional-window-2-memberships"}:
+            raise CredentialProviderError("CREDENTIAL_SCENARIO_NOT_ALLOWED")
         if command is None and values is None:
             raise CredentialProviderError("CREDENTIAL_PROVIDER_REQUIRED")
         if command is not None:
@@ -61,7 +64,7 @@ class CredentialProvider:
         if self._values is not None:
             result = dict(self._values)
         else:
-            result = self._invoke({"action": "read", "aliases": sorted(aliases)})
+            result = self._invoke({"action": "read", "scenario": self._scenario, "aliases": sorted(aliases)})
         if not isinstance(result, dict):
             raise CredentialProviderError("CREDENTIAL_PROVIDER_INVALID")
         if set(result) != aliases or any(not isinstance(v, str) or not v for v in result.values()):
@@ -71,7 +74,7 @@ class CredentialProvider:
     def revoke(self, aliases: set[str]) -> None:
         if self._values is not None:
             return
-        result = self._invoke({"action": "revoke", "aliases": sorted(aliases)})
+        result = self._invoke({"action": "revoke", "scenario": self._scenario, "aliases": sorted(aliases)})
         if not isinstance(result, dict) or sorted(result.get("revoked", [])) != sorted(aliases):
             raise CredentialProviderError("CREDENTIAL_REVOCATION_UNCONFIRMED")
 
@@ -427,7 +430,10 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
     if mode == "qa" and any(case.writes for case in requests) and not cleanup:
         raise RunnerError("CLEANUP_PLAN_REQUIRED")
     aliases = {alias for case in requests + cleanup for alias in (case.bearer_alias, case.machine_alias) if alias}
-    credential_provider = CredentialProvider(credential_command, credential_values) if aliases else None
+    credential_scenario = data.get("credential_scenario", "functional-window-2")
+    if not isinstance(credential_scenario, str):
+        raise RunnerError("CREDENTIAL_SCENARIO_INVALID")
+    credential_provider = CredentialProvider(credential_command, credential_values, credential_scenario) if aliases else None
     credentials = credential_provider.load(aliases) if credential_provider else None
     results: list[dict[str, Any]] = []
     cleanup_results: list[dict[str, Any]] = []

@@ -200,3 +200,36 @@ Comparación: https://github.com/famedic/famedic/compare/prep%2Fakubica-technica
 
 No se hizo merge, deploy ni acceso QA.
 
+## Validación contractual y transporte — iteración posterior
+
+La prueba del escenario `functional-window-2-memberships` usa las
+credenciales obtenidas exclusivamente mediante `functional-window2:custody
+--private`; el test no descifra `access-state.json`. Las assertions derivadas
+del servicio contractual y de los fixtures son:
+
+| Variante | Assertions exactas |
+|---|---|
+| `membership_none` | `status=none`, `source=null`, `purchase_eligible=true`, `ineligibility_reason=null`, `plan_code=null` |
+| `membership_regular` | `status=active`, `source=individual`, `purchase_eligible=false`, `ineligibility_reason=membership_already_active`, `plan_code=basic_annual` |
+| `membership_institutional` | `status=active`, `source=sponsored`, `purchase_eligible=false`, `ineligibility_reason=sponsored_membership_active`, `plan_code=null` |
+| `membership_expired` | `status=expired`, `source=individual`, `purchase_eligible=true`, `ineligibility_reason=null`, `plan_code=basic_annual` |
+
+La prueba también exige `expires_at` para las tres variantes con historial
+de suscripción, confirma manifest activo antes de apply y, tras custody
+revoke/reset, confirma el conteo inicial de PAT, `access-state.json` ausente
+e inventario `completed`. Resultado: 1 test / 41 assertions / exit 0.
+
+El runner local ahora consume `credential_scenario` del plan. Sólo acepta
+`functional-window-2` o `functional-window-2-memberships` y envía el campo
+en ambos mensajes privados, `action=read` y `action=revoke`. La prueba Python
+de transporte confirma escenario, aliases, assertions, cleanup y que ningún
+secreto entra al reporte: 14 tests / 10.619 s / exit 0.
+
+El checkout usado para la validación fue el candidato local con estas
+modificaciones; no se usó QA. El fallo combinado histórico se conserva por
+separado: reproduce `UAT_FIXTURE_UNEXPECTED_ERROR` cuando tests con
+`RefreshDatabase` comparten el namespace de storage y el materializador; las
+corridas aisladas con la base MySQL desechable pasan. R08 continúa pendiente:
+no existe una decisión de alcance aprobada que permita clasificarlo como
+excluido.
+
