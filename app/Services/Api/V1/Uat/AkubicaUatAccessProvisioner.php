@@ -169,7 +169,7 @@ final class AkubicaUatAccessProvisioner
                     $delegation = $registry->delegate($operator, $channel, $user, $caps, $effectiveExpiry);
                     $lifecycle->transition($operator, $delegation, true, self::APPROVAL);
                     $created['delegations'][$kind][$role] = $delegation->id;
-                    $this->writeInventorySnapshot($namespace, $scenario, $context['user_ids'], $created, $expiresAt, 'active');
+                    $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                     $token = $user->createToken($namespace.'-'.$kind, $caps, $effectiveExpiry);
                     $created['tokens'][$kind.'_'.$role] = $token->accessToken->id;
                     $this->writeInventorySnapshot($namespace, $scenario, $context['user_ids'], $created, $expiresAt, 'active');
@@ -210,7 +210,7 @@ final class AkubicaUatAccessProvisioner
 
             $state = [
                 'namespace' => $namespace,
-                'user_ids' => $context['user_ids'],
+                'user_ids' => $inventoryUserIds,
                 'consumer_ids' => $created['consumers'],
                 'channel_ids' => $created['channels'],
                 'delegation_ids' => $created['delegations'],
@@ -513,10 +513,24 @@ final class AkubicaUatAccessProvisioner
         $directory = dirname($absolute);
         if (! is_dir($directory)) mkdir($directory, 0770, true);
         $temporary = $absolute.'.tmp.'.bin2hex(random_bytes(8));
-        if (file_put_contents($temporary, $contents, LOCK_EX) === false || ! rename($temporary, $absolute)) {
+        if (file_put_contents($temporary, $contents, LOCK_EX) === false) {
             @unlink($temporary);
             throw new \RuntimeException('UAT_ACCESS_INVENTORY_WRITE_FAILED');
         }
+        if (@rename($temporary, $absolute)) return;
+        // PHP on Windows cannot replace an existing file with rename(). Keep
+        // the exclusive lock for that local-only fallback; Forge runs the
+        // atomic rename path on Linux.
+        $lock = fopen($absolute.'.lock', 'c');
+        $replaced = false;
+        if (is_resource($lock) && flock($lock, LOCK_EX)) {
+            $replaced = file_put_contents($absolute, $contents, LOCK_EX) !== false;
+            flock($lock, LOCK_UN);
+        }
+        if (is_resource($lock)) fclose($lock);
+        @unlink($temporary);
+        @unlink($absolute.'.lock');
+        if (! $replaced) throw new \RuntimeException('UAT_ACCESS_INVENTORY_WRITE_FAILED');
     }
 
     private function writeState(string $namespace, array $state): void

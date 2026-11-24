@@ -122,3 +122,12 @@ declararse PASS por revocación: la variante pendiente es expiración natural.
   y `FunctionalWindow2CustodyCommand`; valida pérdida de state con inventario
   durable sanitizado en MySQL sintético. B09/B14/B23/B26 siguen BLOCKED en QA
   hasta publicar/desplegarla.
+### IT-0061 — ledger recuperable y pruebas focalizadas
+
+El candidato local `7be558b4` amplía el inventario durable para registrar IDs
+durante apply, validar coherencia de referencias y conservar el ledger cuando
+cleanup falla. La prueba local aislada cubre pérdida de state, apply parcial,
+eliminación interrumpida, retry idempotente y rechazo de namespace/ID ajeno:
+4 tests / 43 assertions / exit 0. No modifica A4, OpenAPI, rev7, fixtures
+base ni legacy. Requiere publicación y deploy antes de emitir accesos QA para
+B09/B14/B23/B26; no constituye PASS QA.

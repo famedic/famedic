@@ -144,3 +144,46 @@ cleanup de fixtures. Las dos advertencias son únicamente la ausencia de
 La corrección requiere publicación y nuevo deploy antes de abrir B09/B14/B23/B26.
 No se hizo merge, push, deploy ni emisión QA.
 
+## Corrección de ledger recuperable — candidato 7be558b4
+
+- `access-inventory.json` se escribe antes de la primera escritura y después
+  de cada recurso creado, incluyendo PAT creados antes de su binding. Sólo
+  conserva IDs, relaciones, namespace, escenario, usuarios y expiración; no
+  contiene plaintext, ciphertext ni headers.
+- La escritura usa temporal + reemplazo atómico en Forge/Linux. El arnés
+  Windows usa un fallback con lock exclusivo porque PHP no reemplaza un
+  destino existente mediante `rename()`; la ruta desplegada no usa ese
+  fallback.
+- El reset valida namespace, tipos, IDs y coherencia de consumer/channel/
+  delegation/binding/credential/token. No adopta referencias ajenas.
+- Si una eliminación falla, el inventario permanece `active`; sólo pasa a
+  `completed` después de comprobar cero PAT y revocación de los demás
+  recursos. Un segundo reset es idempotente.
+
+Prueba focalizada en worktree con Composer propio y MySQL sintético:
+
+`pest --configuration=phpunit.rc2.mysql.window2.xml tests/Feature/Console/ResetStateInventoryRecoveryTest.php tests/Feature/Console/AccessInventoryRecoveryScenariosTest.php tests/Feature/Console/AkubicaUatWindow2AccessTest.php --colors=never`
+
+Resultado: `4 tests`, `43 assertions`, código `0`. Incluye pérdida de state,
+apply parcial, eliminación interrumpida, retry, rechazo de namespace/ID
+malformado, ausencia de temporales y regresión de acceso/idempotencia. Las
+advertencias son únicamente `.env` sintético ausente en el worktree.
+
+Este candidato aún no se publicó ni desplegó; B09/B14/B23/B26 siguen
+bloqueados en QA hasta verificar el release corregido.
+
+## Procedimiento postdeploy único — no ejecutado
+
+1. Precheck read-only: release/current, SHA verificable, REVISION, staging,
+   host HTTPS, flags, Gate, TTL, manifests e inventario inicial.
+2. Preparar sólo B09, B14, B23 y B26 con namespace dedicado; verificar
+   ownership, capacidades, bindings y ausencia de integraciones externas.
+3. Emitir accesos mediante custody privada y guardar únicamente el inventario
+   sanitizado generado por el release.
+4. Ejecutar cada caso independientemente, registrando request, assertion,
+   código y efectos; detener sólo sus dependientes.
+5. En `finally`, revocar por IDs del inventario, ejecutar reset, verificar en BD
+   cero PAT/accesos temporales y conservar `access-inventory.json` como
+   `completed`; emitir código no exitoso si falla cleanup.
+6. Conciliar por IDs y namespace contra el inventario previo y actualizar
+   evidencias sin secretos. No repetir PASS anteriores.

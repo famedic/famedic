@@ -49,8 +49,34 @@ test('records partial apply before the first failure and never records secrets',
     expect($inventory['status'])->toBe('completed')
         ->and($inventory['state']['consumer_ids'])->not->toBeEmpty()
         ->and($inventory)->not->toHaveKey('encrypted_secrets')
-        ->and(json_encode($inventory))->not->toContain('plainTextToken');
+        ->and(json_encode($inventory))->not->toContain('plainTextToken')
+        ->and(glob(Storage::disk('local')->path($inventoryPath).'.tmp.*'))->toBe([]);
 
+    Artisan::call('akubica:uat-fixtures', ['--reset' => true, '--confirm' => $namespace, '--namespace' => $namespace]);
+});
+
+test('rejects foreign namespace and malformed inventory references before reset', function () {
+    [$namespace, $operator] = recoveryScenarioSetup();
+    expect(Artisan::call('akubica:uat-access', ['--apply' => true, '--namespace' => $namespace, '--scenario' => 'functional-window-2', '--confirm' => $namespace]))->toBe(0);
+    $inventoryPath = AkubicaUatFixtureContract::storagePath('access-inventory.json', $namespace);
+    $statePath = AkubicaUatFixtureContract::storagePath('access-state.json', $namespace);
+    $inventory = json_decode(Storage::disk('local')->get($inventoryPath), true, 512, JSON_THROW_ON_ERROR);
+    $validInventory = $inventory;
+    Storage::disk('local')->delete($statePath);
+
+    $inventory['namespace'] = 'akubica-uat-v1';
+    Storage::disk('local')->put($inventoryPath, json_encode($inventory, JSON_THROW_ON_ERROR));
+    expect(fn () => app(AkubicaUatAccessProvisioner::class)->reset($namespace, $operator, 'functional-window-2'))
+        ->toThrow(DomainException::class);
+
+    $inventory['namespace'] = $namespace;
+    $inventory['state']['consumer_ids']['native'] = 'foreign-id';
+    Storage::disk('local')->put($inventoryPath, json_encode($inventory, JSON_THROW_ON_ERROR));
+    expect(fn () => app(AkubicaUatAccessProvisioner::class)->reset($namespace, $operator, 'functional-window-2'))
+        ->toThrow(DomainException::class);
+
+    Storage::disk('local')->put($inventoryPath, json_encode($validInventory, JSON_THROW_ON_ERROR));
+    Artisan::call('akubica:uat-access', ['--reset' => true, '--namespace' => $namespace, '--scenario' => 'functional-window-2', '--confirm' => $namespace]);
     Artisan::call('akubica:uat-fixtures', ['--reset' => true, '--confirm' => $namespace, '--namespace' => $namespace]);
 });
 
