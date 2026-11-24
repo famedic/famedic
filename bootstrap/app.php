@@ -19,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\FunctionalWindow2CustodyCommand::class,
         \App\Console\Commands\FunctionalWindow2InventoryCommand::class,
         \App\Console\Commands\Rc2CatalogFixturesCommand::class,
+        \App\Console\Commands\MaterializeAkubicaUatR04R05FixturesCommand::class,
+        \App\Console\Commands\MaterializeAkubicaUatOrdersCommand::class,
         \App\Console\Commands\RepairRegisterSmsPhoneVerificationCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
