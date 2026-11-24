@@ -1,0 +1,93 @@
+{
+  "schema": "it0061-functional-window-2-memberships-cart-template.v1",
+  "template": true,
+  "namespace": "akubica-uat-batch2-a4-v1",
+  "credential_scenario": "functional-window-2-memberships",
+  "id_source": "runtime-inventory",
+  "qa_guards": {
+    "target_env": "staging",
+    "expected_release_sha": "{{RELEASE_SHA_FROM_IDENTITY}}",
+    "https_verified": true,
+    "qa_writes_authorized": "1",
+    "leo_negative_writes_authorized": "0"
+  },
+  "selection": {
+    "authorized_ids": ["B12", "B12r", "B13", "B16", "B17"],
+    "expected_logical_count": 5,
+    "expected_request_count": 4,
+    "blocked_ids": []
+  },
+  "inventory": {"namespace": "akubica-uat-batch2-a4-v1"},
+  "inventory_records": {
+    "B12": {
+      "purpose": "cart-item-created-by-B12",
+      "owner": "customer:membership_none",
+      "resource_type": "medical_service_cart_item",
+      "service_line": "medical_services",
+      "customer_role": "membership_none",
+      "item_type": "membership",
+      "membership_plan_code": "basic_annual"
+    }
+  },
+  "requests": [
+    {
+      "id": "B12",
+      "method": "POST",
+      "path": "/api/v1/cart/items",
+      "json": {"service_line": "medical_services", "item_type": "membership", "membership_plan_code": "basic_annual", "quantity": 1},
+      "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
+      "headers": {"Idempotency-Key": "{{B12_IDEMPOTENCY_KEY}}"},
+      "expected_status": 201,
+      "writes": true,
+      "assertions": {"required_paths": ["data.items.0.id", "data.items.0.membership_plan_code"], "equals": {"data.items.0.membership_plan_code": "basic_annual"}},
+      "inventory_ref": "B12",
+      "register_after_success": true,
+      "register_id_path": "data.items.0.id"
+    },
+    {
+      "id": "B12r",
+      "method": "GET",
+      "path": "/api/v1/cart?service_line=medical_services",
+      "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
+      "expected_status": 200,
+      "assertions": {"required_paths": ["data.items.0.id", "data.items.0.membership_plan_code"], "equals": {"data.items.0.membership_plan_code": "basic_annual"}}
+    },
+    {
+      "id": "B13",
+      "method": "POST",
+      "path": "/api/v1/cart/items",
+      "json": {"service_line": "medical_services", "item_type": "membership", "membership_plan_code": "basic_annual", "quantity": 1},
+      "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
+      "headers": {"Idempotency-Key": "{{B13_IDEMPOTENCY_KEY}}"},
+      "expected_status": 409,
+      "writes": true,
+      "assertions": {"equals": {"error.code": "MEMBERSHIP_ALREADY_IN_CART"}}
+    },
+    {
+      "id": "B17",
+      "method": "POST",
+      "path": "/api/v1/cart/items",
+      "json": {"service_line": "medical_services", "item_type": "membership", "membership_plan_code": "basic_annual", "quantity": 1},
+      "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
+      "headers": {"Idempotency-Key": "{{B12_IDEMPOTENCY_KEY}}"},
+      "expected_status": 201,
+      "writes": true,
+      "assertions": {"required_paths": ["data.items.0.id"], "headers_equals": {"Idempotency-Replayed": "true"}}
+    }
+  ],
+  "cleanup": [
+    {
+      "id": "B16",
+      "method": "DELETE",
+      "path": "/api/v1/cart/items/{{B12.data.items.0.id}}?service_line=medical_services",
+      "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
+      "expected_status": 200,
+      "writes": true,
+      "functional_case": true,
+      "assertions": {"required_paths": ["data"]},
+      "inventory_ref": "B12",
+      "source_case": "B12",
+      "unregister_after_success": true
+    }
+  ]
+}

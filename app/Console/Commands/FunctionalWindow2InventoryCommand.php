@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Data\Api\V1\Uat\AkubicaUatFixtureContract;
 use App\Models\Api\V1\AkubicaUatFixtureManifest;
 use App\Models\LaboratoryCartItem;
+use App\Models\MedicalServiceCartItem;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
@@ -32,17 +33,19 @@ final class FunctionalWindow2InventoryCommand extends Command
         'cart-item-created-by-B06b' => 'B06b',
         'cart-item-created-by-B20' => 'B20',
         'cart-item-created-by-B21' => 'B21',
+        'cart-item-created-by-B12' => 'B12',
     ];
     private const OWNERS = ['customer-dedicated', 'customer:primary', 'customer:membership_regular', 'customer:membership_none'];
 
     public function handle(): int
     {
-        if ($this->isTty(STDIN)) {
+        $inputStream = $this->input->getStream() ?: STDIN;
+        if ($this->isTty($inputStream)) {
             return $this->failSafe('INVENTORY_INPUT_REQUIRES_PIPE');
         }
 
         try {
-            $input = json_decode((string) stream_get_contents(STDIN), true, 32, JSON_THROW_ON_ERROR);
+            $input = json_decode((string) stream_get_contents($inputStream), true, 32, JSON_THROW_ON_ERROR);
             if (! is_array($input) || ! in_array($input['action'] ?? null, ['identity', 'verify', 'register', 'unregister'], true)) {
                 return $this->failSafe('REQUEST_INVALID');
             }
@@ -77,16 +80,16 @@ final class FunctionalWindow2InventoryCommand extends Command
                 return $this->failSafe('RELEASE_SHA_MISMATCH');
             }
             if (($input['action'] ?? null) === 'register') {
-                $this->registerResource((int) $resourceId, $purpose, $owner, (string) ($input['source_case'] ?? ''));
+                $this->registerResource((int) $resourceId, $purpose, $owner, (string) ($input['source_case'] ?? ''), $input);
                 return $this->json(['status' => 'registered', 'namespace' => self::NAMESPACE, 'resource_id' => (int) $resourceId, 'purpose' => $purpose, 'owner' => $owner]);
             }
             if (($input['action'] ?? null) === 'unregister') {
                 $this->verifyLedger((int) $resourceId, $purpose, $owner);
-                $this->assertResourceGone((int) $resourceId);
+                $this->assertResourceGone((int) $resourceId, $purpose);
                 $this->removeLedger((int) $resourceId);
                 return $this->json(['status' => 'unregistered', 'namespace' => self::NAMESPACE, 'resource_id' => (int) $resourceId]);
             }
-            $this->verifyResource((int) $resourceId, $purpose, $owner);
+            $this->verifyResource((int) $resourceId, $purpose, $owner, $input);
 
             return $this->json([
                 'status' => 'verified',
@@ -102,7 +105,7 @@ final class FunctionalWindow2InventoryCommand extends Command
         }
     }
 
-    private function verifyResource(int $resourceId, string $purpose, string $owner): void
+    private function verifyResource(int $resourceId, string $purpose, string $owner, array $input = []): void
     {
         $scenario = $this->scenarioFromPurpose($purpose);
         $manifest = AkubicaUatFixtureManifest::query()
@@ -119,6 +122,10 @@ final class FunctionalWindow2InventoryCommand extends Command
         $ids = (array) Arr::get((array) $manifest->metadata, 'ids', []);
         $primaryCustomerId = (int) Arr::get($ids, 'customers.primary', 0);
         $temporaryPurpose = str_starts_with($purpose, 'cart-item-created-by-');
+        if ($scenario === 'B12') {
+            $this->verifyMembershipResource($resourceId, $purpose, $owner, $manifest, $input);
+            return;
+        }
         $ownerCustomerId = $temporaryPurpose ? $this->customerIdForOwner($owner, $ids) : $primaryCustomerId;
         $testIds = array_map('intval', array_values((array) Arr::get($ids, 'tests', [])));
         if ($primaryCustomerId < 1 || $testIds === []) {
@@ -180,11 +187,17 @@ final class FunctionalWindow2InventoryCommand extends Command
         $disk->move($temporary, $path);
     }
 
-    private function registerResource(int $resourceId, string $purpose, string $owner, string $sourceCase): void
+    private function registerResource(int $resourceId, string $purpose, string $owner, string $sourceCase, array $input): void
     {
-        if (! in_array($purpose, ['cart-item-created-by-B06b', 'cart-item-created-by-B20', 'cart-item-created-by-B21'], true)) throw new \DomainException('RESOURCE_PURPOSE_NOT_REGISTERABLE');
+        if (! in_array($purpose, ['cart-item-created-by-B06b', 'cart-item-created-by-B20', 'cart-item-created-by-B21', 'cart-item-created-by-B12'], true)) throw new \DomainException('RESOURCE_PURPOSE_NOT_REGISTERABLE');
         if ($sourceCase !== substr($purpose, strlen('cart-item-created-by-'))) throw new \DomainException('RESOURCE_SOURCE_MISMATCH');
-        $this->verifyTemporaryResource($resourceId, $owner);
+        if ($sourceCase === 'B12') {
+            $manifest = AkubicaUatFixtureManifest::query()->where('namespace', self::NAMESPACE)->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)->first();
+            if ($manifest === null) throw new \DomainException('MANIFEST_NOT_ACTIVE');
+            $this->verifyMembershipResource($resourceId, $purpose, $owner, $manifest, $input, true);
+        } else {
+            $this->verifyTemporaryResource($resourceId, $owner);
+        }
         $resources = $this->readLedger();
         $key = (string) $resourceId;
         if (isset($resources[$key]) && $resources[$key] !== ['purpose' => $purpose, 'owner' => $owner]) throw new \DomainException('RESOURCE_LEDGER_COLLISION');
@@ -209,10 +222,26 @@ final class FunctionalWindow2InventoryCommand extends Command
         $this->writeLedger($resources);
     }
 
-    private function assertResourceGone(int $resourceId): void
+    private function assertResourceGone(int $resourceId, string $purpose): void
     {
-        $item = LaboratoryCartItem::withTrashed()->find($resourceId);
+        $item = $this->scenarioFromPurpose($purpose) === 'B12'
+            ? MedicalServiceCartItem::query()->find($resourceId)
+            : LaboratoryCartItem::withTrashed()->find($resourceId);
         if ($item !== null && $item->deleted_at === null) throw new \DomainException('RESOURCE_STILL_PRESENT');
+    }
+
+    private function verifyMembershipResource(int $resourceId, string $purpose, string $owner, AkubicaUatFixtureManifest $manifest, array $input, bool $forRegistration = false): void
+    {
+        if ($purpose !== 'cart-item-created-by-B12' || $owner !== 'customer:membership_none') throw new \DomainException('RESOURCE_PURPOSE_OWNER_MISMATCH');
+        foreach (['resource_type' => 'medical_service_cart_item', 'service_line' => 'medical_services', 'customer_role' => 'membership_none', 'item_type' => MedicalServiceCartItem::ITEM_TYPE_MEMBERSHIP, 'membership_plan_code' => MedicalServiceCartItem::BASIC_ANNUAL_PLAN] as $key => $expected) {
+            if (($input[$key] ?? null) !== $expected) throw new \DomainException('RESOURCE_SPEC_MISMATCH');
+        }
+        $customerId = (int) Arr::get((array) $manifest->metadata, 'ids.customers.membership_none', 0);
+        $item = MedicalServiceCartItem::query()->with('cart')->find($resourceId);
+        if ($customerId < 1 || $item === null || (int) $item->cart?->customer_id !== $customerId) throw new \DomainException('RESOURCE_OWNER_MISMATCH');
+        if ($item->cart?->service_line !== 'medical_services' || $item->cart?->status !== 'active' || $item->item_type !== MedicalServiceCartItem::ITEM_TYPE_MEMBERSHIP || $item->membership_plan_code !== MedicalServiceCartItem::BASIC_ANNUAL_PLAN) throw new \DomainException('RESOURCE_TYPE_MISMATCH');
+        if ($item->created_at === null || $manifest->created_at === null || $item->created_at->lte($manifest->created_at)) throw new \DomainException('RESOURCE_NOT_WINDOW_CREATED');
+        if ($forRegistration && (int) Arr::get((array) $manifest->metadata, 'ids.medical_cart_items.'.$resourceId, 0) === $resourceId) throw new \DomainException('RESOURCE_BASE_ID_REJECTED');
     }
 
     private function verifyTemporaryResource(int $resourceId, string $owner): void

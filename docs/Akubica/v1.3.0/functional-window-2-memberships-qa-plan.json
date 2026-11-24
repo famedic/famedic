@@ -1,0 +1,99 @@
+{
+  "schema": "it0061-functional-window-2-memberships-qa-plan.v1",
+  "namespace": "akubica-uat-batch2-a4-v1",
+  "credential_scenario": "functional-window-2-memberships",
+  "id_source": "runtime-inventory",
+  "qa_guards": {
+    "target_env": "staging",
+    "expected_release_sha": "55fecce944a5cc2c20e08d061f862cd21809af5a",
+    "https_required": true,
+    "https_verified": true,
+    "qa_writes_authorized": "1",
+    "leo_negative_writes_authorized": "0"
+  },
+  "selection": {
+    "authorized_ids": ["B07", "B08", "B10", "B11", "B12", "B12r", "B13", "B16", "B17"],
+    "expected_logical_count": 9,
+    "expected_request_count": 4,
+    "blocked_ids": ["B12", "B12r", "B13", "B16", "B17"]
+  },
+  "requests": [
+    {
+      "id": "B07",
+      "method": "GET",
+      "path": "/api/v1/memberships/plans",
+      "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
+      "expected_status": 200,
+      "assertions": {
+        "required_paths": ["data.plans"],
+        "equals": {
+          "data.plans.0.code": "basic_annual",
+          "data.plans.0.price_cents": 30000,
+          "data.plans.0.currency": "MXN"
+        },
+        "forbidden_paths": ["data.plans.0.payment_link"]
+      }
+    },
+    {
+      "id": "B08",
+      "method": "GET",
+      "path": "/api/v1/memberships/status",
+      "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_none"},
+      "expected_status": 200,
+      "assertions": {
+        "required_paths": ["data.status", "data.purchase_eligible"],
+        "equals": {
+          "data.status": "none",
+          "data.source": null,
+          "data.purchase_eligible": true,
+          "data.ineligibility_reason": null,
+          "data.plan_code": null
+        }
+      }
+    },
+    {
+      "id": "B10",
+      "method": "GET",
+      "path": "/api/v1/memberships/status",
+      "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_institutional"},
+      "expected_status": 200,
+      "assertions": {
+        "required_paths": ["data.status", "data.expires_at"],
+        "equals": {
+          "data.status": "active",
+          "data.source": "sponsored",
+          "data.purchase_eligible": false,
+          "data.ineligibility_reason": "sponsored_membership_active",
+          "data.plan_code": null
+        }
+      }
+    },
+    {
+      "id": "B11",
+      "method": "GET",
+      "path": "/api/v1/memberships/status",
+      "auth": {"machine_alias": "machine_native", "bearer_alias": "native_membership_expired"},
+      "expected_status": 200,
+      "assertions": {
+        "required_paths": ["data.status", "data.expires_at"],
+        "equals": {
+          "data.status": "expired",
+          "data.source": "individual",
+          "data.purchase_eligible": true,
+          "data.ineligibility_reason": null,
+          "data.plan_code": "basic_annual"
+        }
+      }
+    }
+  ],
+  "cleanup": [],
+  "notes": {
+    "blocked": {
+      "B12": "Blocked with dependent cart cases: deployed inventory helper has no supported membership-cart resource purpose.",
+      "B12r": "Blocked with dependent cart cases: cleanup ownership cannot be accredited through the deployed inventory interface.",
+      "B13": "Blocked with dependent cart cases: requires B12 cart state and supported cleanup.",
+      "B16": "Blocked: dynamic membership cart-item DELETE is not an accredited inventory-helper resource type in this release.",
+      "B17": "Blocked with dependent cart cases: replay requires B12 and supported cleanup."
+    }
+  }
+}

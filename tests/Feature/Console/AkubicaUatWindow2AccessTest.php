@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Crypt;
 use App\Services\Api\V1\Uat\AkubicaUatAccessProvisioner;
+use App\Services\Api\V1\Uat\AkubicaUatFixturePlanner;
 use App\Models\MedicalAttentionSubscription;
+use App\Models\MedicalServiceCartItem;
 use App\Models\ApiConsumerDelegation;
 use App\Models\ApiConsumerTokenBinding;
 
@@ -28,6 +30,7 @@ function window2ConfigureIdentities(): void
 test('window 2 access provisions scenario bearers idempotently and resets all tokens', function () {
     window2ConfigureIdentities();
     Storage::disk('local')->deleteDirectory('akubica-uat-batch2-a4-v1');
+    Storage::disk('local')->delete(array_keys((new AkubicaUatFixturePlanner())->storageDefinitions('akubica-uat-batch2-a4-v1')));
     $this->artisan('akubica:uat-fixtures', [
         '--reset' => true,
         '--confirm' => 'akubica-uat-batch2-a4-v1',
@@ -42,7 +45,9 @@ test('window 2 access provisions scenario bearers idempotently and resets all to
         '--confirm' => 'akubica-uat-batch2-a4-v1',
         '--namespace' => 'akubica-uat-batch2-a4-v1',
     ]);
-    expect($fixtureCode)->toBe(0);
+    if ($fixtureCode !== 0) {
+        $this->fail(Artisan::output());
+    }
 
     $manifest = AkubicaUatFixtureManifest::query()
         ->where('namespace', 'akubica-uat-batch2-a4-v1')
@@ -57,6 +62,7 @@ test('window 2 access provisions scenario bearers idempotently and resets all to
     $administrator = Administrator::create(['user_id' => $operator->id]);
     $administrator->givePermissionTo(Permission::firstOrCreate(['name' => 'api-consumers.manage', 'guard_name' => 'web']));
     config()->set('akubica_uat.operator_id', $operator->id);
+    config()->set('api_v1.idempotency.enabled', true);
 
     $dryRun = app(AkubicaUatAccessProvisioner::class)->dryRun(
         'akubica-uat-batch2-a4-v1',
@@ -116,6 +122,8 @@ test('window 2 access provisions scenario bearers idempotently and resets all to
 
 test('native membership none reaches checkout prepare only with the delegated capability', function () {
     window2ConfigureIdentities();
+    Storage::disk('local')->deleteDirectory('akubica-uat-batch2-a4-v1');
+    Storage::disk('local')->delete(array_keys((new AkubicaUatFixturePlanner())->storageDefinitions('akubica-uat-batch2-a4-v1')));
     $this->artisan('akubica:uat-fixtures', [
         '--apply' => true,
         '--confirm' => 'akubica-uat-batch2-a4-v1',
@@ -126,6 +134,7 @@ test('native membership none reaches checkout prepare only with the delegated ca
     $administrator = Administrator::create(['user_id' => $operator->id]);
     $administrator->givePermissionTo(Permission::firstOrCreate(['name' => 'api-consumers.manage', 'guard_name' => 'web']));
     config()->set('akubica_uat.operator_id', $operator->id);
+    config()->set('api_v1.idempotency.enabled', true);
 
     try {
         $this->artisan('akubica:uat-access', [
@@ -156,6 +165,7 @@ test('native membership none reaches checkout prepare only with the delegated ca
             'Authorization' => 'Bearer '.$bearer,
             'X-Synthetic-Machine-Credential' => $machine,
             'Accept' => 'application/json',
+            'Idempotency-Key' => 'it0061-local-window-b12-20261124',
         ];
         $added = $this->withHeaders($membershipHeaders)->postJson('/api/v1/cart/items', [
             'service_line' => 'medical_services',
@@ -166,14 +176,27 @@ test('native membership none reaches checkout prepare only with the delegated ca
         $added->assertCreated()->assertJsonPath('data.items.0.membership_plan_code', 'basic_annual');
         $cartItemId = (int) $added->json('data.items.0.id');
         expect($cartItemId)->toBeGreaterThan(0);
+        $cartId = (int) MedicalServiceCartItem::query()->findOrFail($cartItemId)->cart_id;
 
-        $duplicate = $this->withHeaders($membershipHeaders)->postJson('/api/v1/cart/items', [
+        $readback = $this->withHeaders($membershipHeaders)->getJson('/api/v1/cart?service_line=medical_services');
+        $readback->assertOk()->assertJsonPath('data.items.0.id', $cartItemId);
+
+        $duplicate = $this->withHeaders(array_merge($membershipHeaders, ['Idempotency-Key' => 'it0061-local-window-b13-20261124']))->postJson('/api/v1/cart/items', [
             'service_line' => 'medical_services',
             'item_type' => 'membership',
             'membership_plan_code' => 'basic_annual',
             'quantity' => 1,
         ]);
         $duplicate->assertStatus(409)->assertJsonPath('error.code', 'MEMBERSHIP_ALREADY_IN_CART');
+
+        $replay = $this->withHeaders($membershipHeaders)->postJson('/api/v1/cart/items', [
+            'service_line' => 'medical_services',
+            'item_type' => 'membership',
+            'membership_plan_code' => 'basic_annual',
+            'quantity' => 1,
+        ]);
+        $replay->assertCreated()->assertHeader('Idempotency-Replayed', 'true')->assertJsonPath('data.items.0.id', $cartItemId);
+        expect(MedicalServiceCartItem::query()->where('cart_id', $cartId)->count())->toBe(1);
 
         $cart = $this->withHeaders($membershipHeaders)->getJson('/api/v1/cart?service_line=medical_services');
         $cart->assertOk()->assertJsonPath('data.items.0.id', $cartItemId);
@@ -205,17 +228,32 @@ test('membership variants are namespace-scoped and idempotent without OTP', func
     window2ConfigureIdentities();
     $namespace = 'akubica-uat-batch2-a4-v1';
     $scenario = 'functional-window-2-memberships';
-    $this->artisan('akubica:uat-access', [
+    // The test database is refreshed per test while the local disk is not;
+    // clear only this synthetic namespace so a stale state file cannot make
+    // the next fixture apply appear successful without an active manifest.
+    Storage::disk('local')->deleteDirectory($namespace);
+    Storage::disk('local')->delete(array_keys((new AkubicaUatFixturePlanner())->storageDefinitions($namespace)));
+    Artisan::call('akubica:uat-fixtures', [
         '--reset' => true,
-        '--namespace' => $namespace,
-        '--scenario' => $scenario,
         '--confirm' => $namespace,
-    ])->run();
-    $this->artisan('akubica:uat-fixtures', [
+        '--namespace' => $namespace,
+    ]);
+    $fixtureCode = Artisan::call('akubica:uat-fixtures', [
         '--apply' => true,
         '--confirm' => $namespace,
         '--namespace' => $namespace,
-    ])->assertSuccessful();
+    ]);
+    if ($fixtureCode !== 0) {
+        $this->fail(Artisan::output());
+    }
+    $manifestStatuses = AkubicaUatFixtureManifest::query()
+        ->where('namespace', $namespace)
+        ->pluck('status')
+        ->all();
+    expect(AkubicaUatFixtureManifest::query()
+        ->where('namespace', $namespace)
+        ->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)
+        ->exists(), json_encode($manifestStatuses, JSON_THROW_ON_ERROR))->toBeTrue();
 
     $operator = User::factory()->create();
     $administrator = Administrator::create(['user_id' => $operator->id]);

@@ -1,0 +1,4 @@
+fbd1e66e1ad2629f6dccad3ddabb39933eeef6cbe882e134e12fd3cccad9ddcb  RESULTADOS-VENTANA-MEMBERSHIPS-55fecce9-20261124.md
+1d8198a32555a3d878a331180ac8ef188746b1ccfefa03ac3b170ee1c88df9ee  functional-window-2-memberships-qa-plan.json
+d7f99284cf53511fe75720e0877f24e15eea0e3d3b443cc4a3ff9809b882f059  ../../../../scripts/functional_window2_http.py
+0374401a9bcbbbb80708cd29963969771b88a903c4cebd3ed4894a02a42469eb  functional-window-2-memberships-cart-qa-plan.json
