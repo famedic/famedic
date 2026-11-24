@@ -7,6 +7,12 @@ permisos o deploy.
 
 | Escenario | Estado | Release/SHA | Evidencia | Observación |
 |---|---|---|---|---|
+| B01 | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | `RESULTADOS-VENTANA-B01-B05-20261124.md` | HTTP 200; estudio disponible, ahorro positivo consistente |
+| B01r | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | misma evidencia | HTTP 200; listado, paginación e ID 5010 consistentes |
+| B02 | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | misma evidencia | HTTP 200; paquete 5012, marca, tipo y precios contractuales |
+| B02r | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | misma evidencia | HTTP 200; readback del paquete y ahorro consistente |
+| B04 | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | misma evidencia | HTTP 200; `no_savings`, ahorro 0 |
+| B05 | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | misma evidencia | HTTP 200; `data_inconsistent`, ahorro nulo |
 | B03 | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | `RESULTADOS-VENTANA-A12-B03-20261124.md` | HTTP 200; `public_price_unavailable`, `public_price_cents=0`, `savings_cents=null`; ID dinámico 5008 |
 | B03r | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | `RESULTADOS-VENTANA-A12-B03-20261124.md` | HTTP 200; filtro `RC2 B03`, paginación e identificación por ID; cleanup PASS |
 | B06b | PASS_QA | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | retest QA sanitizado | POST 201; ID dinámico verificado por inventory helper |
@@ -40,7 +46,7 @@ distintas sobre el mismo SHA.
 La ventana focalizada emitió y revocó accesos sólo dentro del namespace
 dedicado. El estado queda:
 
-- `READY_LOCAL / BLOCKED_QA`: B01, B01r, B02, B04 y B05. La supuesta evidencia del release `83825089` / SHA `b5c828c87d99a595df6d9959449f0202cfede7dc` no está localizada en los artefactos disponibles; no se promueven por referencia indirecta.
+- `PASS_QA`: B01, B01r, B02, B04 y B05 en la corrida focalizada del release `83882430`; la alegación histórica de `83825089` / `b5c828c87d99a595df6d9959449f0202cfede7dc` se conserva sin sustituirla.
 - `PASS_QA`: B18. La corrida QA del release `83882430` queda registrada por separado de las corridas locales; no se repite.
 - `PASS_QA`: A12, B03 y B03r, en la corrida focalizada del release `83882430`; A12 acredita expiración natural, no sólo revocación.
 - Los PASS anteriores no se repiten.
@@ -71,6 +77,11 @@ declararse PASS por revocación: la variante pendiente es expiración natural.
 - B18 QA verificado: release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73`.
 - A12/B03/B03r QA verificados en la misma release/SHA; evidencia nueva en
   `RESULTADOS-VENTANA-A12-B03-20261124.md`.
+- B03 conserva la assertion congelada de rev7: `savings_cents` debe ser
+  `null` cuando `comparison_status=public_price_unavailable`; la propiedad no
+  tiene que estar ausente.
+- La incidencia histórica del primer reset con exit 1 queda documentada por
+  separado; el reset final de esta corrida fue PASS y confirmó cero temporales.
 - Identity QA de B18: release y SHA coincidentes mediante `REVISION`/`inventory identity`.
 - Las evidencias locales se distinguen explícitamente de las QA.
 - Fixtures base, manifest legacy, A4, OpenAPI y rev7 permanecen intactos.
