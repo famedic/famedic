@@ -46,6 +46,9 @@ class MedicalServiceCartService
             throw new InvalidArgumentException('La cantidad de una membresía debe ser 1.');
         }
 
+        // MySQL can deadlock two simultaneous first-time cart creations. A
+        // bounded transaction retry lets the losing request re-read the cart
+        // and return the contractual conflict instead of INTERNAL_ERROR.
         return DB::transaction(function () use ($customer, $quantity): MedicalServiceCart {
             $cart = MedicalServiceCart::query()
                 ->where('customer_id', $customer->id)
@@ -97,7 +100,7 @@ class MedicalServiceCartService
             $this->recalculate($cart);
 
             return $cart->fresh('items');
-        });
+        }, 3);
     }
 
     public function removeItem(Customer $customer, int $itemId): MedicalServiceCart
