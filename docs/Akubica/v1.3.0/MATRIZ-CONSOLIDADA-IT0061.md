@@ -1,14 +1,14 @@
 # IT-0061 — matriz consolidada por escenario
 
-Conciliación documental sin nueva ventana, sin credenciales emitidas y sin
-cambios de código, permisos o deploy.
+Conciliación focalizada de una ventana QA autorizada; sin cambios de código,
+permisos o deploy.
 
 ## Resultados conservados
 
 | Escenario | Estado | Release/SHA | Evidencia | Observación |
 |---|---|---|---|---|
-| B03 | PASS_LOCAL | candidato local `615b9c9403fecd811093c5a0723d5b9445c5432c` | `RESULTADOS-DIAGNOSTICO-FUNCIONAL-WINDOW2-LOCAL.md` | Variante `public_price_unavailable`; no es PASS QA |
-| B03r | PASS_LOCAL | candidato local `615b9c9403fecd811093c5a0723d5b9445c5432c` | mismo informe local | Listado/detalle comprobados por identidad, filtro y paginación |
+| B03 | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | `RESULTADOS-VENTANA-A12-B03-20261124.md` | HTTP 200; `public_price_unavailable`, `public_price_cents=0`, `savings_cents=null`; ID dinámico 5008 |
+| B03r | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | `RESULTADOS-VENTANA-A12-B03-20261124.md` | HTTP 200; filtro `RC2 B03`, paginación e identificación por ID; cleanup PASS |
 | B06b | PASS_QA | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | retest QA sanitizado | POST 201; ID dinámico verificado por inventory helper |
 | B06r | PASS_QA | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | retest QA sanitizado | Lectura 200; cleanup posterior |
 | B19 | PASS_QA | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | retest QA sanitizado | 409 `MEMBERSHIP_ALREADY_ACTIVE` |
@@ -19,6 +19,7 @@ cambios de código, permisos o deploy.
 | B21x | PASS_QA_NEGATIVE | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | retest QA sanitizado | 403 `CONSUMER_NOT_AUTHORIZED` |
 | B25 | FAIL_HISTORICAL | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | corrida QA histórica | 403 genérico; se conserva sin sobrescribir |
 | B25 | PASS_QA | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | revalidación QA separada | 403 `LEO_PAYMENT_LINK_FORBIDDEN`; 0 ligas/pagos; cleanup PASS |
+| A12 | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | `RESULTADOS-VENTANA-A12-B03-20261124.md` | Antes de expirar 200/active; después de `expires_at` natural 401 `UNAUTHENTICATED`; reset separado |
 
 La revalidación de B25 no convierte ni borra el FAIL histórico: son corridas
 distintas sobre el mismo SHA.
@@ -36,14 +37,12 @@ distintas sobre el mismo SHA.
 
 ### Clasificación de ejecución
 
-No se emiten credenciales en esta conciliación. Por tanto, el conjunto
-priorizado queda sin nuevos casos ejecutables QA en esta etapa:
+La ventana focalizada emitió y revocó accesos sólo dentro del namespace
+dedicado. El estado queda:
 
-- `READY_LOCAL / BLOCKED_QA`: B01, B01r, B02, B04 y B05. La preparación local es revisable, pero QA exige desplegar el comando y realizar precheck namespace-scoped.
+- `READY_LOCAL / BLOCKED_QA`: B01, B01r, B02, B04 y B05. La supuesta evidencia del release `83825089` / SHA `b5c828c87d99a595df6d9959449f0202cfede7dc` no está localizada en los artefactos disponibles; no se promueven por referencia indirecta.
 - `PASS_QA`: B18. La corrida QA del release `83882430` queda registrada por separado de las corridas locales; no se repite.
-- `BLOCKED_LOCAL`: A12, hasta disponer del operador/enrolamiento sintético necesario para emitir el bearer con el TTL configurado.
-  No se acortó el TTL ni se simuló expiración.
-  y una selección aprobada para esperar el TTL efectivo.
+- `PASS_QA`: A12, B03 y B03r, en la corrida focalizada del release `83882430`; A12 acredita expiración natural, no sólo revocación.
 - Los PASS anteriores no se repiten.
 
 La preparación B01/B02/B04/B05 usa la interfaz local nueva
@@ -62,13 +61,16 @@ declararse PASS por revocación: la variante pendiente es expiración natural.
 - Preparación de catálogo: 3 pruebas, 24 assertions, código 0; incluye
   dry-run sin escrituras, apply idempotente, lecturas B01/B02/B04/B05,
   cleanup aislado y rechazo de namespace legacy.
-- A12: intento focalizado bloqueado antes de la validación funcional por falta
-  de enrolamiento/operator local; no se emitieron accesos.
+- A12: el bloqueo histórico queda superado únicamente para la variante QA de
+  expiración natural descrita en la evidencia nueva; la corrida histórica de
+  revocación se conserva sin mezclarla.
 
 ## Integridad de la evidencia
 
 - SHA QA histórico conservado: `17313693ec1f48f4de0663a7bf8a67c615b3673a`.
 - B18 QA verificado: release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73`.
+- A12/B03/B03r QA verificados en la misma release/SHA; evidencia nueva en
+  `RESULTADOS-VENTANA-A12-B03-20261124.md`.
 - Identity QA de B18: release y SHA coincidentes mediante `REVISION`/`inventory identity`.
 - Las evidencias locales se distinguen explícitamente de las QA.
 - Fixtures base, manifest legacy, A4, OpenAPI y rev7 permanecen intactos.
