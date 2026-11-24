@@ -41,7 +41,7 @@ test('real custody helper reads and revokes all window aliases in isolated mysql
     expect(Artisan::output())->toContain('"status":"ok"');
     $state = json_decode(Storage::disk('local')->get(AkubicaUatFixtureContract::storagePath('access-state.json', $namespace)), true, 512, JSON_THROW_ON_ERROR);
     $tokenIds = array_merge(array_values($state['token_ids']), array_values($state['scenario_token_ids']));
-    expect(count($tokenIds))->toBe(8);
+    expect(count($tokenIds))->toBe(9);
 
     $aliases = ['machine_native', 'machine_leo', 'native_membership_regular', 'leo_membership_none'];
     $childEnv = array_filter([

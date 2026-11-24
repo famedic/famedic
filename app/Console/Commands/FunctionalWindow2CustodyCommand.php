@@ -25,6 +25,7 @@ final class FunctionalWindow2CustodyCommand extends Command
         'machine_native' => 'machine_native',
         'machine_leo' => 'machine_leo',
         'native_membership_regular' => 'scenario:native_membership_regular',
+        'native_membership_none' => 'scenario:native_membership_none',
         'leo_membership_none' => 'scenario:leo_membership_none',
     ];
 
