@@ -23,6 +23,7 @@ permisos o deploy.
 | B21r | PASS_QA | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | retest QA sanitizado | Lectura 200 |
 | B18 | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | evidencia QA B18 sanitizada | Dos POST HTTPS concurrentes: 201 + 409 `MEMBERSHIP_ALREADY_IN_CART`, una fila persistida, 0 HTTP 500; cleanup y revocación verificados |
 | B21x | PASS_QA_NEGATIVE | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | retest QA sanitizado | 403 `CONSUMER_NOT_AUTHORIZED` |
+| B23 | PASS_QA_FUNCTIONAL / PAT_TRACEABILITY_LIMITED | release `83906347`, SHA `aeb8c58cee8a83dbddc87ac471c99d56e82216c1` | `RESULTADOS-RETEST-B23-20261124.md`; FAIL histórico conservado aparte | HTTP 200; continuidad y cleanup PASS; snapshot individual de capacidad del PAT no conservado |
 | B25 | FAIL_HISTORICAL | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | corrida QA histórica | 403 genérico; se conserva sin sobrescribir |
 | B25 | PASS_QA | release `83820733`, SHA `17313693ec1f48f4de0663a7bf8a67c615b3673a` | revalidación QA separada | 403 `LEO_PAYMENT_LINK_FORBIDDEN`; 0 ligas/pagos; cleanup PASS |
 | A12 | PASS_QA | release `83882430`, SHA `49c72de20a53a9a4864b2ab9262d26db7f186e73` | `RESULTADOS-VENTANA-A12-B03-20261124.md` | Antes de expirar 200/active; después de `expires_at` natural 401 `UNAUTHENTICATED`; reset separado |
@@ -140,3 +141,41 @@ candidato `9b7ffb24` corrige esa discrepancia y define la transición de
 inventarios `active`/`completed`. Validación exacta: 6 tests / 60 assertions /
 exit 0, sin acceso QA. B09/B14/B23/B26 permanecen pendientes de deploy y
 verificación; los nueve PAT históricos continúan `LIMITED`.
+
+### Conciliación de pendientes independientes — 2026-11-24
+
+La matriz detallada y los conteos lógico/variante de esta conciliación están en
+`RESULTADOS-PENDIENTES-INDEPENDIENTES-IT0061-20261124.md`. Ese documento
+prevalece sobre las tablas históricas que todavía describen B09/B14/B23/B26
+como bloqueados: B09/B14/B26 conservan el `PASS_QA` de su evidencia original y
+B23 conserva `PASS_QA_FUNCTIONAL / PAT_TRACEABILITY_LIMITED`; ningún PASS fue
+repetido.
+
+El precheck read-only del release activo confirmó `83906347 /
+aeb8c58cee8a83dbddc87ac471c99d56e82216c1` mediante
+`functional-window2:inventory`. El dry-run dedicado de acceso confirmó el
+operador y las relaciones previstas sin escribir. El comando `akubica:uat`
+requiere una fuente SHA verificable y, una vez proporcionada, sólo pudo
+planear `akubica-uat-v1` y quedó `bearer_flow=blocked_without_approved_synthetic_otp`;
+no se adoptó ni modificó el namespace legacy.
+
+Resultado de esta iteración: 0 accesos emitidos, 0 fixtures aplicados, 0
+requests nuevos y 0 cambios remotos. B07/B08/B10/B11, B12/B12r, B13/B15/B16/B17,
+B22 y R01/R01b/R02/R03/R04/R06/R07 permanecen pendientes o bloqueados por las
+precondiciones concretas registradas en el informe nuevo. B24/A4 sigue
+separado por sesión first-party y bandera staging; R05, R08, OTP/step-up y ATIX
+requieren intervención externa. Batch 2 no está certificado.
+
+### Actualización custody memberships — 2026-11-24
+
+| Componente | Resultado | Evidencia |
+|---|---|---|
+| Allowlist `functional-window-2-memberships` | PASS local | 1 test / 14 assertions / exit 0 |
+| Custody privado → Laravel/MySQL → revoke → reset | PASS local | MySQL sintético, sin efectos externos |
+| Escenario/alias ajeno | PASS rechazo | exit no cero, sin entrega ni escritura |
+| Recuperación afectada | PASS con warnings | 1 test / 46 assertions / exit 0 |
+| Suite Feature combinada | No se usa como PASS | `UAT_FIXTURE_UNEXPECTED_ERROR` por arnés |
+
+El escenario requiere publicación/despliegue antes de cualquier ejecución QA.
+Se conservan los resultados históricos. A4, OpenAPI, rev7, fixtures base y
+legacy permanecen sin cambios.
