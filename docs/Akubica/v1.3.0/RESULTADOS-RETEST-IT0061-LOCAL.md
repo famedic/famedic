@@ -36,6 +36,9 @@ como fila activa y después retira su entrada del ledger mediante `unregister`.
 ## Validación
 
 - Runner Python: 19 tests, PASS; incluye rechazo del campo `body` no consumido.
+- Comando único local `scripts/tests/run_functional_window2_local.py`: PASS; 22
+  requests en orden exacto, 2 DELETE de cleanup, revocación sintética y
+  `secret_projection=false`.
 - Inventory identity: 2 tests / 4 assertions, PASS.
 - B19/B20/B21 aislamiento Laravel/MySQL: 3 tests / 31 assertions, PASS.
 - A2 laboratorio y controles de capacidad/marca/ownership: 20 tests, PASS.
@@ -50,6 +53,8 @@ válida para esta suite; las corridas concluyentes usaron PHP Windows con
 ## Pendientes explícitos
 
 La extensión requiere revisión, publicación y despliegue antes de poder usarse
-en QA. No se hizo push, merge, deploy, acceso QA ni emisión remota de credenciales.
+en QA. El comando único validado es exclusivamente local y usa un doble HTTP;
+no acredita por sí mismo el comportamiento de los endpoints desplegados. No se
+hizo push, merge, deploy, acceso QA ni emisión remota de credenciales.
 El retest QA mínimo será B19, B06b/B06r, B20/B21/B21r y los controles negativos
 de capacidad, marca y titular ajenos, con un plan nuevo y cleanup por ledger.

@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import importlib.util
 import os
+import shlex
 import subprocess
 import sys
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -21,7 +23,9 @@ class Handler(BaseHTTPRequestHandler):
     seen: list[tuple[str, str]] = []
     cart_posts = 0
     primary_test_id = 1
+    b06_test_id = 6
     secondary_test_id = 2
+    b21x_test_id = 22
     cleanup_b06_id = 1
     cleanup_b20_id = 2
 
@@ -40,22 +44,31 @@ class Handler(BaseHTTPRequestHandler):
         body = {"data": {}}
         if path == f"/catalog/laboratory-tests/{Handler.primary_test_id}": body = {"data": {"id": Handler.primary_test_id, "pricing": {"comparison_status": "public_price_unavailable"}}}
         elif path == "/catalog/laboratory-tests": body = {"data": {"laboratory_tests": [{"id": Handler.primary_test_id}], "pagination": {"current_page": 1}}}
+        elif path.startswith("/catalog/laboratory-tests/"):
+            try:
+                test_id = int(path.rsplit("/", 1)[-1])
+            except ValueError:
+                test_id = 0
+            if test_id == Handler.primary_test_id:
+                body = {"data": {"id": test_id, "pricing": {"comparison_status": "public_price_unavailable"}}}
+            elif test_id in {Handler.b06_test_id, Handler.secondary_test_id}:
+                body = {"data": {"id": test_id, "pricing": {"comparison_status": "available"}}}
         elif path == "/cart/items" and self.command == "POST":
             payload = self.rfile.read(int(self.headers.get("Content-Length", "0")))
             data = json.loads(payload or b"{}")
             Handler.cart_posts += 1
             if data.get("membership_plan_code") == "plan_inexistente": status, body = 422, {"error": {"code": "VALIDATION_ERROR"}}
             elif data.get("service_line") == "pharmacy": status, body = 503, {"error": {"code": "PHARMACY_SUSPENDED"}}
-            elif data.get("laboratory_test_id") == Handler.secondary_test_id and data.get("service_line") is None and Handler.cart_posts == 5: status, body = 403, {"error": {"code": "CONSUMER_NOT_AUTHORIZED"}}
+            elif data.get("laboratory_test_id") == Handler.b21x_test_id: status, body = 403, {"error": {"code": "CONSUMER_NOT_AUTHORIZED"}}
             elif data.get("service_line") == "medical_services" and "item_type" not in data: status, body = 403, {"error": {"code": "CONSUMER_NOT_AUTHORIZED"}}
-            elif data.get("membership_plan_code") == "basic_annual" and Handler.cart_posts == 2: status, body = 409, {"error": {"code": "MEMBERSHIP_ALREADY_ACTIVE"}}
+            elif data.get("membership_plan_code") == "basic_annual": status, body = 409, {"error": {"code": "MEMBERSHIP_ALREADY_ACTIVE"}}
             else: status, body = 201, {"data": {"id": data.get("laboratory_test_id", Handler.cleanup_b06_id)}}
-        elif path == "/cart": body = {"data": {"items": [{"laboratory_test_id": Handler.primary_test_id}]}}
+        elif path == "/cart": body = {"data": {"items": [{"laboratory_test_id": Handler.b06_test_id}], "totals": {"item_count": 1}}}
         elif path == "/memberships/plans": body = {"data": {"plans": [{"code": "basic_annual"}]}}
         elif path == "/memberships/status":
             if not self.headers.get("Authorization"): status, body = 401, {"error": {"code": "UNAUTHENTICATED"}}
             else: body = {"data": {"status": "active", "source": "individual", "ineligibility_reason": "membership_already_active"}}
-        elif path == "/checkout/payment-link": status, body = 403, {"error": {"code": "CONSUMER_NOT_AUTHORIZED"}}
+        elif path == "/checkout/payment-link": status, body = 403, {"error": {"code": "LEO_PAYMENT_LINK_FORBIDDEN"}}
         elif path == "/orders": body = {"data": {"orders": [{"id": 910100}], "pagination": {"current_page": 1}}}
         elif path.startswith("/orders/") and path.endswith("/status"): status, body = 403, {"error": {"code": "FORBIDDEN"}}
         elif path == "/user/family": body = {"data": {"family": [{"id": 910200, "relationship": "child", "is_principal": False}]}}
@@ -78,6 +91,23 @@ def windows_path(path: Path) -> str:
     return value
 
 
+def write_inventory_helper(path: Path) -> None:
+    path.write_text(
+        "import json,sys\n"
+        "x=json.load(sys.stdin)\n"
+        "a=x.get('action')\n"
+        "if a == 'verify':\n"
+        " print(json.dumps({'status':'verified','namespace':x['namespace'],'resource_id':x['resource_id'],'purpose':x['purpose'],'owner':x['owner']}))\n"
+        "elif a == 'register':\n"
+        " print(json.dumps({'status':'registered','namespace':x['namespace'],'resource_id':x['resource_id'],'purpose':x['purpose'],'owner':x['owner']}))\n"
+        "elif a == 'unregister':\n"
+        " print(json.dumps({'status':'unregistered','namespace':x['namespace'],'resource_id':x['resource_id']}))\n"
+        "else:\n"
+        " print(json.dumps({'error':'ACTION_INVALID'})); sys.exit(2)\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     env = os.environ.copy()
     php_bin = "/mnt/c/Program Files/php/php.exe" if Path("/mnt/c/Program Files/php/php.exe").exists() else "php"
@@ -87,40 +117,58 @@ def main() -> int:
     plan_data = json.loads(PLAN.read_text())
     by_id = {item["id"]: item for item in plan_data["requests"]}
     Handler.primary_test_id = int(by_id["B03"]["path"].rsplit("/", 1)[-1])
+    Handler.b06_test_id = int(by_id["B06b"]["json"]["laboratory_test_id"])
     Handler.secondary_test_id = int(by_id["B20"]["json"]["laboratory_test_id"])
+    Handler.b21x_test_id = int(by_id["B21x"]["json"]["laboratory_test_id"])
     Handler.cleanup_b06_id = Handler.primary_test_id
     Handler.cleanup_b20_id = Handler.secondary_test_id
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     output = ROOT / "storage/framework/testing-functional-window2-report.json"
-    try:
-        spec = importlib.util.spec_from_file_location("functional_window2_http", RUNNER)
-        module = importlib.util.module_from_spec(spec)
-        assert spec and spec.loader
-        sys.modules["functional_window2_http"] = module
-        spec.loader.exec_module(module)
-        values = {"machine_native": "synthetic-machine-native", "machine_leo": "synthetic-machine-leo", "native_membership_regular": "synthetic-native-bearer", "leo_membership_none": "synthetic-leo-bearer"}
-        credential_command = os.environ.get("FW2_CREDENTIAL_COMMAND")
-        inventory_command = os.environ.get("FW2_INVENTORY_COMMAND")
-        exit_code = module.run(PLAN, f"http://127.0.0.1:{server.server_port}", output, mode="local", credential_command=credential_command, credential_values=None if credential_command else values, inventory_command=inventory_command)
-        if exit_code != 0:
-            diagnostic = json.loads(output.read_text()) if output.exists() else {}
-            print(json.dumps({"runner_failed": exit_code, "cleanup_status": diagnostic.get("cleanup_status"), "request_count": len(diagnostic.get("requests", [])), "cleanup_count": len(diagnostic.get("cleanup", [])), "failed_requests": [{"id": item.get("id"), "http_status": item.get("http_status"), "assertion_error": item.get("assertion_error"), "error": item.get("error")} for item in diagnostic.get("requests", []) if not item.get("ok", False)]}, sort_keys=True), file=sys.stderr)
-            return 1
-        report = json.loads(output.read_text())
-        expected_requests = [(item["method"], item["path"].split("?", 1)[0]) for item in json.loads(PLAN.read_text())["requests"]]
-        request_order_ok = Handler.seen[:22] == expected_requests
-        cleanup_order_ok = len(Handler.seen) == 24 and all(method == "DELETE" for method, _path in Handler.seen[22:])
-        if not request_order_ok or not cleanup_order_ok or len(report["requests"]) != 22 or len(report["cleanup"]) != 3 or report["cleanup_status"] != "PASS":
-            print(json.dumps({"mismatch": True, "seen_count": len(Handler.seen), "request_order_ok": request_order_ok, "cleanup_order_ok": cleanup_order_ok, "report_requests": len(report["requests"]), "report_cleanup": len(report["cleanup"]), "cleanup_status": report["cleanup_status"]}, sort_keys=True), file=sys.stderr)
-            return 1
-        print(json.dumps({"status": "pass", "functional_requests": 22, "cleanup_requests": 2, "credential_revoke": 1, "http_order_exact": True, "secret_projection": False}))
-        return 0
-    finally:
-        server.shutdown()
-        server.server_close()
-        if output.exists(): output.unlink()
+    with tempfile.TemporaryDirectory() as helper_dir:
+        helper = Path(helper_dir) / "inventory.py"
+        local_plan = Path(helper_dir) / "plan.json"
+        plan_data["inventory"] = {"namespace": "akubica-uat-batch2-a4-v1"}
+        plan_data["inventory_records"] = {
+            "B06b": {"purpose": "B06b", "owner": "customer-dedicated", "created": True},
+            "B20": {"purpose": "B20", "owner": "customer-dedicated", "created": True},
+            "B21": {"purpose": "B21", "owner": "customer-dedicated", "created": True},
+        }
+        for item in plan_data["requests"]:
+            if item["id"] == "B21":
+                item["inventory_ref"] = "B21"
+        for item, ref in zip(plan_data["cleanup"], ("B06b", "B20")):
+            item["inventory_ref"] = ref
+        local_plan.write_text(json.dumps(plan_data), encoding="utf-8")
+        write_inventory_helper(helper)
+        try:
+            spec = importlib.util.spec_from_file_location("functional_window2_http", RUNNER)
+            module = importlib.util.module_from_spec(spec)
+            assert spec and spec.loader
+            sys.modules["functional_window2_http"] = module
+            spec.loader.exec_module(module)
+            values = {"machine_native": "synthetic-machine-native", "machine_leo": "synthetic-machine-leo", "native_membership_regular": "synthetic-native-bearer", "leo_membership_none": "synthetic-leo-bearer"}
+            credential_command = os.environ.get("FW2_CREDENTIAL_COMMAND")
+            inventory_command = os.environ.get("FW2_INVENTORY_COMMAND") or shlex.join([sys.executable, str(helper)])
+            exit_code = module.run(local_plan, f"http://127.0.0.1:{server.server_port}", output, mode="local", credential_command=credential_command, credential_values=None if credential_command else values, inventory_command=inventory_command)
+            if exit_code != 0:
+                diagnostic = json.loads(output.read_text()) if output.exists() else {}
+                print(json.dumps({"runner_failed": exit_code, "cleanup_status": diagnostic.get("cleanup_status"), "request_count": len(diagnostic.get("requests", [])), "cleanup_count": len(diagnostic.get("cleanup", [])), "failed_requests": [{"id": item.get("id"), "http_status": item.get("http_status"), "assertion_error": item.get("assertion_error"), "error": item.get("error")} for item in diagnostic.get("requests", []) if not item.get("ok", False)], "failed_cleanup": [{"id": item.get("id"), "http_status": item.get("http_status"), "error": item.get("error")} for item in diagnostic.get("cleanup", []) if not item.get("ok", False)]}, sort_keys=True), file=sys.stderr)
+                return 1
+            report = json.loads(output.read_text())
+            expected_requests = [(item["method"], item["path"].split("?", 1)[0]) for item in plan_data["requests"]]
+            request_order_ok = Handler.seen[:22] == expected_requests
+            cleanup_order_ok = len(Handler.seen) == 24 and all(method == "DELETE" for method, _path in Handler.seen[22:])
+            if not request_order_ok or not cleanup_order_ok or len(report["requests"]) != 22 or len(report["cleanup"]) != 3 or report["cleanup_status"] != "PASS":
+                print(json.dumps({"mismatch": True, "seen_count": len(Handler.seen), "request_order_ok": request_order_ok, "cleanup_order_ok": cleanup_order_ok, "report_requests": len(report["requests"]), "report_cleanup": len(report["cleanup"]), "cleanup_status": report["cleanup_status"]}, sort_keys=True), file=sys.stderr)
+                return 1
+            print(json.dumps({"status": "pass", "functional_requests": 22, "cleanup_requests": 2, "credential_revoke": 1, "http_order_exact": True, "secret_projection": False}))
+            return 0
+        finally:
+            server.shutdown()
+            server.server_close()
+            if output.exists(): output.unlink()
 
 
 if __name__ == "__main__":
