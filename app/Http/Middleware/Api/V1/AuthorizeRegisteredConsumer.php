@@ -82,7 +82,15 @@ final class AuthorizeRegisteredConsumer
         }
         $identity = $this->identities->resolve($request, $user, $user->currentAccessToken());
         // RC2 Batch 2 · A2 (rev7 L06): Leo laboratory cart, bound to line laboratory and to a granted brand.
-        $laboratory = $identity->context?->consumerKind === 'leo' ? self::leoLaboratoryRequest($request) : null;
+        $laboratory = self::laboratoryRequest($request);
+        // Preserve the legacy native cart path unless the caller has the explicit
+        // RC2 laboratory capability. The narrow branch is opt-in and therefore
+        // cannot widen existing native or Leo permissions.
+        if ($identity->context?->consumerKind === 'native'
+            && ! in_array('cart:laboratory:write', $user->currentAccessToken()->abilities ?? [], true)
+            && ! in_array('cart:laboratory:read', $user->currentAccessToken()->abilities ?? [], true)) {
+            $laboratory = null;
+        }
         if ($laboratory !== null) {
             $denied = $this->leoLaboratoryDenial($request, $user, $identity, $laboratory);
 
@@ -149,7 +157,7 @@ final class AuthorizeRegisteredConsumer
      *
      * @return array{brand: mixed, operations: list<string>}|null
      */
-    private static function leoLaboratoryRequest(Request $request): ?array
+    private static function laboratoryRequest(Request $request): ?array
     {
         $name = $request->route()?->getName();
         if ($request->isMethod('GET') && $request->query('service_line') === 'laboratory'

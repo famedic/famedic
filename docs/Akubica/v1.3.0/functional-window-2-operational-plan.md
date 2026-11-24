@@ -61,6 +61,30 @@ las dependencias del runner; el comando Laravel permanece en el servidor de
 aplicación y el canal privado transporta únicamente JSON sanitizado y secretos
 en memoria del custody helper.
 
+## Generación de `REVISION` en cada release Forge
+
+El script de despliegue debe ejecutar este bloque desde la raíz física del
+release recién clonado, después de comprobar que el checkout terminó y antes
+de activar el enlace `current`:
+
+```sh
+release_root=$(pwd -P)
+deployed_sha=$(git -C "$release_root" rev-parse HEAD)
+case "$deployed_sha" in
+  [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-Fa-F]) ;;
+  *) echo 'Invalid deployed SHA' >&2; exit 1 ;;
+esac
+printf '%s\n' "$deployed_sha" > "$release_root/.REVISION.tmp"
+chmod 0644 "$release_root/.REVISION.tmp"
+mv -f "$release_root/.REVISION.tmp" "$release_root/REVISION"
+test "$(cat "$release_root/REVISION")" = "$deployed_sha"
+```
+
+El bloque no recibe el SHA por variable externa ni lo fija en el repositorio;
+la fuente es el commit realmente desplegado. La activación de `current` debe
+ocurrir después de la última comprobación. El helper rechaza el release si el
+archivo falta, no contiene 40 hexadecimales o no coincide con `current`.
+
 Ejemplo de ejecución posterior a un precheck exitoso:
 
 ```text
