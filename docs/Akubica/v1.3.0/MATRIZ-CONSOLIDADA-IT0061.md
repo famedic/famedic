@@ -87,3 +87,34 @@ declararse PASS por revocación: la variante pendiente es expiración natural.
 - Fixtures base, manifest legacy, A4, OpenAPI y rev7 permanecen intactos.
 - Batch 2 continúa abierto; BLQ-A1-01, AJ-B y los 98 fallos históricos no se
   cierran por esta matriz.
+
+## Conciliación de seguridad y siguiente bloque — 2026-11-24
+
+- La conciliación de los nueve PAT de B18 es **LIMITADA**: la consulta
+  independiente actual acredita cero PAT del conjunto dedicado y el reset
+  posterior reportó `status=ok/deleted=29`, pero no se conservaron los nueve
+  IDs individuales. Por ello no se puede demostrar la ausencia de cada ID ni
+  atribuir qué operación eliminó cada uno. La primera ejecución del reset
+  terminó con exit `1` después de retirar el state file mientras aún se
+  observaban nueve PAT; el fallo histórico se conserva.
+- La revisión local del aprovisionador confirma que la secuencia prevista
+  elimina PAT antes de `assertCleanupComplete` y elimina `access-state.json`
+  después de la aserción. La observación QA no es reproducible por evidencia
+  individual suficiente; no se cambia runtime ni se despliega en esta
+  conciliación. La emisión de nuevos accesos queda detenida únicamente por
+  esta limitación.
+- Siguiente bloque preparado, sin ejecución: B09, B14, B23 y B26. B09/B14
+  usan `machine_native` + `native_membership_regular` sobre customer/binding
+  dedicado; B23/B26 usan `machine_credential` + `bearer_none` en el customer
+  dedicado `membership_none`. B14 depende de la membresía activa de B09;
+  B26 depende de B12+B23 y no es aislable como prueba independiente.
+- Rutas contractuales: B09 y B26 `GET /api/v1/memberships/status`; B14
+  `POST /api/v1/cart/items` y espera `409/MEMBERSHIP_ALREADY_ACTIVE`; B23
+  `GET /api/v1/checkout/prepare?service_line=medical_services` y exige
+  `200`, `assistant_can_pay=false`, sin `payment_url`, sin gateway y sin
+  efectos externos.
+- Estado: `PAT_RECONCILIATION_LIMITED / ACCESS_ISSUANCE_BLOCKED`; B09/B14/B23/B26
+  permanecen BLOCKED hasta disponer de trazabilidad por PAT y precondiciones
+  verificables. R02b/R03b siguen siendo incidentales. B24, OTP/step-up,
+  ATIX, R05 y R08 requieren intervención externa y permanecen separados.
+- Evidencia detallada: `RESULTADOS-CONCILIACION-PAT-B09-B26-20261124.md`.
