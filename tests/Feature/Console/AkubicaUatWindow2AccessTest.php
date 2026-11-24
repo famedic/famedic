@@ -8,6 +8,7 @@ use App\Data\Api\V1\Uat\AkubicaUatFixtureContract;
 use Laravel\Sanctum\PersonalAccessToken;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Artisan;
+use App\Services\Api\V1\Uat\AkubicaUatAccessProvisioner;
 function window2ConfigureIdentities(): void
 {
     foreach (['primary', 'foreign', 'disposable', 'membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $index => $role) {
@@ -43,6 +44,16 @@ test('window 2 access provisions scenario bearers idempotently and resets all to
     $administrator->givePermissionTo(Permission::firstOrCreate(['name' => 'api-consumers.manage', 'guard_name' => 'web']));
     config()->set('akubica_uat.operator_id', $operator->id);
 
+    $dryRun = app(AkubicaUatAccessProvisioner::class)->dryRun(
+        'akubica-uat-batch2-a4-v1',
+        $operator,
+        'functional-window-2',
+    );
+    expect(collect($dryRun['scenario_bindings'])->pluck('role')->all())
+        ->toContain('membership_none', 'membership_regular')
+        ->and(collect($dryRun['scenario_bindings'])->firstWhere('role', 'membership_none')['profile'])
+        ->toBe('native');
+
     $this->artisan('akubica:uat-access', [
         '--dry-run' => true,
         '--namespace' => 'akubica-uat-batch2-a4-v1',
@@ -59,7 +70,7 @@ test('window 2 access provisions scenario bearers idempotently and resets all to
     $applyCode = $apply->run();
     expect($applyCode)->toBe(0);
     $afterApply = PersonalAccessToken::query()->count();
-    expect($afterApply - $before)->toBe(8);
+    expect($afterApply - $before)->toBe(9);
 
     $this->artisan('akubica:uat-access', [
         '--apply' => true,

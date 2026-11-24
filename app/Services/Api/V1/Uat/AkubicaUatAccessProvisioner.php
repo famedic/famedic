@@ -63,6 +63,12 @@ final class AkubicaUatAccessProvisioner
             'memberships:read', 'cart:read', 'cart:membership:write',
             'cart:laboratory:read', 'cart:laboratory:write',
         ],
+        // B18 requires a dedicated native actor whose membership is never set.
+        // Keep the exact native capability set; only the fixture role differs.
+        'native_membership_none' => [
+            'memberships:read', 'cart:read', 'cart:membership:write',
+            'cart:laboratory:read', 'cart:laboratory:write',
+        ],
         'leo_membership_none' => [
             'memberships:read', 'cart:read', 'cart:laboratory:read', 'cart:membership:write',
             'checkout:prepare', 'api:operation:api:v1:orders:index',
@@ -94,6 +100,7 @@ final class AkubicaUatAccessProvisioner
             'scenario' => $scenario,
             'scenario_bindings' => $scenario === self::WINDOW2_SCENARIO ? [
                 ['alias' => $namespace.'-native-membership-regular', 'profile' => 'native', 'role' => 'membership_regular', 'capabilities' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'laboratory_brands' => []],
+                ['alias' => $namespace.'-native-membership-none', 'profile' => 'native', 'role' => 'membership_none', 'capabilities' => self::WINDOW2_CAPABILITIES['native_membership_none'], 'laboratory_brands' => []],
                 ['alias' => $namespace.'-leo-membership-none', 'profile' => 'leo', 'role' => 'membership_none', 'capabilities' => self::WINDOW2_CAPABILITIES['leo_membership_none'], 'laboratory_brands' => ['swisslab']],
             ] : [],
             'effects' => [
@@ -102,9 +109,9 @@ final class AkubicaUatAccessProvisioner
                 'sms' => 0,
                 'email' => 0,
                 'payments' => 0,
-                'scenario_delegations' => $scenario === self::WINDOW2_SCENARIO ? 2 : 0,
-                'scenario_bindings' => $scenario === self::WINDOW2_SCENARIO ? 2 : 0,
-                'scenario_tokens' => $scenario === self::WINDOW2_SCENARIO ? 2 : 0,
+                'scenario_delegations' => $scenario === self::WINDOW2_SCENARIO ? 3 : 0,
+                'scenario_bindings' => $scenario === self::WINDOW2_SCENARIO ? 3 : 0,
+                'scenario_tokens' => $scenario === self::WINDOW2_SCENARIO ? 3 : 0,
             ],
             'credentials' => 'created only by apply; plaintext never emitted',
             'expires_at' => Carbon::now()->addMinutes($this->ttlMinutes())->toIso8601String(),
@@ -165,6 +172,7 @@ final class AkubicaUatAccessProvisioner
                 $this->assertNoUnownedAccess(array_values($scenarioContext['user_ids']));
                 foreach ([
                     ['key' => 'native_membership_regular', 'kind' => 'native', 'role' => 'membership_regular', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'brands' => ['olab']],
+                    ['key' => 'native_membership_none', 'kind' => 'native', 'role' => 'membership_none', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_none'], 'brands' => ['olab']],
                     ['key' => 'leo_membership_none', 'kind' => 'leo', 'role' => 'membership_none', 'caps' => self::WINDOW2_CAPABILITIES['leo_membership_none'], 'brands' => ['swisslab']],
                 ] as $definition) {
                     $kind = $definition['kind'];
