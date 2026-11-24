@@ -123,8 +123,32 @@ final class AkubicaUatAccessProvisioner
         $this->assertNamespace($namespace);
         Gate::forUser($operator)->authorize('manageApiConsumerRegistry');
         $state = $this->readState($namespace);
+        $stateFromInventory = false;
         if ($state !== null) {
-            $this->assertState($state, $namespace);
+            $completed = $this->readInventoryRecord($namespace, true);
+            if (($completed['status'] ?? null) === 'completed') {
+                $completedState = $completed['state'] ?? null;
+                if (! is_array($completedState)) throw new \DomainException('UAT_ACCESS_INVENTORY_INVALID');
+                $this->assertState($completedState, $namespace, true);
+                $this->assertCleanupComplete($completedState);
+                Storage::disk('local')->delete($this->statePath($namespace));
+                $state = null;
+            }
+        }
+        if ($state === null) {
+            $inventory = $this->readInventoryRecord($namespace, true);
+            if (($inventory['status'] ?? null) === 'completed') {
+                $completedState = $inventory['state'] ?? null;
+                if (! is_array($completedState)) throw new \DomainException('UAT_ACCESS_INVENTORY_INVALID');
+                $this->assertState($completedState, $namespace, true);
+                $this->assertCleanupComplete($completedState);
+            } elseif (($inventory['status'] ?? null) === 'active') {
+                $state = $inventory['state'] ?? null;
+                $stateFromInventory = $state !== null;
+            }
+        }
+        if ($state !== null) {
+            $this->assertState($state, $namespace, $stateFromInventory);
             if (($state['scenario'] ?? '') !== $scenario) throw new \DomainException('UAT_ACCESS_SCENARIO_MISMATCH');
 
             return ['status' => 'idempotent', 'namespace' => $namespace, 'scenario' => $scenario, 'created' => 0, 'active_credentials' => count($state['token_ids'])];
@@ -133,7 +157,13 @@ final class AkubicaUatAccessProvisioner
         $context = $this->context($namespace);
         $this->assertNoUnownedAccess($context['user_ids']);
         $expiresAt = Carbon::now()->addMinutes($this->ttlMinutes());
+        $inventoryUserIds = $context['user_ids'];
+        if ($scenario === self::WINDOW2_SCENARIO) {
+            $inventoryUserIds = array_merge($inventoryUserIds, $this->scenarioContext($namespace)['user_ids']);
+        }
         $created = ['consumers' => [], 'channels' => [], 'delegations' => [], 'credentials' => [], 'bindings' => [], 'tokens' => [], 'secrets' => [], 'scenario_delegations' => [], 'scenario_bindings' => [], 'scenario_tokens' => [], 'scenario_secrets' => []];
+        // Establish a recoverable, secret-free ledger before the first write.
+        $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
         $registry = app(ConsumerRegistryWriter::class);
         $issuer = app(ConsumerMachineCredentialIssuer::class);
         $bindingWriter = app(ConsumerTokenBindingWriter::class);
@@ -143,27 +173,33 @@ final class AkubicaUatAccessProvisioner
             foreach (self::CAPABILITIES as $kind => $caps) {
                 $consumer = $registry->register($operator, $kind, $caps, $expiresAt);
                 $created['consumers'][$kind] = $consumer->id;
+                $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                 $consumer->refresh();
                 $effectiveExpiry = Carbon::parse($consumer->expires_at);
                 $channel = $registry->channel($operator, $consumer, $effectiveExpiry);
                 $created['channels'][$kind] = $channel->id;
+                $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                 $lifecycle->transition($operator, $consumer, true, self::APPROVAL);
                 $lifecycle->transition($operator, $channel, true, self::APPROVAL);
                 $issuedMachine = $issuer->issue($operator, $channel, $effectiveExpiry);
                 $created['credentials'][$kind] = $issuedMachine['credential']->id;
                 $created['tokens']['machine_'.$kind] = $issuedMachine['token']->accessToken->id;
                 $created['secrets']['machine_'.$kind] = Crypt::encryptString($issuedMachine['token']->plainTextToken);
+                $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
 
                 foreach ($context['user_ids'] as $role => $userId) {
                     $user = User::query()->findOrFail($userId);
                     $delegation = $registry->delegate($operator, $channel, $user, $caps, $effectiveExpiry);
                     $lifecycle->transition($operator, $delegation, true, self::APPROVAL);
                     $created['delegations'][$kind][$role] = $delegation->id;
+                    $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                     $token = $user->createToken($namespace.'-'.$kind, $caps, $effectiveExpiry);
                     $created['tokens'][$kind.'_'.$role] = $token->accessToken->id;
+                    $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                     $binding = $bindingWriter->bind($operator, $token->accessToken, $delegation, $caps, $effectiveExpiry, ['olab']);
                     $created['bindings'][$kind][$role] = $binding->id;
                     $created['secrets'][$kind.'_'.$role] = Crypt::encryptString($token->plainTextToken);
+                    $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                 }
             }
 
@@ -184,17 +220,20 @@ final class AkubicaUatAccessProvisioner
                     $delegation = $registry->delegate($operator, $channel, $user, $definition['caps'], $effectiveScenarioExpiry);
                     $lifecycle->transition($operator, $delegation, true, self::APPROVAL);
                     $created['scenario_delegations'][$definition['key']] = $delegation->id;
+                    $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                     $token = $user->createToken($namespace.'-'.$definition['key'], $definition['caps'], $effectiveScenarioExpiry);
                     $created['scenario_tokens'][$definition['key']] = $token->accessToken->id;
                     $created['scenario_secrets'][$definition['key']] = Crypt::encryptString($token->plainTextToken);
+                    $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                     $binding = $bindingWriter->bind($operator, $token->accessToken, $delegation, $definition['caps'], $effectiveScenarioExpiry, $definition['brands']);
                     $created['scenario_bindings'][$definition['key']] = $binding->id;
+                    $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                 }
             }
 
             $state = [
                 'namespace' => $namespace,
-                'user_ids' => $context['user_ids'],
+                'user_ids' => $inventoryUserIds,
                 'consumer_ids' => $created['consumers'],
                 'channel_ids' => $created['channels'],
                 'delegation_ids' => $created['delegations'],
@@ -211,11 +250,20 @@ final class AkubicaUatAccessProvisioner
                 'expires_at' => $expiresAt->toIso8601String(),
             ];
             $this->writeState($namespace, $state);
+            $this->writeInventory($namespace, $state, 'active');
 
             return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'created' => ['consumers' => 2, 'channels' => 2, 'delegations' => 4 + count($created['scenario_delegations']), 'credentials' => 2, 'bindings' => 4 + count($created['scenario_bindings']), 'tokens' => count($created['tokens']) + count($created['scenario_tokens'])], 'external_calls' => 0];
         } catch (\Throwable $exception) {
-            $this->revokeCreated($operator, $created, $lifecycle);
-            $this->purgeCreated($created);
+            try {
+                $this->revokeCreated($operator, $created, $lifecycle);
+                $this->purgeCreated($created);
+                $partialState = $this->stateFromCreated($namespace, $scenario, $inventoryUserIds, $created, $expiresAt);
+                $this->assertCleanupComplete($partialState);
+                $this->writeInventory($namespace, $partialState, 'completed');
+            } catch (\Throwable $cleanupException) {
+                // Keep the active ledger when cleanup is incomplete so reset can recover it.
+                throw $cleanupException;
+            }
             throw $exception;
         }
     }
@@ -224,11 +272,11 @@ final class AkubicaUatAccessProvisioner
     {
         $this->assertNamespace($namespace);
         Gate::forUser($operator)->authorize('manageApiConsumerRegistry');
-        $state = $this->readState($namespace);
+        $state = $this->readState($namespace) ?? $this->readInventory($namespace);
         if ($state === null) {
             return ['status' => 'empty', 'namespace' => $namespace, 'deleted' => 0];
         }
-        $this->assertState($state, $namespace);
+        $this->assertState($state, $namespace, true);
         if (($state['scenario'] ?? '') !== $scenario) throw new \DomainException('UAT_ACCESS_SCENARIO_MISMATCH');
         $lifecycle = app(ConsumerLifecycle::class);
         foreach (array_reverse(array_values($state['scenario_binding_ids'] ?? [])) as $id) $this->revokeModel($operator, ApiConsumerTokenBinding::class, $id, $lifecycle);
@@ -241,6 +289,7 @@ final class AkubicaUatAccessProvisioner
         foreach ($state['channel_ids'] as $id) $this->revokeModel($operator, ApiConsumerChannel::class, $id, $lifecycle);
         foreach ($state['consumer_ids'] as $id) $this->revokeModel($operator, ApiConsumer::class, $id, $lifecycle);
         $this->assertCleanupComplete($state);
+        $this->writeInventory($namespace, $state, 'completed');
         Storage::disk('local')->delete($this->statePath($namespace));
 
         return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'deleted' => 2 + 2 + 4 + 2 + 4 + 6 + count($state['scenario_binding_ids'] ?? []) + count($state['scenario_delegation_ids'] ?? []) + count($state['scenario_token_ids'] ?? [])];
@@ -310,9 +359,10 @@ final class AkubicaUatAccessProvisioner
         if ($record = $class::query()->find($id)) $lifecycle->transition($operator, $record, false, self::APPROVAL);
     }
 
-    private function assertState(array $state, string $namespace): void
+    private function assertState(array $state, string $namespace, bool $allowMissing = false): void
     {
         if (($state['namespace'] ?? null) !== $namespace || ! isset($state['consumer_ids'], $state['binding_ids'], $state['token_ids'])) throw new \DomainException('UAT_ACCESS_STATE_INVALID');
+        $this->assertInventoryReferences($state, $allowMissing);
     }
 
     private function assertCleanupComplete(array $state): void
@@ -357,12 +407,170 @@ final class AkubicaUatAccessProvisioner
         return json_decode((string) Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR);
     }
 
+    private function readInventory(string $namespace): ?array
+    {
+        $inventory = $this->readInventoryRecord($namespace, true);
+        if ($inventory === [] || ($inventory['status'] ?? null) === 'completed') return null;
+        return $inventory['state'] ?? null;
+    }
+
+    private function readInventoryRecord(string $namespace, bool $allowCompleted = false): array
+    {
+        $path = $this->inventoryPath($namespace);
+        if (! Storage::disk('local')->exists($path)) return [];
+        $inventory = json_decode((string) Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR);
+        $allowedStatuses = $allowCompleted ? ['active', 'completed'] : ['active'];
+        if (! is_array($inventory) || ($inventory['namespace'] ?? null) !== $namespace || ($inventory['scenario'] ?? null) !== self::WINDOW2_SCENARIO || ! in_array(($inventory['status'] ?? null), $allowedStatuses, true)) {
+            throw new \DomainException('UAT_ACCESS_INVENTORY_INVALID');
+        }
+
+        return $inventory;
+    }
+
+    private function writeInventory(string $namespace, array $state, string $status): void
+    {
+        $inventory = [
+            'namespace' => $namespace,
+            'scenario' => $state['scenario'] ?? null,
+            'status' => $status,
+            'recorded_at' => now()->toIso8601String(),
+            'state' => [
+                'namespace' => $state['namespace'] ?? null,
+                'scenario' => $state['scenario'] ?? null,
+                'user_ids' => $state['user_ids'] ?? [],
+                'consumer_ids' => $state['consumer_ids'] ?? [],
+                'channel_ids' => $state['channel_ids'] ?? [],
+                'delegation_ids' => $state['delegation_ids'] ?? [],
+                'credential_ids' => $state['credential_ids'] ?? [],
+                'binding_ids' => $state['binding_ids'] ?? [],
+                'token_ids' => $state['token_ids'] ?? [],
+                'scenario_delegation_ids' => $state['scenario_delegation_ids'] ?? [],
+                'scenario_binding_ids' => $state['scenario_binding_ids'] ?? [],
+                'scenario_token_ids' => $state['scenario_token_ids'] ?? [],
+                'expires_at' => $state['expires_at'] ?? null,
+            ],
+        ];
+        $this->atomicWrite($this->inventoryPath($namespace), json_encode($inventory, JSON_THROW_ON_ERROR));
+    }
+
+    private function writeInventorySnapshot(string $namespace, string $scenario, array $userIds, array $created, Carbon $expiresAt, string $status): void
+    {
+        $this->writeInventory($namespace, $this->stateFromCreated($namespace, $scenario, $userIds, $created, $expiresAt), $status);
+    }
+
+    private function stateFromCreated(string $namespace, string $scenario, array $userIds, array $created, Carbon $expiresAt): array
+    {
+        return [
+            'namespace' => $namespace,
+            'user_ids' => $userIds,
+            'consumer_ids' => $created['consumers'] ?? [],
+            'channel_ids' => $created['channels'] ?? [],
+            'delegation_ids' => $created['delegations'] ?? [],
+            'credential_ids' => $created['credentials'] ?? [],
+            'binding_ids' => $created['bindings'] ?? [],
+            'token_ids' => $created['tokens'] ?? [],
+            'scenario' => $scenario,
+            'scenario_delegation_ids' => $created['scenario_delegations'] ?? [],
+            'scenario_binding_ids' => $created['scenario_bindings'] ?? [],
+            'scenario_token_ids' => $created['scenario_tokens'] ?? [],
+            'expires_at' => $expiresAt->toIso8601String(),
+        ];
+    }
+
+    private function assertInventoryReferences(array $state, bool $allowMissing): void
+    {
+        foreach (['consumer_ids', 'channel_ids', 'credential_ids', 'user_ids'] as $key) {
+            foreach ((array) ($state[$key] ?? []) as $id) {
+                if (! is_int($id) && ! ctype_digit((string) $id)) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
+                if ((int) $id <= 0) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
+            }
+        }
+        foreach (['delegation_ids', 'binding_ids', 'scenario_delegation_ids', 'scenario_binding_ids'] as $key) {
+            $values = collect($state[$key] ?? [])->flatten()->all();
+            foreach ($values as $id) {
+                if (! is_int($id) && ! ctype_digit((string) $id)) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
+                if ((int) $id <= 0) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
+            }
+        }
+        foreach (['token_ids', 'scenario_token_ids'] as $key) {
+            foreach ((array) ($state[$key] ?? []) as $id) {
+                if (! is_int($id) && ! ctype_digit((string) $id)) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
+                if ((int) $id <= 0) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
+            }
+        }
+        $this->assertGraphOwnership($state, $allowMissing);
+    }
+
+    private function assertGraphOwnership(array $state, bool $allowMissing): void
+    {
+        $consumerIds = array_values(array_map('intval', $state['consumer_ids'] ?? []));
+        $channelIds = array_values(array_map('intval', $state['channel_ids'] ?? []));
+        $delegationIds = $this->flattenIds(array_merge(array_values($state['delegation_ids'] ?? []), array_values($state['scenario_delegation_ids'] ?? [])));
+        $bindingIds = $this->flattenIds(array_merge(array_values($state['binding_ids'] ?? []), array_values($state['scenario_binding_ids'] ?? [])));
+        if (! $allowMissing && $consumerIds !== [] && ApiConsumer::query()->whereIn('id', $consumerIds)->count() !== count($consumerIds)) throw new \DomainException('UAT_ACCESS_INVENTORY_CONSUMER_REFERENCE_INVALID');
+        if (! $allowMissing && $channelIds !== [] && ApiConsumerChannel::query()->whereIn('id', $channelIds)->count() !== count($channelIds)) throw new \DomainException('UAT_ACCESS_INVENTORY_CHANNEL_REFERENCE_INVALID');
+        $foreignChannel = ApiConsumerChannel::query()->whereIn('id', $channelIds)->whereNotIn('consumer_id', $consumerIds)->exists();
+        if ($foreignChannel) throw new \DomainException('UAT_ACCESS_INVENTORY_CHANNEL_SCOPE_INVALID');
+        $foreignDelegation = ApiConsumerDelegation::query()->whereIn('id', $delegationIds)->whereNotIn('consumer_id', $consumerIds)->exists();
+        if ($foreignDelegation) throw new \DomainException('UAT_ACCESS_INVENTORY_DELEGATION_SCOPE_INVALID');
+        $userIds = array_values(array_map('intval', $state['user_ids'] ?? []));
+        if (ApiConsumerDelegation::query()->whereIn('id', $delegationIds)->whereNotIn('user_id', $userIds)->exists()) throw new \DomainException('UAT_ACCESS_INVENTORY_DELEGATION_OWNER_INVALID');
+        $foreignBinding = ApiConsumerTokenBinding::query()->whereIn('id', $bindingIds)->whereNotIn('consumer_id', $consumerIds)->exists();
+        if ($foreignBinding) throw new \DomainException('UAT_ACCESS_INVENTORY_BINDING_SCOPE_INVALID');
+        if (ApiConsumerTokenBinding::query()->whereIn('id', $bindingIds)->whereNotIn('channel_id', $channelIds)->exists()) throw new \DomainException('UAT_ACCESS_INVENTORY_BINDING_CHANNEL_INVALID');
+        if (ApiConsumerTokenBinding::query()->whereIn('id', $bindingIds)->whereNotIn('delegation_id', $delegationIds)->exists()) throw new \DomainException('UAT_ACCESS_INVENTORY_BINDING_DELEGATION_INVALID');
+        $credentialIds = array_values(array_map('intval', $state['credential_ids'] ?? []));
+        if (ApiConsumerCredential::query()->whereIn('id', $credentialIds)->where(function ($query) use ($consumerIds, $channelIds): void {
+            $query->whereNotIn('consumer_id', $consumerIds)->orWhereNotIn('channel_id', $channelIds);
+        })->exists()) throw new \DomainException('UAT_ACCESS_INVENTORY_CREDENTIAL_SCOPE_INVALID');
+        $machineTokenIds = [];
+        foreach ((array) ($state['token_ids'] ?? []) as $key => $value) {
+            if (str_starts_with((string) $key, 'machine_')) $machineTokenIds[] = (int) $value;
+        }
+        foreach (array_merge(array_values($state['token_ids'] ?? []), array_values($state['scenario_token_ids'] ?? [])) as $id) {
+            $token = PersonalAccessToken::query()->find((int) $id);
+            if (! $token) continue;
+            $isMachine = in_array((int) $id, $machineTokenIds, true);
+            $expectedType = $isMachine ? ApiConsumer::class : User::class;
+            $expectedIds = $isMachine ? $consumerIds : $userIds;
+            if ($token->tokenable_type !== $expectedType || ! in_array((int) $token->tokenable_id, $expectedIds, true)) throw new \DomainException('UAT_ACCESS_INVENTORY_TOKEN_SCOPE_INVALID');
+        }
+    }
+
+    private function atomicWrite(string $path, string $contents): void
+    {
+        $disk = Storage::disk('local');
+        $absolute = $disk->path($path);
+        $directory = dirname($absolute);
+        if (! is_dir($directory)) mkdir($directory, 0770, true);
+        $temporary = $absolute.'.tmp.'.bin2hex(random_bytes(8));
+        if (file_put_contents($temporary, $contents, LOCK_EX) === false) {
+            @unlink($temporary);
+            throw new \RuntimeException('UAT_ACCESS_INVENTORY_WRITE_FAILED');
+        }
+        if (@rename($temporary, $absolute)) return;
+        // PHP on Windows cannot replace an existing file with rename(). Keep
+        // the exclusive lock for that local-only fallback; Forge runs the
+        // atomic rename path on Linux.
+        $lock = fopen($absolute.'.lock', 'c');
+        $replaced = false;
+        if (is_resource($lock) && flock($lock, LOCK_EX)) {
+            $replaced = file_put_contents($absolute, $contents, LOCK_EX) !== false;
+            flock($lock, LOCK_UN);
+        }
+        if (is_resource($lock)) fclose($lock);
+        @unlink($temporary);
+        @unlink($absolute.'.lock');
+        if (! $replaced) throw new \RuntimeException('UAT_ACCESS_INVENTORY_WRITE_FAILED');
+    }
+
     private function writeState(string $namespace, array $state): void
     {
         Storage::disk('local')->put($this->statePath($namespace), json_encode($state, JSON_THROW_ON_ERROR));
     }
 
     private function statePath(string $namespace): string { return AkubicaUatFixtureContract::storagePath('access-state.json', $namespace); }
+    private function inventoryPath(string $namespace): string { return AkubicaUatFixtureContract::storagePath('access-inventory.json', $namespace); }
     private function ttlMinutes(): int { return max(1, min(45, (int) config('akubica_uat.access_ttl_minutes', 30))); }
     private function assertNamespace(string $namespace): void { if ($namespace !== AkubicaUatFixtureContract::DEDICATED_NAMESPACE) throw new \DomainException('UAT_ACCESS_NAMESPACE_NOT_ALLOWED'); }
 }

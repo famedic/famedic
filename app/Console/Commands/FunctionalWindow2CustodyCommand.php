@@ -66,15 +66,27 @@ final class FunctionalWindow2CustodyCommand extends Command
     private function validatedState(bool $allowAlreadyRevokedTokens = false): array
     {
         $path = AkubicaUatFixtureContract::storagePath('access-state.json', self::NAMESPACE);
-        if (! Storage::disk('local')->exists($path)) throw new \DomainException('STATE_MISSING');
-        $state = json_decode((string) Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR);
+        $state = Storage::disk('local')->exists($path)
+            ? json_decode((string) Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR)
+            : ($allowAlreadyRevokedTokens ? $this->readInventory() : null);
+        if (! is_array($state)) throw new \DomainException('STATE_MISSING');
         if (($state['namespace'] ?? null) !== self::NAMESPACE || ($state['scenario'] ?? null) !== self::SCENARIO) throw new \DomainException('STATE_SCOPE_INVALID');
-        if (empty($state['scenario_encrypted_secrets']) || empty($state['scenario_token_ids'])) throw new \DomainException('STATE_SCENARIO_MATERIAL_MISSING');
+        if ((! $allowAlreadyRevokedTokens && empty($state['scenario_encrypted_secrets'])) || empty($state['scenario_token_ids'])) throw new \DomainException('STATE_SCENARIO_MATERIAL_MISSING');
         if (isset($state['expires_at']) && now()->isAfter($state['expires_at'])) throw new \DomainException('STATE_EXPIRED');
         foreach (array_merge(array_values($state['token_ids'] ?? []), array_values($state['scenario_token_ids'])) as $id) {
             if (! $allowAlreadyRevokedTokens && ! PersonalAccessToken::query()->whereKey((int) $id)->exists()) throw new \DomainException('STATE_TOKEN_REFERENCE_INVALID');
         }
         return $state;
+    }
+
+    private function readInventory(): ?array
+    {
+        $path = AkubicaUatFixtureContract::storagePath('access-inventory.json', self::NAMESPACE);
+        if (! Storage::disk('local')->exists($path)) return null;
+        $inventory = json_decode((string) Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR);
+        if (! is_array($inventory) || ($inventory['namespace'] ?? null) !== self::NAMESPACE || ($inventory['scenario'] ?? null) !== self::SCENARIO || ($inventory['status'] ?? null) !== 'active') return null;
+
+        return $inventory['state'] ?? null;
     }
 
     /** @param list<string> $aliases */

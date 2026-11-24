@@ -1,7 +1,22 @@
-# IT-0061 — retest local focalizado
+# IT-0061 — retest local focalizado y evidencia QA B18
 
 Este informe complementa y no sustituye `RESULTADOS-DIAGNOSTICO-FUNCIONAL-WINDOW2-LOCAL.md`.
-No contiene resultados de una nueva ventana QA.
+Las secciones históricas locales se conservan. La sección QA B18 registra una
+corrida ya autorizada sobre el release `83882430`; no representa una nueva
+ejecución de los demás escenarios.
+
+## B18 — PASS_QA
+
+- Release/SHA: `83882430` / `49c72de20a53a9a4864b2ab9262d26db7f186e73`.
+- Precondiciones: `membership_none` sin suscripciones, incluidas soft-deleted,
+  y carrito inicial vacío.
+- Ejecución: dos POST HTTPS concurrentes reales al endpoint Laravel.
+- Resultado: `201` y `409` `MEMBERSHIP_ALREADY_IN_CART`; cero `500`; una única
+  línea persistida.
+- Limpieza: DELETE dinámico con ownership verificado, revocación de los PAT
+  registrados, reset dedicado e inventario final independiente.
+- Estado final: 0 PAT del namespace, `access-state.json` ausente y 0 líneas
+  temporales de carrito. No se ejecutaron OTP, pagos ni integraciones externas.
 
 ## B19
 
