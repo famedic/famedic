@@ -131,3 +131,12 @@ eliminación interrumpida, retry idempotente y rechazo de namespace/ID ajeno:
 4 tests / 43 assertions / exit 0. No modifica A4, OpenAPI, rev7, fixtures
 base ni legacy. Requiere publicación y deploy antes de emitir accesos QA para
 B09/B14/B23/B26; no constituye PASS QA.
+
+### Corrección posterior a c46f8067
+
+El checkout publicado no contenía la inicialización de `inventoryUserIds` que
+sí estaba presente en el worktree usado para la validación anterior. El
+candidato `9b7ffb24` corrige esa discrepancia y define la transición de
+inventarios `active`/`completed`. Validación exacta: 6 tests / 60 assertions /
+exit 0, sin acceso QA. B09/B14/B23/B26 permanecen pendientes de deploy y
+verificación; los nueve PAT históricos continúan `LIMITED`.

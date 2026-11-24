@@ -187,3 +187,36 @@ bloqueados en QA hasta verificar el release corregido.
    `completed`; emitir código no exitoso si falla cleanup.
 6. Conciliar por IDs y namespace contra el inventario previo y actualizar
    evidencias sin secretos. No repetir PASS anteriores.
+
+## Corrección sobre c46f8067 — candidato 9b7ffb24
+
+La revisión del checkout publicado `c46f8067a892d297c38061c4c4b6959cac8079bf`
+confirmó dos hallazgos: el conjunto `inventoryUserIds` no estaba inicializado
+en ese commit y algunos snapshots todavía usaban sólo `context.user_ids`;
+además, `completed` se trataba como inventario inválido en un reset repetido.
+
+La corrección inicializa el conjunto antes del primer snapshot, agrega los
+titulares de escenario y lo reutiliza en todos los snapshots y estados. Un
+inventario `completed` ahora se valida con `assertCleanupComplete` antes de
+permitir un nuevo apply; un reset repetido devuelve `empty`, y un inventario
+`active` nunca se sobrescribe mientras conserve recursos pendientes.
+
+Validación en checkout exacto del candidato corregido `9b7ffb24`:
+
+`pest --configuration=phpunit.rc2.mysql.window2.xml tests/Feature/Console/AccessInventoryRecoveryScenariosTest.php tests/Feature/Console/ResetStateInventoryRecoveryTest.php tests/Feature/Console/AkubicaUatWindow2AccessTest.php --colors=never`
+
+Resultado: `6 tests`, `60 assertions`, código `0`. Se verificó:
+
+- `apply → pérdida de state → reset → reset repetido → nuevo apply → reset`;
+- fallo después de crear un PAT de escenario, con el ID presente en el
+  snapshot y cero PAT de la ventana al finalizar;
+- cero residuos del namespace, inventario `completed`, fixtures activos y
+  preservación del conteo de PAT preexistentes.
+
+Las seis advertencias fueron únicamente `.env` sintético ausente. La corrida
+anterior reportada como `4 tests / 43 assertions` no correspondía íntegramente
+al SHA publicado: se ejecutó en un worktree de validación que tenía cambios
+locales posteriores no incluidos en `c46f8067`, mientras el worktree principal
+usaba además `vendor` enlazado al árbol A4. Esa discrepancia queda corregida y
+se conserva como incidencia documental; no se reutiliza como evidencia del
+candidato corregido.
