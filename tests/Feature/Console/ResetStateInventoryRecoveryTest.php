@@ -28,7 +28,8 @@ test('recovers reset from durable sanitized inventory after state loss', functio
     $administrator = Administrator::create(['user_id' => $operator->id]);
     $administrator->givePermissionTo(Permission::firstOrCreate(['name' => 'api-consumers.manage', 'guard_name' => 'web']));
     config()->set('akubica_uat.operator_id', $operator->id);
-    expect(Artisan::call('akubica:uat-access', ['--apply' => true, '--namespace' => $namespace, '--scenario' => 'functional-window-2', '--confirm' => $namespace]))->toBe(0);
+    $applyCode = Artisan::call('akubica:uat-access', ['--apply' => true, '--namespace' => $namespace, '--scenario' => 'functional-window-2', '--confirm' => $namespace]);
+    expect($applyCode)->toBe(0, Artisan::output());
 
     $statePath = AkubicaUatFixtureContract::storagePath('access-state.json', $namespace);
     $inventoryPath = AkubicaUatFixtureContract::storagePath('access-inventory.json', $namespace);
