@@ -2,6 +2,7 @@
 
 use App\Data\Api\V1\Uat\AkubicaUatFixtureContract;
 use App\Models\Administrator;
+use App\Models\Api\V1\AkubicaUatFixtureManifest;
 use App\Models\Permission;
 use App\Models\User;
 use App\Services\Api\V1\Uat\AkubicaUatAccessProvisioner;
@@ -9,6 +10,7 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\PersonalAccessToken;
 
 function recoveryScenarioSetup(): array
 {
@@ -107,5 +109,47 @@ test('keeps active inventory after interrupted deletion and completes on retry',
         ->and($afterRetry['status'])->toBe('completed')
         ->and(Storage::disk('local')->exists($statePath))->toBeFalse();
 
+    Artisan::call('akubica:uat-fixtures', ['--reset' => true, '--confirm' => $namespace, '--namespace' => $namespace]);
+});
+
+test('supports reset, repeated reset, new apply and reset again', function () {
+    [$namespace, $operator] = recoveryScenarioSetup();
+    $provisioner = app(AkubicaUatAccessProvisioner::class);
+
+    expect($provisioner->apply($namespace, $operator, 'functional-window-2')['status'])->toBe('ok');
+    Storage::disk('local')->delete(AkubicaUatFixtureContract::storagePath('access-state.json', $namespace));
+    expect($provisioner->reset($namespace, $operator, 'functional-window-2')['status'])->toBe('ok')
+        ->and($provisioner->reset($namespace, $operator, 'functional-window-2')['status'])->toBe('empty');
+
+    expect($provisioner->apply($namespace, $operator, 'functional-window-2')['status'])->toBe('ok');
+    expect($provisioner->reset($namespace, $operator, 'functional-window-2')['status'])->toBe('ok');
+    expect(PersonalAccessToken::query()->count())->toBe(0)
+        ->and(AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->where('status', 'active')->exists())->toBeTrue();
+
+    Artisan::call('akubica:uat-fixtures', ['--reset' => true, '--confirm' => $namespace, '--namespace' => $namespace]);
+});
+
+test('keeps a scenario PAT in the ledger when binding preparation fails', function () {
+    [$namespace, $operator] = recoveryScenarioSetup();
+    $inventoryPath = AkubicaUatFixtureContract::storagePath('access-inventory.json', $namespace);
+    $captured = null;
+    $patLocks = 0;
+    DB::listen(function (QueryExecuted $query) use (&$captured, &$patLocks, $inventoryPath): void {
+        $sql = strtolower($query->sql);
+        if (str_contains($sql, 'personal_access_tokens') && str_contains($sql, 'for update') && ++$patLocks === 5) {
+            $captured = json_decode(Storage::disk('local')->get($inventoryPath), true, 512, JSON_THROW_ON_ERROR);
+            throw new RuntimeException('synthetic scenario binding preparation failure');
+        }
+    });
+
+    $code = Artisan::call('akubica:uat-access', ['--apply' => true, '--namespace' => $namespace, '--scenario' => 'functional-window-2', '--confirm' => $namespace]);
+    expect($code)->not->toBe(0, Artisan::output())
+        ->and($captured['status'] ?? null)->toBe('active')
+        ->and($captured['state']['scenario_token_ids'] ?? [])->not->toBeEmpty()
+        ->and(PersonalAccessToken::query()->count())->toBe(0);
+
+    $inventory = json_decode(Storage::disk('local')->get($inventoryPath), true, 512, JSON_THROW_ON_ERROR);
+    expect($inventory['status'])->toBe('completed')
+        ->and(Storage::disk('local')->exists(AkubicaUatFixtureContract::storagePath('access-state.json', $namespace)))->toBeFalse();
     Artisan::call('akubica:uat-fixtures', ['--reset' => true, '--confirm' => $namespace, '--namespace' => $namespace]);
 });
