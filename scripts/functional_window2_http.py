@@ -117,6 +117,16 @@ class InventoryProvider:
         if result != {"status": "verified", "namespace": namespace, "resource_id": resource_id, "purpose": purpose, "owner": owner}:
             raise InventoryProviderError("INVENTORY_OWNERSHIP_UNCONFIRMED")
 
+    def register(self, namespace: str, resource_id: int, purpose: str, owner: str, source_case: str, expected_sha: str) -> None:
+        result = self._invoke({"action": "register", "namespace": namespace, "resource_id": resource_id, "purpose": purpose, "owner": owner, "source_case": source_case, "expected_sha": expected_sha})
+        if result != {"status": "registered", "namespace": namespace, "resource_id": resource_id, "purpose": purpose, "owner": owner}:
+            raise InventoryProviderError("INVENTORY_REGISTRATION_UNCONFIRMED")
+
+    def unregister(self, namespace: str, resource_id: int, purpose: str, owner: str, expected_sha: str) -> None:
+        result = self._invoke({"action": "unregister", "namespace": namespace, "resource_id": resource_id, "purpose": purpose, "owner": owner, "expected_sha": expected_sha})
+        if result != {"status": "unregistered", "namespace": namespace, "resource_id": resource_id}:
+            raise InventoryProviderError("INVENTORY_UNREGISTRATION_UNCONFIRMED")
+
     def _invoke(self, request: dict[str, Any]) -> dict[str, Any]:
         try:
             completed = subprocess.run(
@@ -153,6 +163,8 @@ class Case:
     assertions: dict[str, Any] | None = None
     inventory_ref: str | None = None
     source_case: str | None = None
+    register_after_success: bool = False
+    unregister_after_success: bool = False
 
 
 def _origin(url: str) -> tuple[str, str, int | None]:
@@ -193,6 +205,11 @@ def load_plan(path: Path) -> tuple[list[Case], list[Case]]:
                 expected = [expected]
             if not isinstance(expected, list) or not expected or any(type(x) is not int or x < 100 or x > 599 for x in expected):
                 raise RunnerError("EXPECTED_STATUS_INVALID")
+            # Do not silently discard a request body under the non-consumed
+            # `body` key.  A plan with that typo previously sent an empty POST
+            # and turned a business assertion into an authorization 403.
+            if "body" in raw and "json" not in raw:
+                raise RunnerError("JSON_BODY_KEY_INVALID")
             body = raw.get("json")
             if body is not None and not isinstance(body, dict):
                 raise RunnerError("JSON_BODY_INVALID")
@@ -218,7 +235,13 @@ def load_plan(path: Path) -> tuple[list[Case], list[Case]]:
             source_case = raw.get("source_case")
             if source_case is not None and (not isinstance(source_case, str) or not source_case):
                 raise RunnerError("SOURCE_CASE_INVALID")
-            result.append(Case(case_id, method.upper(), path_value, tuple(expected), body, writes, bearer_alias, machine_alias, assertions, inventory_ref, source_case))
+            register_after_success = raw.get("register_after_success", False)
+            if type(register_after_success) is not bool:
+                raise RunnerError("INVENTORY_REGISTER_FLAG_INVALID")
+            unregister_after_success = raw.get("unregister_after_success", False)
+            if type(unregister_after_success) is not bool:
+                raise RunnerError("INVENTORY_UNREGISTER_FLAG_INVALID")
+            result.append(Case(case_id, method.upper(), path_value, tuple(expected), body, writes, bearer_alias, machine_alias, assertions, inventory_ref, source_case, register_after_success, unregister_after_success))
             seen.add(case_id)
         return result
 
@@ -432,6 +455,16 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                 status, duration, body, assertion_error = _request(base_url, case, timeout, tls_context, credentials)
                 response_bodies[case.case_id] = body
                 ok = status in case.expected and assertion_error is None
+                if ok and case.register_after_success:
+                    if inventory_provider is None or not case.inventory_ref:
+                        raise InventoryProviderError("INVENTORY_PROVIDER_REQUIRED")
+                    ref = data.get("inventory_records", {}).get(case.inventory_ref)
+                    if not isinstance(ref, dict):
+                        raise InventoryProviderError("INVENTORY_RECORD_MISSING")
+                    dynamic_id = _path_value(body, "data.item.id")
+                    if type(dynamic_id) is not int or dynamic_id <= 0:
+                        raise InventoryProviderError("HTTP_RESOURCE_ID_MISSING")
+                    inventory_provider.register(data.get("inventory", {}).get("namespace", ""), dynamic_id, ref.get("purpose", ""), ref.get("owner", ""), case.case_id, metadata.get("expected_release_sha", ""))
                 result = {"id": case.case_id, "method": case.method, "path": case.path, "http_status": status, "ok": ok, "duration_ms": duration}
                 if assertion_error:
                     result["assertion_error"] = assertion_error
@@ -478,6 +511,14 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                 # turn a guaranteed cleanup attempt into a secondary timeout.
                 status, duration, _body, assertion_error = _request(base_url, cleanup_case, max(timeout, 5.0), tls_context, credentials)
                 ok = status in case.expected and assertion_error is None
+                if ok and case.unregister_after_success:
+                    if inventory_provider is None or not case.inventory_ref:
+                        raise InventoryProviderError("INVENTORY_PROVIDER_REQUIRED")
+                    ref = data.get("inventory_records", {}).get(case.inventory_ref)
+                    if not isinstance(ref, dict):
+                        raise InventoryProviderError("INVENTORY_RECORD_MISSING")
+                    resource_id = int(urlsplit(cleanup_case.path).path.rsplit("/", 1)[-1])
+                    inventory_provider.unregister(data.get("inventory", {}).get("namespace", ""), resource_id, ref.get("purpose", ""), ref.get("owner", ""), metadata.get("expected_release_sha", ""))
                 cleanup_results.append({"id": case.case_id, "http_status": status, "ok": ok, "duration_ms": duration})
                 if not ok and exit_code == 0:
                     exit_code = 1

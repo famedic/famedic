@@ -13,7 +13,9 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * RC2 B03/B06 (D6): synthetic, reversible price fixtures.
+ * RC2 B03/B06 (D6): synthetic, reversible price fixtures. The optional
+ * --cart-window extension adds disposable B20/B21 studies; it never adopts
+ * manifest cart rows and is cleaned by the same namespace prefix.
  *  - B03: study without public reference price (public_price_cents = 0 -> public_price_unavailable).
  *  - B06: study with a mutable FAMEDIC price (--mutate toggles 30000 <-> 31500) to prove server-side revalidation.
  * Default mode is dry-run. Writes require --apply/--mutate/--cleanup plus --confirm=rc2-price-fixtures.
@@ -34,6 +36,7 @@ class Rc2PriceFixturesCommand extends Command
                             {--apply : Crea o restaura los fixtures B03/B06}
                             {--mutate : Alterna el precio FAMEDIC del fixture B06}
                             {--cleanup : Elimina exclusivamente los fixtures marcados y sus lineas de carrito}
+                            {--cart-window : Añade estudios temporales exclusivos para B20/B21}
                             {--namespace= : Namespace dedicado; obligatorio para preparación QA aislada}
                             {--confirm= : Confirmacion exacta para escribir}';
 
@@ -95,10 +98,16 @@ class Rc2PriceFixturesCommand extends Command
 
     private function definitions(): array
     {
-        return [
+        $definitions = [
             'B03' => ['gda_id' => $this->prefix().'B03', 'name' => '[UAT] RC2 B03 sin precio publico', 'public_price_cents' => 0, 'famedic_price_cents' => 25000],
             'B06' => ['gda_id' => $this->prefix().'B06', 'name' => '[UAT] RC2 B06 precio mutable', 'public_price_cents' => 40000, 'famedic_price_cents' => self::B06_PRICES[0]],
         ];
+        if ($this->option('cart-window')) {
+            $definitions['B20'] = ['gda_id' => $this->prefix().'B20', 'name' => '[UAT] RC2 B20 estudio temporal', 'public_price_cents' => 40000, 'famedic_price_cents' => 27000];
+            $definitions['B21'] = ['gda_id' => $this->prefix().'B21', 'name' => '[UAT] RC2 B21 estudio temporal', 'public_price_cents' => 40000, 'famedic_price_cents' => 28000];
+        }
+
+        return $definitions;
     }
 
     private function plan(): array
