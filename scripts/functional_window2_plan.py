@@ -106,6 +106,10 @@ def generate(template: Path, inventory: Path, release_source: Path, expected_sha
     if not isinstance(requests, list) or len(requests) != 22 or not isinstance(cleanup, list) or len(cleanup) != 2:
         raise PlanError("PLAN_SHAPE_INVALID")
     plan = _replace_ids(plan, inv["resources"])
+    for case in plan["requests"]:
+        if case.get("id") == "B03r":
+            case.setdefault("assertions", {}).pop("equals", None)
+            case["assertions"]["contains"] = [{"path": "data.laboratory_tests", "equals": {"id": inv["resources"]["B03"]["id"]}}]
     plan["id_source"] = "runtime-inventory"
     plan["qa_cleanup_policy"] = "Resolve every DELETE from the active-window inventory; verify namespace, ownership and purpose immediately before deletion; omit a resource that was not created."
     plan["template_sha"] = source.get("template_sha")

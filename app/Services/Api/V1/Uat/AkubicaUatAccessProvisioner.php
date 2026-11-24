@@ -61,6 +61,7 @@ final class AkubicaUatAccessProvisioner
     private const WINDOW2_CAPABILITIES = [
         'native_membership_regular' => [
             'memberships:read', 'cart:read', 'cart:membership:write',
+            'cart:laboratory:read', 'cart:laboratory:write',
         ],
         'leo_membership_none' => [
             'memberships:read', 'cart:read', 'cart:laboratory:read', 'cart:membership:write',
@@ -163,7 +164,7 @@ final class AkubicaUatAccessProvisioner
                 $scenarioContext = $this->scenarioContext($namespace);
                 $this->assertNoUnownedAccess(array_values($scenarioContext['user_ids']));
                 foreach ([
-                    ['key' => 'native_membership_regular', 'kind' => 'native', 'role' => 'membership_regular', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'brands' => []],
+                    ['key' => 'native_membership_regular', 'kind' => 'native', 'role' => 'membership_regular', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'brands' => ['olab']],
                     ['key' => 'leo_membership_none', 'kind' => 'leo', 'role' => 'membership_none', 'caps' => self::WINDOW2_CAPABILITIES['leo_membership_none'], 'brands' => ['swisslab']],
                 ] as $definition) {
                     $kind = $definition['kind'];

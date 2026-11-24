@@ -300,6 +300,10 @@ def _assert_response(body: Any, assertions: dict[str, Any] | None) -> str | None
         return None
     if not isinstance(body, (dict, list)):
         return "RESPONSE_JSON_REQUIRED"
+    alternatives = assertions.get("one_of", [])
+    if alternatives:
+        if not isinstance(alternatives, list) or not any(_assert_response(body, item) is None for item in alternatives if isinstance(item, dict)):
+            return "ASSERTION_NO_ALLOWED_ENVELOPE"
     for path in assertions.get("required_paths", []):
         if _path_value(body, path) is None:
             return "ASSERTION_REQUIRED_PATH"
@@ -309,6 +313,12 @@ def _assert_response(body: Any, assertions: dict[str, Any] | None) -> str | None
     for path, expected in assertions.get("equals", {}).items():
         if _path_value(body, path) != expected:
             return "ASSERTION_VALUE_MISMATCH"
+    for rule in assertions.get("contains", []):
+        if not isinstance(rule, dict) or not isinstance(rule.get("path"), str) or not isinstance(rule.get("equals"), dict):
+            return "ASSERTION_CONTAINS_INVALID"
+        collection = _path_value(body, rule["path"])
+        if not isinstance(collection, list) or not any(isinstance(item, dict) and all(item.get(key) == value for key, value in rule["equals"].items()) for item in collection):
+            return "ASSERTION_COLLECTION_MISMATCH"
     return None
 
 
@@ -417,7 +427,7 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                     ref = data.get("inventory_records", {}).get(case.inventory_ref)
                     if not isinstance(ref, dict):
                         raise InventoryProviderError("INVENTORY_RECORD_MISSING")
-                    resource_id = int(case.path.rsplit("/", 1)[-1])
+                    resource_id = int(urlsplit(case.path).path.rsplit("/", 1)[-1])
                     inventory_provider.verify(data.get("inventory", {}).get("namespace", ""), resource_id, ref.get("purpose", ""), ref.get("owner", ""), metadata.get("expected_release_sha", ""))
                 status, duration, body, assertion_error = _request(base_url, case, timeout, tls_context, credentials)
                 response_bodies[case.case_id] = body
@@ -464,7 +474,9 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                         raise InventoryProviderError("INVENTORY_PROVIDER_REQUIRED")
                     resource_id = int(urlsplit(cleanup_case.path).path.rsplit("/", 1)[-1])
                     inventory_provider.verify(data.get("inventory", {}).get("namespace", ""), resource_id, ref.get("purpose", ""), ref.get("owner", ""), metadata.get("expected_release_sha", ""))
-                status, duration, _body, assertion_error = _request(base_url, cleanup_case, timeout, tls_context, credentials)
+                # Cleanup gets its own floor so a short functional timeout cannot
+                # turn a guaranteed cleanup attempt into a secondary timeout.
+                status, duration, _body, assertion_error = _request(base_url, cleanup_case, max(timeout, 5.0), tls_context, credentials)
                 ok = status in case.expected and assertion_error is None
                 cleanup_results.append({"id": case.case_id, "http_status": status, "ok": ok, "duration_ms": duration})
                 if not ok and exit_code == 0:

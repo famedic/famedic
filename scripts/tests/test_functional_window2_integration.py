@@ -50,7 +50,7 @@ class Window2IntegrationTests(unittest.TestCase):
                 if path == "/catalog/laboratory-tests/930003": return self.send_json(200, {"data": {"id": 930003, "pricing": {"comparison_status": "public_price_unavailable"}}})
                 if path == "/catalog/laboratory-tests/930006": return self.send_json(200, {"data": {"id": 930006, "pricing": {}}})
                 if path == "/catalog/laboratory-tests": return self.send_json(200, {"data": {"laboratory_tests": [{"id": 930003}], "pagination": {}}})
-                if path == "/cart" and self.command == "GET": return self.send_json(200, {"data": {"items": [{"laboratory_test_id": 930006}]}})
+                if path == "/cart" and self.command == "GET": return self.send_json(200, {"data": {"items": [{"laboratory_test_id": 930006}], "totals": {"item_count": 1}}})
                 if path == "/memberships/plans": return self.send_json(200, {"data": {"plans": [{}]}})
                 if path == "/memberships/status": return self.send_json(200, {"data": {"status": "active", "source": "individual", "ineligibility_reason": "membership_already_active"}})
                 if path == "/catalog/laboratory-brands": return self.send_json(200, {"data": []})
