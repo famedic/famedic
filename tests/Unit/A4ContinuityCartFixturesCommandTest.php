@@ -7,9 +7,11 @@ use App\Data\Api\V1\Uat\AkubicaUatFixtureContract;
 use App\Models\Api\V1\AkubicaUatFixtureManifest;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
+use App\Models\LaboratoryTestCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Storage;
 use Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture;
 use Tests\TestCase;
 
@@ -43,6 +45,7 @@ final class A4ContinuityCartFixturesCommandTest extends TestCase
         URL::forceRootUrl('https://famedic-a4.test');
         URL::forceScheme('https');
         SyntheticConsumerRegistryFixture::reset();
+        Storage::disk('local')->delete(AkubicaUatFixtureContract::storagePath('a4-continuity-cart.json', AkubicaUatFixtureContract::DEDICATED_NAMESPACE));
     }
 
     public function test_dry_run_apply_is_idempotent_and_cleanup_is_scoped(): void
@@ -74,6 +77,50 @@ final class A4ContinuityCartFixturesCommandTest extends TestCase
         $this->artisan('akubica:a4-continuity-cart', $args + ['--cleanup' => true, '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM])->assertSuccessful();
         self::assertSame(0, LaboratoryCartItem::query()->count());
         self::assertSame(0, LaboratoryTest::query()->where('gda_id', 'like', A4ContinuityCartFixturesCommand::TEST_PREFIX.'%')->count());
+        self::assertSame(0, LaboratoryTestCategory::query()->where('name', '[UAT] RC2 A4 continuidad laboratorio · '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE)->count());
+        $manifest->delete();
+    }
+
+    public function test_preexisting_category_is_preserved_after_a4_cleanup(): void
+    {
+        [$manifest] = $this->manifest();
+        LaboratoryTestCategory::query()->create(['name' => '[UAT] RC2 A4 continuidad laboratorio · '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE]);
+        $args = [
+            '--namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+            '--apply' => true,
+            '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+        ];
+        $this->artisan('akubica:a4-continuity-cart', $args)->assertSuccessful();
+        $this->artisan('akubica:a4-continuity-cart', [
+            '--namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+            '--cleanup' => true,
+            '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+        ])->assertSuccessful();
+
+        self::assertSame(1, LaboratoryTestCategory::query()->where('name', '[UAT] RC2 A4 continuidad laboratorio · '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE)->count());
+        $manifest->delete();
+    }
+
+    public function test_cleanup_recovers_when_item_is_missing_and_removes_only_owned_category(): void
+    {
+        [$manifest] = $this->manifest();
+        $args = [
+            '--namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+            '--apply' => true,
+            '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+        ];
+        $this->artisan('akubica:a4-continuity-cart', $args)->assertSuccessful();
+        $testId = LaboratoryTest::query()->where('gda_id', A4ContinuityCartFixturesCommand::TEST_PREFIX.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.'-OLAB')->value('id');
+        LaboratoryCartItem::query()->where('laboratory_test_id', $testId)->forceDelete();
+
+        $this->artisan('akubica:a4-continuity-cart', [
+            '--namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+            '--cleanup' => true,
+            '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+        ])->assertSuccessful();
+
+        self::assertSame(0, LaboratoryTest::query()->where('gda_id', 'like', A4ContinuityCartFixturesCommand::TEST_PREFIX.'%')->count());
+        self::assertSame(0, LaboratoryTestCategory::query()->where('name', '[UAT] RC2 A4 continuidad laboratorio · '.AkubicaUatFixtureContract::DEDICATED_NAMESPACE)->count());
         $manifest->delete();
     }
 

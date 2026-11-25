@@ -10,6 +10,7 @@ use App\Models\LaboratoryTestCategory;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * A4-only, namespace-scoped laboratory cart preparation for membership_none.
@@ -120,7 +121,13 @@ final class A4ContinuityCartFixturesCommand extends Command
             $existingItem->restore();
         }
 
-        $category = LaboratoryTestCategory::query()->withTrashed()->firstOrCreate(['name' => self::CATEGORY.' · '.$namespace]);
+        $categoryName = self::CATEGORY.' · '.$namespace;
+        $category = LaboratoryTestCategory::query()->withTrashed()->where('name', $categoryName)->first();
+        $categoryCreated = false;
+        if ($category === null) {
+            $category = LaboratoryTestCategory::query()->create(['name' => $categoryName]);
+            $categoryCreated = true;
+        }
         if ($category->trashed()) {
             $category->restore();
         }
@@ -145,6 +152,21 @@ final class A4ContinuityCartFixturesCommand extends Command
         if ((int) $item->customer_id !== $customerId || (int) $item->laboratory_test_id !== (int) $test->id) {
             throw new \DomainException('A4_FIXTURE_RESOURCE_COLLISION');
         }
+        $existingLedger = $this->readLedger($namespace);
+        if (($existingLedger['status'] ?? null) === 'completed') {
+            $existingLedger = null;
+        }
+        if ($existingLedger !== null && ($existingLedger['category_id'] ?? null) !== (int) $category->id) {
+            throw new \DomainException('A4_FIXTURE_LEDGER_COLLISION');
+        }
+        $this->writeLedger($namespace, [
+            'namespace' => $namespace,
+            'status' => 'active',
+            'category_id' => (int) $category->id,
+            'category_created' => $existingLedger['category_created'] ?? $categoryCreated,
+            'test_id' => (int) $test->id,
+            'item_id' => (int) $item->id,
+        ]);
 
         return $this->emit('ok', [
             'mode' => 'apply',
@@ -161,10 +183,47 @@ final class A4ContinuityCartFixturesCommand extends Command
 
     private function cleanup(string $namespace, int $customerId, ?LaboratoryTest $existingTest, ?LaboratoryCartItem $existingItem): int
     {
-        if ($existingTest === null || $existingItem === null) {
-            return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => 0, 'laboratory_tests' => 0], 'reason' => 'RESOURCE_NOT_CREATED']);
+        $ledger = $this->readLedger($namespace);
+        if (($ledger['status'] ?? null) === 'completed') {
+            return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => 0, 'laboratory_tests' => 0, 'categories' => 0], 'reason' => 'ALREADY_COMPLETED']);
         }
-        if ((int) $existingItem->customer_id !== $customerId || ! str_starts_with((string) $existingTest->gda_id, self::TEST_PREFIX.$namespace.'-')) {
+        if ($ledger !== null) {
+            $ledgerTest = LaboratoryTest::query()->withTrashed()->find((int) ($ledger['test_id'] ?? 0));
+            $ledgerItem = LaboratoryCartItem::query()->withTrashed()->find((int) ($ledger['item_id'] ?? 0));
+            if ($existingTest !== null && $ledgerTest !== null && (int) $existingTest->id !== (int) $ledgerTest->id) {
+                return $this->emit('error', ['error_code' => 'A4_FIXTURE_LEDGER_RESOURCE_MISMATCH'], self::FAILURE);
+            }
+            if ($existingItem !== null && $ledgerItem !== null && (int) $existingItem->id !== (int) $ledgerItem->id) {
+                return $this->emit('error', ['error_code' => 'A4_FIXTURE_LEDGER_RESOURCE_MISMATCH'], self::FAILURE);
+            }
+            $existingTest = $ledgerTest;
+            $existingItem = $ledgerItem;
+        }
+        if ($existingTest === null && $existingItem === null) {
+            $categoryDeleted = $this->cleanupCategory($ledger);
+            if ($ledger !== null) {
+                $this->writeLedger($namespace, $ledger + ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0]);
+            }
+            return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => 0, 'laboratory_tests' => 0, 'categories' => $categoryDeleted], 'reason' => 'RESOURCE_NOT_CREATED']);
+        }
+        if (($existingTest === null || $existingItem === null) && $ledger !== null) {
+            if ($existingItem !== null && ((int) $existingItem->customer_id !== $customerId || (int) $existingItem->laboratory_test_id !== (int) ($ledger['test_id'] ?? 0))) {
+                return $this->emit('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
+            }
+            if ($existingTest !== null && ! str_starts_with((string) $existingTest->gda_id, self::TEST_PREFIX.$namespace.'-')) {
+                return $this->emit('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
+            }
+            $itemDeleted = $existingItem === null ? 0 : LaboratoryCartItem::query()->withTrashed()->whereKey($existingItem->id)->forceDelete();
+            $testDeleted = 0;
+            if ($existingTest !== null && ! LaboratoryCartItem::query()->withTrashed()->where('laboratory_test_id', $existingTest->id)->exists()) {
+                $testDeleted = LaboratoryTest::query()->withTrashed()->whereKey($existingTest->id)->forceDelete();
+            }
+            $categoryDeleted = $this->cleanupCategory($ledger);
+            $this->writeLedger($namespace, $ledger + ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0]);
+
+            return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => $itemDeleted, 'laboratory_tests' => $testDeleted, 'categories' => $categoryDeleted], 'reason' => 'PARTIAL_RESOURCE_RECOVERED']);
+        }
+        if ($existingTest === null || $existingItem === null || (int) $existingItem->customer_id !== $customerId || ! str_starts_with((string) $existingTest->gda_id, self::TEST_PREFIX.$namespace.'-')) {
             return $this->emit('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
         }
         $itemDeleted = LaboratoryCartItem::query()->withTrashed()->whereKey($existingItem->id)->forceDelete();
@@ -172,8 +231,66 @@ final class A4ContinuityCartFixturesCommand extends Command
         if (! LaboratoryCartItem::query()->withTrashed()->where('laboratory_test_id', $existingTest->id)->exists()) {
             $testDeleted = LaboratoryTest::query()->withTrashed()->whereKey($existingTest->id)->forceDelete();
         }
+        $categoryDeleted = 0;
+        $categoryReason = 'CATEGORY_PROVENANCE_UNCONFIRMED';
+        if ($ledger !== null && ($ledger['category_created'] ?? false) === true) {
+            $categoryDeleted = $this->cleanupCategory($ledger);
+            $categoryReason = $categoryDeleted > 0 ? 'WINDOW_CREATED_NO_REFERENCES' : 'SHARED_REFERENCE_PRESERVED_OR_ABSENT';
+        }
+        if ($ledger !== null) {
+            $this->writeLedger($namespace, $ledger + [
+                'status' => 'completed',
+                'resources_absent' => ! LaboratoryCartItem::query()->withTrashed()->whereKey($existingItem->id)->exists()
+                    && ! LaboratoryTest::query()->withTrashed()->whereKey($existingTest->id)->exists(),
+                'category_deleted' => $categoryDeleted > 0,
+                'category_reason' => $categoryReason,
+            ]);
+        }
 
-        return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => $itemDeleted, 'laboratory_tests' => $testDeleted], 'resource_id' => $existingItem->id]);
+        return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => $itemDeleted, 'laboratory_tests' => $testDeleted, 'categories' => $categoryDeleted], 'category_reason' => $categoryReason, 'resource_id' => $existingItem->id]);
+    }
+
+    private function cleanupCategory(?array $ledger): int
+    {
+        if ($ledger === null || ($ledger['category_created'] ?? false) !== true) {
+            return 0;
+        }
+        $categoryId = (int) ($ledger['category_id'] ?? 0);
+        $category = LaboratoryTestCategory::query()->withTrashed()->find($categoryId);
+        if ($category === null || LaboratoryTest::query()->withTrashed()->where('laboratory_test_category_id', $categoryId)->exists()) {
+            return 0;
+        }
+
+        return LaboratoryTestCategory::query()->withTrashed()->whereKey($categoryId)->forceDelete();
+    }
+
+    private function ledgerPath(string $namespace): string
+    {
+        return AkubicaUatFixtureContract::storagePath('a4-continuity-cart.json', $namespace);
+    }
+
+    private function readLedger(string $namespace): ?array
+    {
+        $disk = Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK);
+        $path = $this->ledgerPath($namespace);
+        if (! $disk->exists($path)) {
+            return null;
+        }
+        $ledger = json_decode((string) $disk->get($path), true, 512, JSON_THROW_ON_ERROR);
+        if (! is_array($ledger) || ($ledger['namespace'] ?? null) !== $namespace) {
+            throw new \DomainException('A4_FIXTURE_LEDGER_INVALID');
+        }
+
+        return $ledger;
+    }
+
+    private function writeLedger(string $namespace, array $ledger): void
+    {
+        $disk = Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK);
+        $path = $this->ledgerPath($namespace);
+        $temporary = $path.'.tmp.'.bin2hex(random_bytes(6));
+        $disk->put($temporary, json_encode($ledger, JSON_THROW_ON_ERROR));
+        $disk->move($temporary, $path);
     }
 
     private function testGdaId(string $namespace): string
