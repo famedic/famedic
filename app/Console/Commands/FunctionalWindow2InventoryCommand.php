@@ -34,6 +34,7 @@ final class FunctionalWindow2InventoryCommand extends Command
         'cart-item-created-by-B20' => 'B20',
         'cart-item-created-by-B21' => 'B21',
         'cart-item-created-by-B12' => 'B12',
+        'cart-item-created-by-A4-continuity' => 'A4',
     ];
     private const OWNERS = ['customer-dedicated', 'customer:primary', 'customer:membership_regular', 'customer:membership_none'];
 
@@ -126,6 +127,10 @@ final class FunctionalWindow2InventoryCommand extends Command
             $this->verifyMembershipResource($resourceId, $purpose, $owner, $manifest, $input);
             return;
         }
+        if ($scenario === 'A4') {
+            $this->verifyA4ContinuityResource($resourceId, $purpose, $owner, $manifest);
+            return;
+        }
         $ownerCustomerId = $temporaryPurpose ? $this->customerIdForOwner($owner, $ids) : $primaryCustomerId;
         $testIds = array_map('intval', array_values((array) Arr::get($ids, 'tests', [])));
         if ($primaryCustomerId < 1 || $testIds === []) {
@@ -189,12 +194,19 @@ final class FunctionalWindow2InventoryCommand extends Command
 
     private function registerResource(int $resourceId, string $purpose, string $owner, string $sourceCase, array $input): void
     {
-        if (! in_array($purpose, ['cart-item-created-by-B06b', 'cart-item-created-by-B20', 'cart-item-created-by-B21', 'cart-item-created-by-B12'], true)) throw new \DomainException('RESOURCE_PURPOSE_NOT_REGISTERABLE');
-        if ($sourceCase !== substr($purpose, strlen('cart-item-created-by-'))) throw new \DomainException('RESOURCE_SOURCE_MISMATCH');
+        if (! in_array($purpose, ['cart-item-created-by-B06b', 'cart-item-created-by-B20', 'cart-item-created-by-B21', 'cart-item-created-by-B12', 'cart-item-created-by-A4-continuity'], true)) throw new \DomainException('RESOURCE_PURPOSE_NOT_REGISTERABLE');
+        $expectedSourceCase = $purpose === 'cart-item-created-by-A4-continuity'
+            ? 'A4'
+            : substr($purpose, strlen('cart-item-created-by-'));
+        if ($sourceCase !== $expectedSourceCase) throw new \DomainException('RESOURCE_SOURCE_MISMATCH');
         if ($sourceCase === 'B12') {
             $manifest = AkubicaUatFixtureManifest::query()->where('namespace', self::NAMESPACE)->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)->first();
             if ($manifest === null) throw new \DomainException('MANIFEST_NOT_ACTIVE');
             $this->verifyMembershipResource($resourceId, $purpose, $owner, $manifest, $input, true);
+        } elseif ($sourceCase === 'A4') {
+            $manifest = AkubicaUatFixtureManifest::query()->where('namespace', self::NAMESPACE)->where('status', AkubicaUatFixtureContract::STATUS_ACTIVE)->first();
+            if ($manifest === null) throw new \DomainException('MANIFEST_NOT_ACTIVE');
+            $this->verifyA4ContinuityResource($resourceId, $purpose, $owner, $manifest, true);
         } else {
             $this->verifyTemporaryResource($resourceId, $owner);
         }
@@ -251,6 +263,32 @@ final class FunctionalWindow2InventoryCommand extends Command
         $item = LaboratoryCartItem::query()->with('laboratoryTest')->find($resourceId);
         $ownerCustomerId = $this->customerIdForOwner($owner, (array) ($manifest?->metadata['ids'] ?? []));
         if (! $manifest || $ownerCustomerId < 1 || ! $item || (int) $item->customer_id !== $ownerCustomerId || ! $item->laboratoryTest || ! str_starts_with((string) $item->laboratoryTest->gda_id, 'RC2-PRICE-FIX-'.self::NAMESPACE.'-')) throw new \DomainException('RESOURCE_NOT_WINDOW_CREATED');
+    }
+
+    private function verifyA4ContinuityResource(int $resourceId, string $purpose, string $owner, AkubicaUatFixtureManifest $manifest, bool $forRegistration = false): void
+    {
+        if ($purpose !== 'cart-item-created-by-A4-continuity' || $owner !== 'customer:membership_none') {
+            throw new \DomainException('RESOURCE_PURPOSE_OWNER_MISMATCH');
+        }
+        $customerId = (int) Arr::get((array) $manifest->metadata, 'ids.customers.membership_none', 0);
+        $item = LaboratoryCartItem::query()->with('laboratoryTest')->find($resourceId);
+        if ($customerId < 1 || $item === null || (int) $item->customer_id !== $customerId) {
+            throw new \DomainException('RESOURCE_OWNER_MISMATCH');
+        }
+        $brand = $item->laboratoryTest?->brand;
+        $brandValue = $brand instanceof \BackedEnum ? $brand->value : $brand;
+        if ($brandValue !== 'olab' || ! str_starts_with((string) $item->laboratoryTest?->gda_id, 'RC2-A4-CONTINUITY-'.self::NAMESPACE.'-')) {
+            throw new \DomainException('RESOURCE_TYPE_MISMATCH');
+        }
+        if ($item->created_at === null || $manifest->created_at === null || $item->created_at->lte($manifest->created_at)) {
+            throw new \DomainException('RESOURCE_NOT_WINDOW_CREATED');
+        }
+        if (! $forRegistration) {
+            $this->verifyLedger($resourceId, $purpose, $owner);
+        }
+        if ($forRegistration && in_array((int) $resourceId, array_map('intval', (array) Arr::get((array) $manifest->metadata, 'ids.cart_items', [])), true)) {
+            throw new \DomainException('RESOURCE_BASE_ID_REJECTED');
+        }
     }
 
     private function customerIdForOwner(string $owner, array $ids): int

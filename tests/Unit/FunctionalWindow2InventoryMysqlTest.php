@@ -168,3 +168,62 @@ test('inventory helper registers and verifies a namespace-scoped medical members
         if (is_file($metadataPath)) unlink($metadataPath);
     }
 });
+
+test('inventory helper registers and verifies the dedicated A4 laboratory item', function () {
+    $sha = 'f248e3cc86d64464d188900859b8019fcf6dbf20';
+    $metadataPath = tempnam(sys_get_temp_dir(), 'fw2-release-');
+    file_put_contents($metadataPath, $sha);
+    $user = $customer = $test = $item = $manifest = null;
+    try {
+        $user = User::factory()->create();
+        $customer = Customer::factory()->withRegularAccount()->create(['user_id' => $user->id]);
+        $test = LaboratoryTest::factory()->create([
+            'brand' => 'olab',
+            'gda_id' => 'RC2-A4-CONTINUITY-'.AkubicaUatFixtureContract::DEDICATED_NAMESPACE.'-OLAB-'.bin2hex(random_bytes(3)),
+        ]);
+        $item = LaboratoryCartItem::factory()->create(['customer_id' => $customer->id, 'laboratory_test_id' => $test->id]);
+        $manifest = AkubicaUatFixtureManifest::query()->create([
+            'namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+            'fixture_version' => AkubicaUatFixtureContract::FIXTURE_VERSION,
+            'status' => AkubicaUatFixtureContract::STATUS_ACTIVE,
+            'expires_at' => now()->addHour(),
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+            'metadata' => ['ids' => ['customers' => ['membership_none' => $customer->id]]],
+        ]);
+
+        $spec = [
+            'purpose' => 'cart-item-created-by-A4-continuity',
+            'owner' => 'customer:membership_none',
+            'source_case' => 'A4',
+            'expected_sha' => $sha,
+        ];
+        $register = runInventoryVerifyMysql($metadataPath, array_merge(['action' => 'register', 'namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE, 'resource_id' => $item->id], $spec));
+        expect($register->getExitCode(), $register->getOutput().' '.$register->getErrorOutput())->toBe(0);
+        $verify = runInventoryVerifyMysql($metadataPath, array_merge(['action' => 'verify', 'namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE, 'resource_id' => $item->id], $spec));
+        expect($verify->getExitCode())->toBe(0);
+
+        $item->delete();
+        $unregister = runInventoryVerifyMysql($metadataPath, array_merge(['action' => 'unregister', 'namespace' => AkubicaUatFixtureContract::DEDICATED_NAMESPACE, 'resource_id' => $item->id], $spec));
+        expect($unregister->getExitCode())->toBe(0);
+    } finally {
+        if ($manifest) {
+            DB::table('akubica_uat_fixture_manifests')->where('id', $manifest->id)->delete();
+        }
+        if ($item) {
+            DB::table('laboratory_cart_items')->where('id', $item->id)->delete();
+        }
+        if ($test) {
+            DB::table('laboratory_tests')->where('id', $test->id)->delete();
+        }
+        if ($customer) {
+            DB::table('customers')->where('id', $customer->id)->delete();
+        }
+        if ($user) {
+            DB::table('users')->where('id', $user->id)->delete();
+        }
+        if (is_file($metadataPath)) {
+            unlink($metadataPath);
+        }
+    }
+});
