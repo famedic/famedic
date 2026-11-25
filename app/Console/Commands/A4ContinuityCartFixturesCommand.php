@@ -200,11 +200,11 @@ final class A4ContinuityCartFixturesCommand extends Command
             $existingItem = $ledgerItem;
         }
         if ($existingTest === null && $existingItem === null) {
-            $categoryDeleted = $this->cleanupCategory($ledger);
+            [$categoryDeleted, $categoryReason] = $this->cleanupCategory($ledger);
             if ($ledger !== null) {
-                $this->writeLedger($namespace, $ledger + ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0]);
+                $this->writeLedger($namespace, $ledger + ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0, 'category_reason' => $categoryReason]);
             }
-            return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => 0, 'laboratory_tests' => 0, 'categories' => $categoryDeleted], 'reason' => 'RESOURCE_NOT_CREATED']);
+            return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => 0, 'laboratory_tests' => 0, 'categories' => $categoryDeleted], 'reason' => 'RESOURCE_NOT_CREATED', 'category_reason' => $categoryReason]);
         }
         if (($existingTest === null || $existingItem === null) && $ledger !== null) {
             if ($existingItem !== null && ((int) $existingItem->customer_id !== $customerId || (int) $existingItem->laboratory_test_id !== (int) ($ledger['test_id'] ?? 0))) {
@@ -218,10 +218,10 @@ final class A4ContinuityCartFixturesCommand extends Command
             if ($existingTest !== null && ! LaboratoryCartItem::query()->withTrashed()->where('laboratory_test_id', $existingTest->id)->exists()) {
                 $testDeleted = LaboratoryTest::query()->withTrashed()->whereKey($existingTest->id)->forceDelete();
             }
-            $categoryDeleted = $this->cleanupCategory($ledger);
-            $this->writeLedger($namespace, $ledger + ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0]);
+            [$categoryDeleted, $categoryReason] = $this->cleanupCategory($ledger);
+            $this->writeLedger($namespace, $ledger + ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0, 'category_reason' => $categoryReason]);
 
-            return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => $itemDeleted, 'laboratory_tests' => $testDeleted, 'categories' => $categoryDeleted], 'reason' => 'PARTIAL_RESOURCE_RECOVERED']);
+            return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => $itemDeleted, 'laboratory_tests' => $testDeleted, 'categories' => $categoryDeleted], 'reason' => 'PARTIAL_RESOURCE_RECOVERED', 'category_reason' => $categoryReason]);
         }
         if ($existingTest === null || $existingItem === null || (int) $existingItem->customer_id !== $customerId || ! str_starts_with((string) $existingTest->gda_id, self::TEST_PREFIX.$namespace.'-')) {
             return $this->emit('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
@@ -234,8 +234,7 @@ final class A4ContinuityCartFixturesCommand extends Command
         $categoryDeleted = 0;
         $categoryReason = 'CATEGORY_PROVENANCE_UNCONFIRMED';
         if ($ledger !== null && ($ledger['category_created'] ?? false) === true) {
-            $categoryDeleted = $this->cleanupCategory($ledger);
-            $categoryReason = $categoryDeleted > 0 ? 'WINDOW_CREATED_NO_REFERENCES' : 'SHARED_REFERENCE_PRESERVED_OR_ABSENT';
+            [$categoryDeleted, $categoryReason] = $this->cleanupCategory($ledger);
         }
         if ($ledger !== null) {
             $this->writeLedger($namespace, $ledger + [
@@ -250,18 +249,23 @@ final class A4ContinuityCartFixturesCommand extends Command
         return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => $itemDeleted, 'laboratory_tests' => $testDeleted, 'categories' => $categoryDeleted], 'category_reason' => $categoryReason, 'resource_id' => $existingItem->id]);
     }
 
-    private function cleanupCategory(?array $ledger): int
+    private function cleanupCategory(?array $ledger): array
     {
         if ($ledger === null || ($ledger['category_created'] ?? false) !== true) {
-            return 0;
+            return [0, 'CATEGORY_PROVENANCE_UNCONFIRMED'];
         }
         $categoryId = (int) ($ledger['category_id'] ?? 0);
         $category = LaboratoryTestCategory::query()->withTrashed()->find($categoryId);
-        if ($category === null || LaboratoryTest::query()->withTrashed()->where('laboratory_test_category_id', $categoryId)->exists()) {
-            return 0;
+        if ($category === null) {
+            return [0, 'CATEGORY_ALREADY_ABSENT'];
+        }
+        if (LaboratoryTest::query()->withTrashed()->where('laboratory_test_category_id', $categoryId)->exists()) {
+            return [0, 'SHARED_REFERENCE_PRESERVED'];
         }
 
-        return LaboratoryTestCategory::query()->withTrashed()->whereKey($categoryId)->forceDelete();
+        $deleted = LaboratoryTestCategory::query()->withTrashed()->whereKey($categoryId)->forceDelete();
+
+        return [$deleted, $deleted > 0 ? 'WINDOW_CREATED_NO_REFERENCES' : 'CATEGORY_ALREADY_ABSENT'];
     }
 
     private function ledgerPath(string $namespace): string
