@@ -388,6 +388,65 @@ def _path_value(value: Any, path: str) -> Any:
     return current
 
 
+SENSITIVE_OBSERVED_HEADER_NAMES = frozenset({
+    "authorization",
+    "proxy-authorization",
+    "cookie",
+    "set-cookie",
+    "x-consumer-credential",
+})
+OBSERVED_HEADER_REDACTED = "[REDACTED]"
+_TOKENISH_OBSERVED_VALUE = re.compile(
+    r"(?i)(?:bearer\s+\S+|eyJ[A-Za-z0-9_-]{10,}|continuity_url)"
+)
+
+
+def _cache_control_directives(value: str) -> set[str]:
+    """Parse Cache-Control into a case-insensitive set of trimmed directives."""
+    return {part.strip().lower() for part in value.split(",") if part.strip()}
+
+
+def _header_value_matches(name: str, actual: str | None, expected: str) -> bool:
+    """Compare headers. Cache-Control is a directive set; all others stay exact."""
+    if actual is None:
+        return False
+    if name.lower() == "cache-control":
+        return _cache_control_directives(actual) == _cache_control_directives(expected)
+    return actual == expected
+
+
+def _sanitize_observed_header_value(name: str, value: str | None) -> str | None:
+    """Record asserted header values without cookies, Authorization, tokens or continuity URLs."""
+    if value is None:
+        return None
+    if name.lower() in SENSITIVE_OBSERVED_HEADER_NAMES:
+        return OBSERVED_HEADER_REDACTED
+    if _TOKENISH_OBSERVED_VALUE.search(value):
+        return OBSERVED_HEADER_REDACTED
+    return value
+
+
+def _observed_asserted_headers(
+    assertions: dict[str, Any] | None,
+    response_headers: dict[str, str] | None = None,
+) -> dict[str, str | None]:
+    if not assertions:
+        return {}
+    expected_headers = assertions.get("headers_equals", {})
+    if not isinstance(expected_headers, dict):
+        return {}
+    observed: dict[str, str | None] = {}
+    for name in expected_headers:
+        if not isinstance(name, str):
+            continue
+        actual = next(
+            (value for key, value in (response_headers or {}).items() if key.lower() == name.lower()),
+            None,
+        )
+        observed[name] = _sanitize_observed_header_value(name, actual)
+    return observed
+
+
 def _assert_response(body: Any, assertions: dict[str, Any] | None, response_headers: dict[str, str] | None = None) -> str | None:
     if not assertions:
         return None
@@ -395,7 +454,7 @@ def _assert_response(body: Any, assertions: dict[str, Any] | None, response_head
         if not isinstance(name, str) or not isinstance(expected, str):
             return "ASSERTION_HEADER_INVALID"
         actual = next((value for key, value in (response_headers or {}).items() if key.lower() == name.lower()), None)
-        if actual != expected:
+        if not _header_value_matches(name, actual, expected):
             return "ASSERTION_HEADER_MISMATCH"
     if not isinstance(body, (dict, list)):
         return "RESPONSE_JSON_REQUIRED"
@@ -535,7 +594,7 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                         raise InventoryProviderError("INVENTORY_RECORD_MISSING")
                     resource_id = int(urlsplit(case.path).path.rsplit("/", 1)[-1])
                     inventory_provider.verify(data.get("inventory", {}).get("namespace", ""), resource_id, ref, metadata.get("expected_release_sha", ""))
-                status, duration, body, assertion_error, _headers = _request(base_url, case, timeout, tls_context, credentials)
+                status, duration, body, assertion_error, response_headers = _request(base_url, case, timeout, tls_context, credentials)
                 response_bodies[case.case_id] = body
                 ok = status in case.expected and assertion_error is None
                 if ok and case.register_after_success:
@@ -551,6 +610,9 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
                 result = {"id": case.case_id, "method": case.method, "path": case.path, "http_status": status, "ok": ok, "duration_ms": duration}
                 if assertion_error:
                     result["assertion_error"] = assertion_error
+                observed_headers = _observed_asserted_headers(case.assertions, response_headers)
+                if observed_headers:
+                    result["observed_headers"] = observed_headers
                 results.append(result)
                 if not ok:
                     exit_code = 1
