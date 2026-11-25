@@ -9,7 +9,7 @@ use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture;
@@ -17,7 +17,7 @@ use Tests\TestCase;
 
 final class A4ContinuityCartFixturesCommandTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     private function manifest(): array
     {

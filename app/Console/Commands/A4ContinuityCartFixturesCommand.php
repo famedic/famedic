@@ -202,7 +202,7 @@ final class A4ContinuityCartFixturesCommand extends Command
         if ($existingTest === null && $existingItem === null) {
             [$categoryDeleted, $categoryReason] = $this->cleanupCategory($ledger);
             if ($ledger !== null) {
-                $this->writeLedger($namespace, $ledger + ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0, 'category_reason' => $categoryReason]);
+                $this->writeLedger($namespace, array_merge($ledger, ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0, 'category_reason' => $categoryReason]));
             }
             return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => 0, 'laboratory_tests' => 0, 'categories' => $categoryDeleted], 'reason' => 'RESOURCE_NOT_CREATED', 'category_reason' => $categoryReason]);
         }
@@ -219,7 +219,7 @@ final class A4ContinuityCartFixturesCommand extends Command
                 $testDeleted = LaboratoryTest::query()->withTrashed()->whereKey($existingTest->id)->forceDelete();
             }
             [$categoryDeleted, $categoryReason] = $this->cleanupCategory($ledger);
-            $this->writeLedger($namespace, $ledger + ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0, 'category_reason' => $categoryReason]);
+            $this->writeLedger($namespace, array_merge($ledger, ['status' => 'completed', 'resources_absent' => true, 'category_deleted' => $categoryDeleted > 0, 'category_reason' => $categoryReason]));
 
             return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => $itemDeleted, 'laboratory_tests' => $testDeleted, 'categories' => $categoryDeleted], 'reason' => 'PARTIAL_RESOURCE_RECOVERED', 'category_reason' => $categoryReason]);
         }
@@ -237,13 +237,13 @@ final class A4ContinuityCartFixturesCommand extends Command
             [$categoryDeleted, $categoryReason] = $this->cleanupCategory($ledger);
         }
         if ($ledger !== null) {
-            $this->writeLedger($namespace, $ledger + [
+            $this->writeLedger($namespace, array_merge($ledger, [
                 'status' => 'completed',
                 'resources_absent' => ! LaboratoryCartItem::query()->withTrashed()->whereKey($existingItem->id)->exists()
                     && ! LaboratoryTest::query()->withTrashed()->whereKey($existingTest->id)->exists(),
                 'category_deleted' => $categoryDeleted > 0,
                 'category_reason' => $categoryReason,
-            ]);
+            ]));
         }
 
         return $this->emit('ok', ['mode' => 'cleanup', 'deleted' => ['laboratory_cart_items' => $itemDeleted, 'laboratory_tests' => $testDeleted, 'categories' => $categoryDeleted], 'category_reason' => $categoryReason, 'resource_id' => $existingItem->id]);
