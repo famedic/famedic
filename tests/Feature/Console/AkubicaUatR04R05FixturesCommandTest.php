@@ -28,13 +28,11 @@ test('dry-run is the default and writes nothing', function () {
     expect(FamilyAccount::query()->count())->toBe(0)
         ->and(LaboratoryAppointment::query()->count())->toBe(0);
 });
-
 test('apply requires the exact namespace confirmation', function () {
     r04r05Manifest();
     $this->artisan('akubica:uat-fixtures-r04r05 --apply --confirm=otro')->assertFailed();
     expect(FamilyAccount::query()->count())->toBe(0);
 });
-
 test('fails closed without an active manifest', function () {
     $this->artisan('akubica:uat-fixtures-r04r05 --apply --confirm=akubica-uat-v1')->assertFailed();
 });
@@ -99,3 +97,4 @@ test('dedicated namespace R04 fixtures are idempotent and do not reuse legacy ma
 
     expect(FamilyAccount::query()->where('name', Cmd::FAMILY_NAME.' akubica-uat-batch2-a4-v1')->count())->toBe(0);
 });
+

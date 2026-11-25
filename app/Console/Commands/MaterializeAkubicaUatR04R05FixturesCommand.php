@@ -41,6 +41,7 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
                             {--dry-run : Plan y verificaciones sin escribir (por defecto)}
                             {--apply : Crea familiares y citas sintéticos (idempotente)}
                             {--reset : Elimina solo registros con marcador RC2}
+                            {--family-only : Prepara o restablece únicamente familiares; nunca crea citas}
                             {--confirm= : Debe ser exactamente akubica-uat-v1 para apply/reset}
                             {--namespace= : Namespace dedicado permitido; por defecto akubica-uat-v1}
                             {--check-unknown-phone : Verifica (lectura) que QA_UNKNOWN_PHONE no exista; lee el número del entorno}';
@@ -56,6 +57,7 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
 
         $apply = (bool) $this->option('apply');
         $reset = (bool) $this->option('reset');
+        $familyOnly = (bool) $this->option('family-only');
         if ($apply && $reset) {
             return $this->out('error', ['error_code' => 'UAT_INVALID_OPTION_COMBINATION']);
         }
@@ -67,7 +69,7 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
             return $this->out('error', ['error_code' => 'UAT_CONFIRMATION_MISMATCH']);
         }
 
-        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->first();
+        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->latest('id')->first();
         if (! $manifest || $manifest->status !== AkubicaUatFixtureContract::STATUS_ACTIVE) {
             return $this->out('error', ['error_code' => 'UAT_FIXTURES_NOT_ACTIVE']);
         }
@@ -93,14 +95,14 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
                 'pre' => $pre,
                 'would_create' => [
                     'family_accounts' => collect($pre)->filter(fn ($s) => $s['family_marked'] === 0)->keys()->values(),
-                    'laboratory_appointments' => collect($pre)->filter(fn ($s) => $s['appointments_marked'] === 0)->keys()->values(),
+                    'laboratory_appointments' => $familyOnly ? [] : collect($pre)->filter(fn ($s) => $s['appointments_marked'] === 0)->keys()->values(),
                 ],
                 'unknown_phone' => $unknown,
             ]);
         }
 
         $changes = [];
-        DB::transaction(function () use ($apply, $customers, $storeId, $marker, $familyName, &$changes): void {
+        DB::transaction(function () use ($apply, $reset, $familyOnly, $customers, $storeId, $marker, $familyName, &$changes): void {
             foreach ($customers as $role => $customerId) {
                 if ($apply) {
                     $family = FamilyAccount::query()->withTrashed()->firstOrCreate(
@@ -112,6 +114,9 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
                     }
                     $changes[] = ['role' => $role, 'table' => 'family_accounts', 'id' => $family->id, 'op' => $family->wasRecentlyCreated ? 'created' : 'kept'];
 
+                    if ($familyOnly) {
+                        continue;
+                    }
                     $appointment = LaboratoryAppointment::query()->withTrashed()->firstOrCreate(
                         ['customer_id' => $customerId, 'notes' => $marker],
                         [
@@ -133,17 +138,36 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
                         ->where('name', $familyName)->where('maternal_lastname', self::FAMILY_LASTNAME_2);
                     $a = LaboratoryAppointment::query()->withTrashed()->where('customer_id', $customerId)->where('notes', $marker);
                     $changes[] = ['role' => $role, 'table' => 'family_accounts', 'ids' => $f->pluck('id')->all(), 'op' => 'deleted'];
-                    $changes[] = ['role' => $role, 'table' => 'laboratory_appointments', 'ids' => $a->pluck('id')->all(), 'op' => 'deleted'];
-                    $f->forceDelete();
-                    $a->forceDelete();
+                    // Use the already ownership-scoped IDs for deterministic hard cleanup.
+                    // This avoids model-event/soft-delete ambiguity in the family-only path.
+                    $familyIds = $f->pluck('id')->all();
+                    if ($familyIds !== []) {
+                        DB::table('family_accounts')->whereIn('id', $familyIds)->delete();
+                    }
+                    if (! $familyOnly) {
+                        $changes[] = ['role' => $role, 'table' => 'laboratory_appointments', 'ids' => $a->pluck('id')->all(), 'op' => 'deleted'];
+                        $a->forceDelete();
+                    }
                 }
             }
         });
 
-        $post = $this->snapshot($customers, $familyName, $marker);
-        Log::info('akubica_uat_r04r05_fixtures', ['action' => $apply ? 'apply' : 'reset', 'changes' => $changes]);
+        // Reconcile the family-only reset after the transaction as a final
+        // ownership-scoped guard; appointment rows are intentionally excluded.
+        if ($reset && $familyOnly) {
+            foreach ($customers as $customerId) {
+                DB::table('family_accounts')
+                    ->where('customer_id', $customerId)
+                    ->where('name', $familyName)
+                    ->where('maternal_lastname', self::FAMILY_LASTNAME_2)
+                    ->delete();
+            }
+        }
 
-        return $this->out('ok', ['action' => $apply ? 'apply' : 'reset', 'pre' => $pre, 'changes' => $changes, 'post' => $post, 'unknown_phone' => $unknown]);
+        $post = $this->snapshot($customers, $familyName, $marker);
+        Log::info('akubica_uat_r04r05_fixtures', ['action' => $apply ? 'apply' : 'reset', 'family_only' => $familyOnly, 'changes' => $changes]);
+
+        return $this->out('ok', ['action' => $apply ? 'apply' : 'reset', 'namespace' => $namespace, 'family_only' => $familyOnly, 'pre' => $pre, 'changes' => $changes, 'post' => $post, 'unknown_phone' => $unknown]);
     }
 
     /** @param array<string,int> $customers */
