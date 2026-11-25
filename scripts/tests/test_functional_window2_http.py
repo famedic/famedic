@@ -7,7 +7,14 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from scripts.functional_window2_http import RunnerError, run, validate_mode
+from scripts.functional_window2_http import (
+    RunnerError,
+    _assert_response,
+    _header_value_matches,
+    _observed_asserted_headers,
+    run,
+    validate_mode,
+)
 from scripts.functional_window2_preconditions import validate
 
 
@@ -18,6 +25,8 @@ RUNNER = ROOT / "scripts" / "functional_window2_http.py"
 class Handler(BaseHTTPRequestHandler):
     calls = []
     mode = "ok"
+    cache_control = "no-store, private"
+    extra_headers = {}
 
     def log_message(self, *_args):
         return
@@ -37,6 +46,18 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if self.path == "/cache-control":
+            payload = b'{"data":{"status":"ok"}}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            if self.cache_control is not None:
+                self.send_header("Cache-Control", self.cache_control)
+            for name, value in self.extra_headers.items():
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(payload)
             return
@@ -63,6 +84,8 @@ class Handler(BaseHTTPRequestHandler):
 class HttpRunnerTests(unittest.TestCase):
     def setUp(self):
         Handler.calls = []
+        Handler.cache_control = "no-store, private"
+        Handler.extra_headers = {}
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -327,6 +350,136 @@ class HttpRunnerTests(unittest.TestCase):
             self.assertEqual(exit_code, 130)
             self.assertTrue(report["interrupted"])
             self.assertEqual(report["cleanup_status"], "PASS")
+
+
+    def test_cache_control_order_swap_passes(self):
+        Handler.cache_control = "no-store, private"
+        proc, report = self.run_plan({
+            "requests": [{
+                "id": "A4-L05a",
+                "method": "GET",
+                "path": "/cache-control",
+                "expected_status": 200,
+                "assertions": {"headers_equals": {"cache-control": "private, no-store"}, "equals": {"data.status": "ok"}},
+            }],
+            "cleanup": [],
+        })
+        self.assertEqual(proc.returncode, 0)
+        self.assertTrue(report["requests"][0]["ok"])
+        self.assertNotIn("assertion_error", report["requests"][0])
+        self.assertEqual(report["requests"][0]["observed_headers"], {"cache-control": "no-store, private"})
+
+    def test_cache_control_missing_directive_fails(self):
+        Handler.cache_control = "private"
+        proc, report = self.run_plan({
+            "requests": [{
+                "id": "A4-L05a",
+                "method": "GET",
+                "path": "/cache-control",
+                "expected_status": 200,
+                "assertions": {"headers_equals": {"cache-control": "private, no-store"}},
+            }],
+            "cleanup": [],
+        })
+        self.assertEqual(proc.returncode, 1)
+        self.assertFalse(report["requests"][0]["ok"])
+        self.assertEqual(report["requests"][0]["assertion_error"], "ASSERTION_HEADER_MISMATCH")
+        self.assertEqual(report["requests"][0]["observed_headers"], {"cache-control": "private"})
+
+    def test_cache_control_extra_directive_fails(self):
+        Handler.cache_control = "private, no-store, no-cache"
+        proc, report = self.run_plan({
+            "requests": [{
+                "id": "A4-L05a",
+                "method": "GET",
+                "path": "/cache-control",
+                "expected_status": 200,
+                "assertions": {"headers_equals": {"cache-control": "private, no-store"}},
+            }],
+            "cleanup": [],
+        })
+        self.assertEqual(proc.returncode, 1)
+        self.assertFalse(report["requests"][0]["ok"])
+        self.assertEqual(report["requests"][0]["assertion_error"], "ASSERTION_HEADER_MISMATCH")
+        self.assertEqual(report["requests"][0]["observed_headers"], {"cache-control": "private, no-store, no-cache"})
+
+    def test_non_cache_control_header_remains_exact(self):
+        Handler.extra_headers = {"Idempotency-Replayed": "True"}
+        proc, report = self.run_plan({
+            "requests": [{
+                "id": "B17",
+                "method": "GET",
+                "path": "/cache-control",
+                "expected_status": 200,
+                "assertions": {"headers_equals": {"Idempotency-Replayed": "true"}},
+            }],
+            "cleanup": [],
+        })
+        self.assertEqual(proc.returncode, 1)
+        self.assertFalse(report["requests"][0]["ok"])
+        self.assertEqual(report["requests"][0]["assertion_error"], "ASSERTION_HEADER_MISMATCH")
+        self.assertEqual(report["requests"][0]["observed_headers"], {"Idempotency-Replayed": "True"})
+
+    def test_observed_headers_are_recorded_and_sanitized(self):
+        Handler.cache_control = "no-store, private"
+        Handler.extra_headers = {
+            "Authorization": "Bearer synthetic-secret-token",
+            "Set-Cookie": "session=synthetic-cookie",
+            "X-Debug": "continuity_url=https://staging.example/checkout/continue/abc",
+        }
+        proc, report = self.run_plan({
+            "requests": [{
+                "id": "A4-L05a",
+                "method": "GET",
+                "path": "/cache-control",
+                "expected_status": 200,
+                "assertions": {
+                    "headers_equals": {
+                        "cache-control": "private, no-store",
+                        "Authorization": "Bearer synthetic-secret-token",
+                    }
+                },
+            }],
+            "cleanup": [],
+        })
+        self.assertEqual(proc.returncode, 0)
+        self.assertTrue(report["requests"][0]["ok"])
+        self.assertEqual(report["requests"][0]["observed_headers"], {
+            "cache-control": "no-store, private",
+            "Authorization": "[REDACTED]",
+        })
+        serialized = json.dumps(report)
+        self.assertNotIn("synthetic-secret-token", serialized)
+        self.assertNotIn("synthetic-cookie", serialized)
+        self.assertNotIn("Bearer ", serialized)
+        self.assertNotIn("continuity_url=", serialized)
+        self.assertNotIn("session=", serialized)
+
+    def test_header_helpers_compare_sets_and_sanitize(self):
+        self.assertTrue(_header_value_matches("cache-control", "no-store, private", "private, no-store"))
+        self.assertTrue(_header_value_matches("Cache-Control", "Private, No-Store", "private, no-store"))
+        self.assertFalse(_header_value_matches("cache-control", "private", "private, no-store"))
+        self.assertFalse(_header_value_matches("cache-control", "private, no-store, no-cache", "private, no-store"))
+        self.assertFalse(_header_value_matches("Idempotency-Replayed", "True", "true"))
+        self.assertIsNone(_assert_response(
+            {"data": {"status": "ok"}},
+            {"headers_equals": {"cache-control": "private, no-store"}},
+            {"Cache-Control": "no-store, private"},
+        ))
+        self.assertEqual(
+            _assert_response(
+                {"data": {"status": "ok"}},
+                {"headers_equals": {"cache-control": "private, no-store"}},
+                {"Cache-Control": "private"},
+            ),
+            "ASSERTION_HEADER_MISMATCH",
+        )
+        observed = _observed_asserted_headers(
+            {"headers_equals": {"cache-control": "private, no-store", "Authorization": "secret"}},
+            {"Cache-Control": "no-store, private", "Authorization": "Bearer synthetic-secret-token"},
+        )
+        self.assertEqual(observed, {"cache-control": "no-store, private", "Authorization": "[REDACTED]"})
+
 
     def test_synthetic_blocked_preconditions_are_namespace_isolated_and_literal(self):
         result = validate(ROOT / "docs" / "Akubica" / "v1.3.0" / "functional-window-2-preconditions.synthetic.json")
