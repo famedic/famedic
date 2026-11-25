@@ -309,6 +309,7 @@ return [
                 'fecha_compra' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_FECHA_COMPRA'),
                 'marca_laboratorio' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_MARCA'),
                 'total_compra' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_TOTAL'),
+                'estudios_instrucciones' => active_campaign_env('ACTIVECAMPAIGN_FIELD_LAB_ESTUDIOS_INSTRUCCIONES'),
             ],
         ],
     ],

@@ -13,6 +13,7 @@ use App\Exceptions\GdaOrderResultUncertainException;
 use App\Services\Laboratory\GdaOrderConfirmation;
 use App\Services\Laboratory\UncertainGdaPaymentGuard;
 use App\Jobs\GenerateLaboratoryPurchasePreparationSummaryJob;
+use App\Services\ActiveCampaign\LaboratoryPreparationActiveCampaignSync;
 use App\Models\Address;
 use App\Models\Cart;
 use App\Models\Contact;
@@ -268,6 +269,10 @@ class FulfillLaboratoryCartOrderAction
             $this->dispatchLaboratoryPreparationSummaryGeneration($laboratoryPurchase);
             ($this->recordMarketingCampaignConversionAction)($laboratoryPurchase);
             $this->dispatchLaboratoryOrderAutomation($laboratoryPurchase);
+            app(LaboratoryPreparationActiveCampaignSync::class)->syncInstructions(
+                $laboratoryPurchase,
+                LaboratoryPreparationActiveCampaignSync::TRIGGER_PURCHASE_FULFILLED,
+            );
 
             if (is_string($clinicalOrderUuid) && $clinicalOrderUuid !== '') {
                 try {

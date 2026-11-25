@@ -152,6 +152,11 @@ class ActiveCampaignOutboundDispatcher
         return "laboratory_purchase:{$purchaseId}:results_completed:lab_fields";
     }
 
+    public function idempotencyKeyForLaboratoryPreparationInstructions(int $purchaseId): string
+    {
+        return "laboratory_purchase:{$purchaseId}:preparation_instructions:lab_fields";
+    }
+
     public function enqueueLaboratoryPurchaseCompleted(LaboratoryPurchase $purchase): ActiveCampaignDispatch
     {
         $purchase->loadMissing(['customer.user', 'cart']);
@@ -590,6 +595,33 @@ class ActiveCampaignOutboundDispatcher
             eventType: 'laboratory_results_completed',
             idempotencyKey: $this->idempotencyKeyForLaboratoryResultsCompleted((int) $purchase->id),
             fields: $this->laboratoryPayloadBuilder->forResultsCompleted($purchase),
+            payloadExtras: [
+                'laboratory_purchase_id' => $purchase->id,
+                'gda_order_id' => $purchase->gda_order_id,
+            ],
+            relatedEntityType: 'laboratory_purchase',
+            relatedEntityId: $purchase->id,
+            purchase: $purchase,
+        );
+    }
+
+    /**
+     * @param  array<string, string>  $fields
+     */
+    public function enqueueLaboratoryPreparationInstructions(LaboratoryPurchase $purchase, array $fields): ?ActiveCampaignDispatch
+    {
+        $purchase->loadMissing(['customer.user', 'cart']);
+        $cart = $purchase->cart;
+
+        if (! $cart || $fields === []) {
+            return null;
+        }
+
+        return $this->dispatchLaboratoryCustomFields(
+            cart: $cart,
+            eventType: 'laboratory_preparation_instructions',
+            idempotencyKey: $this->idempotencyKeyForLaboratoryPreparationInstructions((int) $purchase->id),
+            fields: $fields,
             payloadExtras: [
                 'laboratory_purchase_id' => $purchase->id,
                 'gda_order_id' => $purchase->gda_order_id,

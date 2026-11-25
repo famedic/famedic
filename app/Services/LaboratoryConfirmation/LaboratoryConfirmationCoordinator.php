@@ -8,6 +8,7 @@ use App\Models\AiExecution;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryPurchaseConfirmation as Confirmation;
 use App\Models\LaboratoryPurchasePreparationSummary;
+use App\Services\ActiveCampaign\LaboratoryPreparationActiveCampaignSync;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -244,6 +245,17 @@ class LaboratoryConfirmationCoordinator
                     'payload' => $encrypted->getAttributes()['payload'],
                     'lease_until' => null, 'next_attempt_at' => now(), 'error_code' => null,
                 ]);
+
+                $purchaseForCampaign = LaboratoryPurchase::query()
+                    ->with(['laboratoryPurchaseItems', 'preparationSummary.aiExecution', 'customer.user', 'cart'])
+                    ->find($purchase->id);
+
+                if ($purchaseForCampaign) {
+                    app(LaboratoryPreparationActiveCampaignSync::class)->syncInstructions(
+                        $purchaseForCampaign,
+                        LaboratoryPreparationActiveCampaignSync::TRIGGER_CONFIRMATION_READY,
+                    );
+                }
             } catch (Throwable) {
                 Confirmation::whereKey($id)->where('status', 'preparing')->where('attempt_id', $token)->update([
                     'status' => $intent->preparation_attempts >= 2 ? 'failed' : 'waiting',

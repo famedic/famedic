@@ -7,6 +7,7 @@ use App\Models\LaboratoryPurchase;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationEligibility;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationFidelityValidationException;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationOperationalException;
+use App\Services\ActiveCampaign\LaboratoryPreparationActiveCampaignSync;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryNotificationService;
 use App\Services\LaboratoryPreparation\LaboratoryPreparationSummaryService;
 use Illuminate\Bus\Queueable;
@@ -200,6 +201,11 @@ class GenerateLaboratoryPurchasePreparationSummaryJob implements ShouldQueue
             throw $exception instanceof LaboratoryPreparationOperationalException
                 ? $exception : new LaboratoryPreparationOperationalException('generation');
         }
+
+        app(LaboratoryPreparationActiveCampaignSync::class)->syncInstructions(
+            $purchase->fresh(['laboratoryPurchaseItems', 'preparationSummary.aiExecution', 'customer.user', 'cart']) ?? $purchase,
+            LaboratoryPreparationActiveCampaignSync::TRIGGER_PREPARATION_JOB,
+        );
     }
 
     private function logIneligiblePurchase(LaboratoryPurchase $purchase, string $reason, ?string $paymentMethod): void

@@ -75,7 +75,9 @@ services:
   node:
     image: node:20-bookworm
     working_dir: /var/www/html
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+    # npm ci en cada arranque se queda colgado si registry.npmjs.org responde mal
+    # y deja el puerto 5173 sin Vite (pantalla en blanco). Reinstala solo si falta Vite.
+    command: sh -c "if [ ! -x node_modules/.bin/vite ]; then npm ci; fi && npm run dev -- --host 0.0.0.0 --port 5173"
     volumes:
       - .:/var/www/html
     ports:

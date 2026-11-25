@@ -21,6 +21,7 @@ use App\Models\LaboratoryTest;
 use App\Models\User;
 use App\Services\ActiveCampaign\ActiveCampaignOutboundDispatcher;
 use App\Services\ActiveCampaign\ActiveCampaignService;
+use App\Services\ActiveCampaign\LaboratoryActiveCampaignPayloadBuilder;
 use App\Services\Laboratory\LabOrderNotificationGateService;
 use App\Services\Monitoring\SyncMonitoringCartService;
 use Illuminate\Support\Facades\Http;
@@ -572,4 +573,33 @@ it('marks lab custom field dispatch as failed on ActiveCampaign 500 without bloc
 
     expect($dispatch->fresh()->status)->toBe(ActiveCampaignDispatch::STATUS_FAILED)
         ->and($dispatch->fresh()->attempts)->toBe(1);
+});
+
+it('queues preparation instructions as laboratory custom fields', function () {
+    Queue::fake();
+    config(['services.activecampaign.fields.lab.estudios_instrucciones' => 65]);
+
+    $purchase = phase3LabPurchase();
+    $item = $purchase->laboratoryPurchaseItems()->firstOrFail();
+    $item->update([
+        'name' => 'COLESTEROL VLDL',
+        'indications' => 'Ayuno de 10 a 12 horas',
+    ]);
+
+    $purchase = $purchase->fresh(['customer.user', 'cart', 'laboratoryPurchaseItems', 'preparationSummary.aiExecution']);
+
+    $fields = app(LaboratoryActiveCampaignPayloadBuilder::class)->forPreparationInstructions($purchase);
+
+    expect($fields)->toHaveKey('estudios_instrucciones')
+        ->and($fields['estudios_instrucciones'])->toContain('COLESTEROL VLDL')
+        ->and($fields['estudios_instrucciones'])->toContain('Ayuno de 10 a 12 horas');
+
+    app(ActiveCampaignOutboundDispatcher::class)->enqueueLaboratoryPreparationInstructions($purchase, $fields);
+
+    $dispatch = ActiveCampaignDispatch::query()
+        ->where('idempotency_key', "laboratory_purchase:{$purchase->id}:preparation_instructions:lab_fields")
+        ->firstOrFail();
+
+    expect($dispatch->event_type)->toBe('laboratory_preparation_instructions')
+        ->and($dispatch->payload['custom_fields'])->toBe($fields);
 });

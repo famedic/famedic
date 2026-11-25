@@ -107,6 +107,12 @@ class LaboratoryActiveCampaignDiagnostics
                 'title' => 'EstudiosComprados',
                 'types' => ['text'],
             ],
+            'estudios_instrucciones' => [
+                'env' => 'ACTIVECAMPAIGN_FIELD_LAB_ESTUDIOS_INSTRUCCIONES',
+                'config' => 'services.activecampaign.fields.lab.estudios_instrucciones',
+                'title' => 'Estudios_Instrucciones',
+                'types' => ['textarea', 'text'],
+            ],
             'cantidad_estudios' => [
                 'env' => 'ACTIVECAMPAIGN_FIELD_LAB_CANTIDAD_ESTUDIOS',
                 'config' => 'services.activecampaign.fields.lab.cantidad_estudios',

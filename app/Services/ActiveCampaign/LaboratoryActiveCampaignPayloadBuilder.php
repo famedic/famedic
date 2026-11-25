@@ -9,10 +9,16 @@ use App\Models\Cart;
 use App\Models\LaboratoryAppointment;
 use App\Models\LaboratoryPurchase;
 use App\Models\LaboratoryStore;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationInstructionsTextFormatter;
+use App\Services\LaboratoryPreparation\LaboratoryPreparationPresenter;
 use Illuminate\Support\Facades\Log;
 
 class LaboratoryActiveCampaignPayloadBuilder
 {
+    public function __construct(
+        private readonly LaboratoryPreparationPresenter $preparationPresenter,
+        private readonly LaboratoryPreparationInstructionsTextFormatter $preparationInstructionsTextFormatter,
+    ) {}
     /**
      * @return array<string, string|null>
      */
@@ -111,6 +117,23 @@ class LaboratoryActiveCampaignPayloadBuilder
     public function forResultsCompleted(LaboratoryPurchase $purchase): array
     {
         return ['resultados_lab' => 'Disponibles'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function forPreparationInstructions(LaboratoryPurchase $purchase): array
+    {
+        $purchase->loadMissing(['laboratoryPurchaseItems', 'preparationSummary.aiExecution']);
+
+        $presentation = $this->preparationPresenter->present($purchase);
+        $text = $this->preparationInstructionsTextFormatter->format($presentation);
+
+        if (trim($text) === '') {
+            return [];
+        }
+
+        return ['estudios_instrucciones' => $text];
     }
 
     public function storesMapUrl(LaboratoryBrand $brand): string
