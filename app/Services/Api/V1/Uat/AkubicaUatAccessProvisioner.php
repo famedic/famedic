@@ -57,6 +57,7 @@ final class AkubicaUatAccessProvisioner
 
     private const WINDOW2_SCENARIO = 'functional-window-2';
     private const WINDOW2_MEMBERSHIP_SCENARIO = 'functional-window-2-memberships';
+    private const WINDOW2_CONTINUITY_SCENARIO = 'functional-window-2-continuity';
 
     /** @var array<string, list<string>> */
     private const WINDOW2_CAPABILITIES = [
@@ -74,6 +75,11 @@ final class AkubicaUatAccessProvisioner
             'memberships:read', 'cart:read', 'cart:laboratory:read', 'cart:membership:write',
             'checkout:prepare', 'api:operation:api:v1:orders:index',
             'api:operation:api:v1:orders:status', 'api:operation:api:v1:user:family',
+        ],
+        // A4 only: exact capabilities required to prepare a laboratory cart.
+        // Keep this separate from the swisslab negative profile.
+        'leo_membership_none_olab' => [
+            'checkout:prepare', 'cart:laboratory:read',
         ],
     ];
 
@@ -323,7 +329,7 @@ final class AkubicaUatAccessProvisioner
 
     private function isScenario(string $scenario): bool
     {
-        return in_array($scenario, [self::WINDOW2_SCENARIO, self::WINDOW2_MEMBERSHIP_SCENARIO], true);
+        return in_array($scenario, [self::WINDOW2_SCENARIO, self::WINDOW2_MEMBERSHIP_SCENARIO, self::WINDOW2_CONTINUITY_SCENARIO], true);
     }
 
     /** @return list<array{key:string,kind:string,role:string,caps:list<string>,brands:list<string>}> */
@@ -340,6 +346,12 @@ final class AkubicaUatAccessProvisioner
                 $definitions[0],
                 ['key' => 'native_membership_institutional', 'kind' => 'native', 'role' => 'membership_institutional', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'brands' => ['olab']],
                 ['key' => 'native_membership_expired', 'kind' => 'native', 'role' => 'membership_expired', 'caps' => self::WINDOW2_CAPABILITIES['native_membership_regular'], 'brands' => ['olab']],
+            ];
+        }
+
+        if ($scenario === self::WINDOW2_CONTINUITY_SCENARIO) {
+            return [
+                ['key' => 'leo_membership_none_olab', 'kind' => 'leo', 'role' => 'membership_none', 'caps' => self::WINDOW2_CAPABILITIES['leo_membership_none_olab'], 'brands' => ['olab']],
             ];
         }
 

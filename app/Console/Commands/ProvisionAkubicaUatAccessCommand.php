@@ -24,7 +24,7 @@ final class ProvisionAkubicaUatAccessCommand extends Command
         if (! app()->environment(['testing', 'staging'])) return $this->failCode('UAT_ENVIRONMENT_NOT_ALLOWED');
         $namespace = (string) ($this->option('namespace') ?: AkubicaUatFixtureContract::DEDICATED_NAMESPACE);
         $scenario = (string) ($this->option('scenario') ?: '');
-        if ($scenario !== '' && ! in_array($scenario, ['functional-window-2', 'functional-window-2-memberships'], true)) return $this->failCode('UAT_SCENARIO_NOT_ALLOWED');
+        if ($scenario !== '' && ! in_array($scenario, ['functional-window-2', 'functional-window-2-memberships', 'functional-window-2-continuity'], true)) return $this->failCode('UAT_SCENARIO_NOT_ALLOWED');
         if ($scenario !== '' && $namespace !== AkubicaUatFixtureContract::DEDICATED_NAMESPACE) return $this->failCode('UAT_SCENARIO_NAMESPACE_NOT_ALLOWED');
         if ($namespace !== AkubicaUatFixtureContract::DEDICATED_NAMESPACE) return $this->failCode('UAT_ACCESS_NAMESPACE_NOT_ALLOWED');
         if ($this->option('apply') && $this->option('reset') || ! $this->option('dry-run') && ! $this->option('apply') && ! $this->option('reset')) return $this->failCode('UAT_MODE_REQUIRED');

@@ -51,7 +51,7 @@ class CredentialProvider:
         self._command = command
         self._values = values
         self._scenario = scenario
-        if scenario not in {"functional-window-2", "functional-window-2-memberships"}:
+        if scenario not in {"functional-window-2", "functional-window-2-memberships", "functional-window-2-continuity"}:
             raise CredentialProviderError("CREDENTIAL_SCENARIO_NOT_ALLOWED")
         if command is None and values is None:
             raise CredentialProviderError("CREDENTIAL_PROVIDER_REQUIRED")
@@ -279,7 +279,58 @@ def load_plan(path: Path) -> tuple[list[Case], list[Case]]:
         expected_count = allowed.get("expected_request_count")
         if expected_count is not None and expected_count != len(requests):
             raise RunnerError("SELECTION_COUNT_MISMATCH")
+    _validate_comparisons(data.get("comparisons", []), {case.case_id for case in requests})
     return requests, cleanup
+
+
+def _validate_comparisons(raw: Any, request_ids: set[str]) -> None:
+    """Validate ID-only projections without permitting response-body output."""
+    if raw is None:
+        return
+    if not isinstance(raw, list):
+        raise RunnerError("COMPARISONS_INVALID")
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            raise RunnerError("COMPARISON_ITEM_INVALID")
+        comparison_id = item.get("id")
+        left_case = item.get("left_case")
+        right_case = item.get("right_case")
+        left_path = item.get("left_path")
+        right_path = item.get("right_path")
+        if (not isinstance(comparison_id, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", comparison_id)
+                or comparison_id in seen):
+            raise RunnerError("COMPARISON_ID_INVALID")
+        if (not isinstance(left_case, str) or left_case not in request_ids
+                or not isinstance(right_case, str) or right_case not in request_ids):
+            raise RunnerError("COMPARISON_CASE_INVALID")
+        if (not isinstance(left_path, str) or not re.fullmatch(r"[A-Za-z0-9_.]+", left_path)
+                or not isinstance(right_path, str) or not re.fullmatch(r"[A-Za-z0-9_.]+", right_path)):
+            raise RunnerError("COMPARISON_PATH_INVALID")
+        seen.add(comparison_id)
+
+
+def _project_comparisons(raw: Any, response_bodies: dict[str, Any], successful_cases: set[str]) -> list[dict[str, Any]]:
+    """Project only synthetic scalar IDs and a boolean comparison outcome."""
+    if not raw:
+        return []
+    projected: list[dict[str, Any]] = []
+    for item in raw:
+        left_id = _path_value(response_bodies.get(item["left_case"]), item["left_path"])
+        right_id = _path_value(response_bodies.get(item["right_case"]), item["right_path"])
+        comparable = item["left_case"] in successful_cases and item["right_case"] in successful_cases \
+            and isinstance(left_id, int) and not isinstance(left_id, bool) and left_id > 0 \
+            and isinstance(right_id, int) and not isinstance(right_id, bool) and right_id > 0
+        projected.append({
+            "id": item["id"],
+            "left_case": item["left_case"],
+            "right_case": item["right_case"],
+            "left_id": left_id if comparable else None,
+            "right_id": right_id if comparable else None,
+            "equal": bool(comparable and left_id == right_id),
+            "status": "COMPARABLE" if comparable else "NOT_COMPARABLE",
+        })
+    return projected
 
 
 def validate_mode(mode: str, base_url: str, metadata: dict[str, Any]) -> ssl.SSLContext | None:
@@ -582,6 +633,8 @@ def run(plan: Path, base_url: str, output: Path, timeout: float = 5.0, mode: str
     if cleanup_status == "CLEANUP_FAILED":
         exit_code = 1
     projected = {"schema": "it0061-functional-window-2-http.v1", "exit_code": exit_code, "interrupted": interrupted, "cleanup_status": cleanup_status, "requests": results, "cleanup": cleanup_results}
+    successful_cases = {item["id"] for item in results if item.get("phase") is None and item.get("ok") is True}
+    projected["comparisons"] = _project_comparisons(data.get("comparisons", []), response_bodies, successful_cases)
     output.write_text(json.dumps(projected, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return exit_code
 

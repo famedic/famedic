@@ -20,6 +20,7 @@ final class FunctionalWindow2CustodyCommand extends Command
     private const NAMESPACE = AkubicaUatFixtureContract::DEDICATED_NAMESPACE;
     private const SCENARIO = 'functional-window-2';
     private const MEMBERSHIP_SCENARIO = 'functional-window-2-memberships';
+    private const CONTINUITY_SCENARIO = 'functional-window-2-continuity';
 
     /** @var array<string, array<string, string>> */
     private const SECRET_KEYS_BY_SCENARIO = [
@@ -36,6 +37,10 @@ final class FunctionalWindow2CustodyCommand extends Command
             'native_membership_regular' => 'scenario:native_membership_regular',
             'native_membership_institutional' => 'scenario:native_membership_institutional',
             'native_membership_expired' => 'scenario:native_membership_expired',
+        ],
+        self::CONTINUITY_SCENARIO => [
+            'machine_leo' => 'machine_leo',
+            'leo_membership_none_olab' => 'scenario:leo_membership_none_olab',
         ],
     ];
 

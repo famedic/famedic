@@ -24,6 +24,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self.calls.append(("GET", self.path))
+        if self.path in {"/id/b12", "/id/b12r", "/id/b17"}:
+            payload = json.dumps({"data": {"item": {"id": 1201}}}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if self.path == "/assert":
             payload = b'{"data":{"status":"ok"},"secret":"synthetic-secret"}'
             self.send_response(200)
@@ -157,6 +165,51 @@ class HttpRunnerTests(unittest.TestCase):
         self.assertNotIn("Authorization", json.dumps(report))
         self.assertNotIn("Bearer", json.dumps(report))
 
+    def test_projects_only_synthetic_ids_and_boolean_comparison_outcomes(self):
+        proc, report = self.run_plan({
+            "requests": [
+                {"id": "B12", "method": "GET", "path": "/id/b12", "expected_status": 200},
+                {"id": "B12r", "method": "GET", "path": "/id/b12r", "expected_status": 200},
+                {"id": "B17", "method": "GET", "path": "/id/b17", "expected_status": 200},
+            ],
+            "comparisons": [
+                {"id": "B12r_id_matches_B12", "left_case": "B12", "left_path": "data.item.id", "right_case": "B12r", "right_path": "data.item.id"},
+                {"id": "B17_id_matches_B12", "left_case": "B12", "left_path": "data.item.id", "right_case": "B17", "right_path": "data.item.id"},
+            ],
+            "cleanup": [],
+        })
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(report["comparisons"], [
+            {"id": "B12r_id_matches_B12", "left_case": "B12", "right_case": "B12r", "left_id": 1201, "right_id": 1201, "equal": True, "status": "COMPARABLE"},
+            {"id": "B17_id_matches_B12", "left_case": "B12", "right_case": "B17", "left_id": 1201, "right_id": 1201, "equal": True, "status": "COMPARABLE"},
+        ])
+        serialized = json.dumps(report)
+        self.assertNotIn('"data"', serialized)
+        self.assertNotIn('"body"', serialized)
+
+    def test_non_comparable_projection_is_not_a_pass(self):
+        proc, report = self.run_plan({
+            "requests": [{"id": "B12", "method": "GET", "path": "/a", "expected_status": 200}],
+            "comparisons": [{"id": "missing", "left_case": "B12", "left_path": "data.item.id", "right_case": "B12", "right_path": "data.missing.id"}],
+            "cleanup": [],
+        })
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(report["comparisons"][0]["equal"], False)
+        self.assertEqual(report["comparisons"][0]["status"], "NOT_COMPARABLE")
+
+    def test_failed_source_request_cannot_produce_comparable_pass(self):
+        proc, report = self.run_plan({
+            "requests": [
+                {"id": "B12", "method": "GET", "path": "/fail", "expected_status": 200},
+                {"id": "B12r", "method": "GET", "path": "/id/b12r", "expected_status": 200},
+            ],
+            "comparisons": [{"id": "failed_source", "left_case": "B12", "left_path": "data.item.id", "right_case": "B12r", "right_path": "data.item.id"}],
+            "cleanup": [],
+        })
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(report["comparisons"][0]["equal"], False)
+        self.assertEqual(report["comparisons"][0]["status"], "NOT_COMPARABLE")
+
     def test_custody_injects_headers_and_assertions_without_projecting_secret(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
@@ -200,6 +253,28 @@ class HttpRunnerTests(unittest.TestCase):
                 "requests": [{
                     "id": "B08", "method": "GET", "path": "/assert", "expected_status": 200,
                     "auth": {"bearer_alias": "bearer", "machine_alias": "machine"},
+                    "assertions": {"equals": {"data.status": "ok"}},
+                }],
+                "cleanup": [],
+            }, provider=f"{sys.executable} {provider}")
+            self.assertEqual(proc.returncode, 0)
+            self.assertTrue(report["requests"][0]["ok"])
+
+    def test_continuity_scenario_is_sent_to_custody_read_and_revoke(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            provider = root / "provider.py"
+            provider.write_text(
+                "import json,sys; x=json.load(sys.stdin); "
+                "assert x['scenario']=='functional-window-2-continuity'; "
+                "print(json.dumps({'revoked':x['aliases']} if x['action']=='revoke' else {'bearer':'synthetic-bearer'}))\n",
+                encoding="utf-8",
+            )
+            proc, report = self.run_plan({
+                "credential_scenario": "functional-window-2-continuity",
+                "requests": [{
+                    "id": "B24", "method": "GET", "path": "/assert", "expected_status": 200,
+                    "auth": {"bearer_alias": "bearer"},
                     "assertions": {"equals": {"data.status": "ok"}},
                 }],
                 "cleanup": [],
