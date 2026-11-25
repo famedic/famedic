@@ -45,3 +45,21 @@ test('R01 reads own order and soft-denies a foreign order', function () {
     expect($ids)->toContain($own->id)->not->toContain($other->id);
     expect($this->getJson('/api/v1/orders/'.$other->id.'/status', $headers)->status())->toBeIn([403, 404]);
 });
+
+test('orders reject production and other environments before writes', function () {
+    $this->app->detectEnvironment(fn () => 'production');
+    $this->artisan('akubica:uat-fixtures-orders', [
+        '--apply' => true,
+        '--namespace' => 'akubica-uat-batch2-a4-v1',
+        '--confirm' => 'akubica-uat-batch2-a4-v1',
+    ])->assertFailed();
+    expect(LaboratoryPurchase::query()->count())->toBe(0);
+
+    $this->app->detectEnvironment(fn () => 'qa');
+    $this->artisan('akubica:uat-fixtures-orders', [
+        '--apply' => true,
+        '--namespace' => 'akubica-uat-batch2-a4-v1',
+        '--confirm' => 'akubica-uat-batch2-a4-v1',
+    ])->assertFailed();
+    expect(LaboratoryPurchase::query()->count())->toBe(0);
+});

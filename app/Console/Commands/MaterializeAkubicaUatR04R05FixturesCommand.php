@@ -69,7 +69,7 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
             return $this->out('error', ['error_code' => 'UAT_CONFIRMATION_MISMATCH']);
         }
 
-        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->first();
+        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->latest('id')->first();
         if (! $manifest || $manifest->status !== AkubicaUatFixtureContract::STATUS_ACTIVE) {
             return $this->out('error', ['error_code' => 'UAT_FIXTURES_NOT_ACTIVE']);
         }
@@ -138,19 +138,36 @@ class MaterializeAkubicaUatR04R05FixturesCommand extends Command
                         ->where('name', $familyName)->where('maternal_lastname', self::FAMILY_LASTNAME_2);
                     $a = LaboratoryAppointment::query()->withTrashed()->where('customer_id', $customerId)->where('notes', $marker);
                     $changes[] = ['role' => $role, 'table' => 'family_accounts', 'ids' => $f->pluck('id')->all(), 'op' => 'deleted'];
-                    $changes[] = ['role' => $role, 'table' => 'laboratory_appointments', 'ids' => $a->pluck('id')->all(), 'op' => 'deleted'];
-                    $f->forceDelete();
+                    // Use the already ownership-scoped IDs for deterministic hard cleanup.
+                    // This avoids model-event/soft-delete ambiguity in the family-only path.
+                    $familyIds = $f->pluck('id')->all();
+                    if ($familyIds !== []) {
+                        DB::table('family_accounts')->whereIn('id', $familyIds)->delete();
+                    }
                     if (! $familyOnly) {
+                        $changes[] = ['role' => $role, 'table' => 'laboratory_appointments', 'ids' => $a->pluck('id')->all(), 'op' => 'deleted'];
                         $a->forceDelete();
                     }
                 }
             }
         });
 
-        $post = $this->snapshot($customers, $familyName, $marker);
-        Log::info('akubica_uat_r04r05_fixtures', ['action' => $apply ? 'apply' : 'reset', 'changes' => $changes]);
+        // Reconcile the family-only reset after the transaction as a final
+        // ownership-scoped guard; appointment rows are intentionally excluded.
+        if ($reset && $familyOnly) {
+            foreach ($customers as $customerId) {
+                DB::table('family_accounts')
+                    ->where('customer_id', $customerId)
+                    ->where('name', $familyName)
+                    ->where('maternal_lastname', self::FAMILY_LASTNAME_2)
+                    ->delete();
+            }
+        }
 
-        return $this->out('ok', ['action' => $apply ? 'apply' : 'reset', 'pre' => $pre, 'changes' => $changes, 'post' => $post, 'unknown_phone' => $unknown]);
+        $post = $this->snapshot($customers, $familyName, $marker);
+        Log::info('akubica_uat_r04r05_fixtures', ['action' => $apply ? 'apply' : 'reset', 'family_only' => $familyOnly, 'changes' => $changes]);
+
+        return $this->out('ok', ['action' => $apply ? 'apply' : 'reset', 'namespace' => $namespace, 'family_only' => $familyOnly, 'pre' => $pre, 'changes' => $changes, 'post' => $post, 'unknown_phone' => $unknown]);
     }
 
     /** @param array<string,int> $customers */

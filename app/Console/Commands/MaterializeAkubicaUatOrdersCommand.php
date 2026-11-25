@@ -25,6 +25,11 @@ class MaterializeAkubicaUatOrdersCommand extends Command
 
     public function handle(): int
     {
+        if (! app()->environment((array) config('akubica_uat.allowed_environments', ['testing', 'staging']))
+            || app()->environment('production')) {
+            return $this->failCommand('UAT_ENVIRONMENT_NOT_ALLOWED');
+        }
+
         $namespace = (string) $this->option('namespace');
         $apply = (bool) $this->option('apply');
         $reset = (bool) $this->option('reset');
@@ -32,7 +37,7 @@ class MaterializeAkubicaUatOrdersCommand extends Command
             || (($apply || $reset) && (string) $this->option('confirm') !== $namespace)) {
             return $this->failCommand('UAT_ORDER_FIXTURE_GUARD');
         }
-        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->first();
+        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', $namespace)->latest('id')->first();
         if (! $manifest || $manifest->status !== AkubicaUatFixtureContract::STATUS_ACTIVE) {
             return $this->failCommand('UAT_FIXTURES_NOT_ACTIVE');
         }

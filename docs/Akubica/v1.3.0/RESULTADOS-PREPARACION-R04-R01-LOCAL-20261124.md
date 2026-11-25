@@ -65,3 +65,51 @@ Batch 2 continúa abierto y los PASS QA anteriores se conservan sin repetir.
 Estas intervenciones son agrupadas: no se solicitan secretos por chat y ninguna
 se ejecuta en esta entrega. La preparación local de R04/R01/R01b no crea citas,
 pagos, facturas, compras ni llamadas a proveedores.
+
+## Corrección sobre d48f1c9
+
+- `akubica:uat-fixtures-orders` ahora aplica la misma guarda que los
+  preparadores existentes: sólo `testing`/`staging`; `production` y cualquier
+  otro entorno terminan con `UAT_ENVIRONMENT_NOT_ALLOWED` antes de resolver el
+  manifiesto o escribir.
+- El reset `--family-only` elimina únicamente familiares del customer dedicado.
+  No emite cambios de `laboratory_appointments`; las citas preexistentes quedan
+  fuera del conjunto de cleanup. La salida y el log incluyen `namespace` y
+  `family_only`, y `pre/post` conserva los conteos de citas para conciliación.
+- La selección del manifiesto activo es determinista por el registro activo más
+  reciente dentro del namespace solicitado; no adopta el manifiesto legacy.
+
+## Validación focalizada final
+
+Checkout limpio de dependencias: imagen Docker `rc2local-app:latest`, PHP
+8.3.36, MySQL 8 sintético en `127.0.0.1:13307`, esquema preparado una vez y
+volumen `it0061-b18-vendor`. La suite `phpunit.rc2.mysql.window2.xml` no pudo
+usarse como fuente concluyente porque su base local quedó sin la tabla de
+manifiestos tras una reconstrucción interrumpida; se dejó ese hecho como
+limitación del arnés. La validación concluyente se ejecutó contra la base
+preparada `famedic_rc2_it0061_testing` con `phpunit.rc2.mysql.materializer.xml`.
+
+Comandos y resultados:
+
+```text
+vendor/bin/pest --configuration=phpunit.rc2.mysql.materializer.xml \
+  tests/Feature/Console/AkubicaUatR04R05FixturesCommandTest.php \
+  tests/Feature/Console/AkubicaUatOrdersFixturesCommandTest.php
+# exit 0 — 8 warnings conocidas de file_get_contents, 1 PASS, 41 assertions
+
+vendor/bin/pest --configuration=phpunit.rc2.mysql.materializer.xml \
+  tests/Unit/IT0061PreparationIsolationTest.php
+# exit 0 — 1 warning conocida, 1 PASS, 10 assertions
+```
+
+La prueba aislada cubre apply/reset family-only, preservación de una cita
+preexistente, idempotencia, namespace/ownership de pedidos, rechazo de
+`production` y de un entorno no permitido sin escrituras, además de
+`Http::assertNothingSent`, `Mail::assertNothingSent` y
+`Queue::assertNothingPushed`. Los warnings son del arnés (`file_get_contents`)
+y no fallos de negocio.
+
+R04 y R01/R01b quedan `READY_LOCAL`; R05 sigue `NO RUN`. No se repitieron los
+PASS QA de B15, B22, R06 ni R07. QA aún requiere desplegar el candidato,
+generar plan desde identity/inventory y ejecutar custody, requests, assertions
+y cleanup con IDs reales; no se hizo en esta entrega.
