@@ -120,6 +120,7 @@ test('window 2 access provisions scenario bearers idempotently and resets all to
         ->and(AkubicaUatFixtureManifest::query()->where('namespace', 'akubica-uat-batch2-a4-v1')->where('status', 'active')->exists())->toBeTrue();
 });
 
+
 test('native membership none reaches checkout prepare only with the delegated capability', function () {
     window2ConfigureIdentities();
     Storage::disk('local')->deleteDirectory('akubica-uat-batch2-a4-v1');

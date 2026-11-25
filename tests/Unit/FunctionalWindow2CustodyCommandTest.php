@@ -10,10 +10,6 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\Process\Process;
 
-// This suite exercises Artisan, config, Storage and MySQL; it is a Laravel
-// integration suite despite its historical Unit directory location.
-uses(Tests\TestCase::class);
-
 function custodyWindow2ConfigureIdentities(): void
 {
     foreach (['primary', 'foreign', 'disposable', 'membership_none', 'membership_regular', 'membership_institutional', 'membership_expired'] as $index => $role) {
@@ -60,7 +56,7 @@ test('real custody helper reads and revokes all window aliases in isolated mysql
         'CACHE_STORE' => 'array',
         'SESSION_DRIVER' => 'array',
         'QUEUE_CONNECTION' => 'sync',
-        'APP_CONFIG_CACHE' => base_path('storage/framework/cache/functional-window2-custody-config.php'),
+        'APP_CONFIG_CACHE' => 'storage/framework/cache/functional-window2-custody-config.php',
     ], static fn ($value): bool => $value !== false && $value !== null);
     $read = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--private', '--no-ansi'], base_path(), $childEnv);
     $read->setInput(json_encode(['action' => 'read', 'aliases' => $aliases], JSON_THROW_ON_ERROR));
@@ -91,6 +87,7 @@ test('real custody helper supports the dedicated membership scenario and rejects
     custodyWindow2ConfigureIdentities();
     $namespace = 'akubica-uat-batch2-a4-v1';
     $scenario = 'functional-window-2-memberships';
+    Storage::disk('local')->deleteDirectory($namespace);
     $this->artisan('akubica:uat-fixtures', [
         '--apply' => true,
         '--confirm' => $namespace,
