@@ -28,6 +28,8 @@ use App\Models\LaboratoryTest;
 use App\Models\User;
 use App\Services\Api\V1\Continuity\LaboratoryCheckoutContinuity;
 use App\Services\Api\V1\Uat\A4SyntheticMonitoringWindow;
+use App\Services\Monitoring\SyncMonitoringCartService;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\PersonalAccessToken;
 use Illuminate\Support\Facades\Bus;
@@ -1062,4 +1064,102 @@ test('A4 apply reports REPLICA_PENDING when storage throws and recovers from the
         ->and(CartItem::query()->whereKey($foreignItem->id)->exists())->toBeTrue()
         ->and(Cart::query()->whereKey($foreignCart->id)->exists())->toBeTrue()
         ->and(a4ReplicaTempFiles())->toBeEmpty();
+});
+
+test('A4 empty laboratory-item branch rejects unaccredited monitoring content without partial deletes, retires accredited window items, and leaves completed and foreign resources untouched', function () {
+    Http::preventStrayRequests();
+    Notification::fake();
+
+    $user = a4MonitoringResidueCustomer();
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->assertSuccessful();
+
+    $ledger = a4ReadWindowLedger();
+    $windowCartId = (int) $ledger['monitoring_cart_id'];
+    $registeredIds = $ledger['monitoring_cart_item_ids'];
+    expect($registeredIds)->not->toBeEmpty();
+    $windowItem = CartItem::query()->whereKey($registeredIds[0])->sole();
+
+    $completedCart = Cart::query()->create([
+        'user_id' => $user->id,
+        'type' => MonitoringCartType::Lab,
+        'status' => MonitoringCartStatus::Completed,
+        'total' => 11,
+    ]);
+    $completedItem = CartItem::query()->create([
+        'cart_id' => $completedCart->id,
+        'product_id' => 'completed-sibling',
+        'name' => 'completed cart outside the empty-lab branch',
+        'price' => 11,
+        'quantity' => 1,
+    ]);
+
+    $foreignUser = User::factory()->withRegularCustomer()->create();
+    $foreignLabItem = LaboratoryCartItem::factory()->create(['customer_id' => $foreignUser->customer->id]);
+    $foreignCartId = Cart::query()->where('user_id', $foreignUser->id)->where('type', MonitoringCartType::Lab)->value('id');
+    expect($foreignCartId)->not->toBeNull();
+    $foreignItemIds = CartItem::query()->where('cart_id', $foreignCartId)->pluck('id')->all();
+
+    $unaccreditedCart = Cart::query()->create([
+        'user_id' => $user->id,
+        'type' => MonitoringCartType::Lab,
+        'status' => MonitoringCartStatus::Active,
+        'total' => $windowItem->price,
+    ]);
+    $unaccreditedItem = CartItem::query()->create([
+        'cart_id' => $unaccreditedCart->id,
+        'product_id' => $windowItem->product_id,
+        'name' => 'unaccredited sibling active cart',
+        'price' => $windowItem->price,
+        'quantity' => 1,
+    ]);
+
+    $labItem = LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->sole();
+    expect(fn () => $labItem->forceDelete())
+        ->toThrow(\DomainException::class, A4SyntheticMonitoringWindow::UNACCREDITED_CONTENT);
+
+    expect(Cart::query()->whereKey($windowCartId)->exists())->toBeTrue()
+        ->and(Cart::query()->whereKey($unaccreditedCart->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($unaccreditedItem->id)->exists())->toBeTrue()
+        ->and(Cart::query()->whereKey($completedCart->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($completedItem->id)->exists())->toBeTrue()
+        ->and($completedCart->fresh()->status)->toBe(MonitoringCartStatus::Completed)
+        ->and(LaboratoryCartItem::query()->whereKey($foreignLabItem->id)->exists())->toBeTrue()
+        ->and(Cart::query()->whereKey($foreignCartId)->exists())->toBeTrue();
+    foreach ($registeredIds as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeTrue();
+    }
+    foreach ($foreignItemIds as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeTrue();
+    }
+
+    Queue::assertNothingPushed();
+    Mail::assertNothingSent();
+    Notification::assertNothingSent();
+    expect(Http::recorded())->toHaveCount(0);
+
+    $unaccreditedItem->delete();
+    $unaccreditedCart->delete();
+
+    app(SyncMonitoringCartService::class)->syncLaboratory($user->customer->fresh());
+
+    expect(Cart::query()->whereKey($windowCartId)->exists())->toBeFalse();
+    foreach ($registeredIds as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeFalse();
+    }
+    expect(Cart::query()->whereKey($completedCart->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($completedItem->id)->exists())->toBeTrue()
+        ->and($completedCart->fresh()->status)->toBe(MonitoringCartStatus::Completed)
+        ->and(LaboratoryCartItem::query()->whereKey($foreignLabItem->id)->exists())->toBeTrue()
+        ->and(Cart::query()->whereKey($foreignCartId)->exists())->toBeTrue();
+    foreach ($foreignItemIds as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeTrue();
+    }
+
+    Queue::assertNothingPushed();
+    Mail::assertNothingSent();
+    Notification::assertNothingSent();
+    expect(Http::recorded())->toHaveCount(0);
 });
