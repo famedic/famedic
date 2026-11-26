@@ -99,8 +99,14 @@ class AkubicaCheckoutLinkController extends Controller
     /** RC2 A4/D-2: first-party laboratory checkout continuity; never authenticates or pays. */
     private function continueToLaboratoryCheckout(Request $request, AkubicaCheckoutLink $link, string $token, CheckoutPreparation $checkoutPreparation): RedirectResponse
     {
-        if (! LaboratoryCheckoutContinuity::enabled() || $link->used_at !== null || $link->isExpired()) {
-            return redirect()->route('login')->with('error', 'La liga de checkout no es válida o ya expiró.');
+        if (! LaboratoryCheckoutContinuity::enabled()) {
+            return $this->rejectLaboratoryContinuity($link, 'disabled', 'La liga de checkout no es válida.');
+        }
+        if ($link->used_at !== null) {
+            return $this->rejectLaboratoryContinuity($link, 'already_used', 'La liga de checkout ya fue utilizada.');
+        }
+        if ($link->isExpired()) {
+            return $this->rejectLaboratoryContinuity($link, 'expired', 'La liga de checkout ha expirado.');
         }
         if (! Auth::guard('web')->check()) {
             $request->session()->put('akubica.checkout.continue_token', $token);
@@ -108,11 +114,11 @@ class AkubicaCheckoutLinkController extends Controller
         }
         $owner = $link->customer?->user;
         if (! $owner || (int) Auth::id() !== (int) $owner->getKey()) {
-            return redirect()->route('login')->with('error', 'La liga de checkout no corresponde a la sesión activa.');
+            return $this->rejectLaboratoryContinuity($link, 'session_mismatch', 'La liga de checkout no corresponde a la sesión activa.');
         }
         $failure = app(LaboratoryCheckoutContinuity::class)->bindingFailure($link);
         if ($failure !== null || ! $link->laboratory_brand) {
-            return redirect()->route('login')->with('error', $failure ?? 'El carrito de laboratorio ya no está disponible.');
+            return $this->rejectLaboratoryContinuity($link, 'cart_binding', $failure ?? 'El carrito de laboratorio ya no está disponible.');
         }
         $redirectParameters = [
             'laboratory_brand' => $link->laboratory_brand->value,
@@ -126,9 +132,29 @@ class AkubicaCheckoutLinkController extends Controller
         }
         $destination = route('laboratory.checkout', $redirectParameters);
         if (! $link->claim()) {
-            return redirect()->route('login')->with('error', 'La liga de checkout ya fue utilizada.');
+            return $this->rejectLaboratoryContinuity($link, 'claim_race', 'La liga de checkout ya fue utilizada.');
         }
+        Log::info('akubica_laboratory_continuity_redeemed', ['link_id' => $link->id, 'customer_id' => $link->customer_id]);
+
         return redirect($destination);
+    }
+
+    /**
+     * INT-025: rejections are logged with the link id and reason only (never the token, URL or personal data).
+     * With a web session the user lands on home with a visible error; sending them to the guest-only login
+     * route bounced them to home silently and lost the flash. Without a session the destination stays login.
+     */
+    private function rejectLaboratoryContinuity(AkubicaCheckoutLink $link, string $reason, string $message): RedirectResponse
+    {
+        Log::warning('akubica_laboratory_continuity_rejected', ['link_id' => $link->id, 'reason' => $reason]);
+
+        if (Auth::guard('web')->check()) {
+            return redirect()->route('home')
+                ->with('error', $message)
+                ->flashMessage($message, 'error');
+        }
+
+        return redirect()->route('login')->with('error', $message);
     }
 
     /**
