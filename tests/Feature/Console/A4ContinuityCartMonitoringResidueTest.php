@@ -27,6 +27,7 @@ use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
 use App\Models\User;
 use App\Services\Api\V1\Continuity\LaboratoryCheckoutContinuity;
+use App\Services\Api\V1\Uat\A4SyntheticMonitoringWindow;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\PersonalAccessToken;
 use Illuminate\Support\Facades\Bus;
@@ -83,7 +84,28 @@ beforeEach(function () {
 
 afterEach(function () {
     URL::forceRootUrl(null);
+    A4SyntheticMonitoringWindow::clearTestHooks();
 });
+
+function a4ReadWindowLedger(): ?array
+{
+    return A4SyntheticMonitoringWindow::readAuthoritativeLedger(
+        AkubicaUatFixtureContract::DEDICATED_NAMESPACE,
+    );
+}
+
+function a4IssueWindowLink(User $user): array
+{
+    $token = $user->createToken('a4-cleanup-pat');
+    $user->withAccessToken($token->accessToken);
+    $request = Request::create('https://famedic-a4.test/api/v1/checkout/prepare', 'GET', [
+        'service_line' => 'laboratory',
+        'brand' => 'olab',
+    ]);
+    $request->setUserResolver(fn () => $user);
+
+    return app(LaboratoryCheckoutContinuity::class)->issue($request, $user->customer, LaboratoryBrand::OLAB);
+}
 
 test('query-builder forceDelete leaves a monitoring cart because the observer does not run', function () {
     $user = User::factory()->withRegularCustomer()->create();
@@ -624,4 +646,242 @@ test('historical monitoring residue retirement rejects a completed cart and does
     expect(Cart::query()->whereKey($completedCart->id)->exists())->toBeTrue()
         ->and(CartItem::query()->whereKey($completedItem->id)->exists())->toBeTrue()
         ->and($completedCart->fresh()->status)->toBe(MonitoringCartStatus::Completed);
+});
+
+test('A4 apply then issue renews monitoring item IDs from sync and cleanup removes only the registered replacements', function () {
+    $user = a4MonitoringResidueCustomer();
+    $args = a4MonitoringCleanupArgs();
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->assertSuccessful();
+
+    $ledgerBefore = a4ReadWindowLedger();
+    $idsBefore = $ledgerBefore['monitoring_cart_item_ids'];
+    $cartId = (int) $ledgerBefore['monitoring_cart_id'];
+    expect($idsBefore)->not->toBeEmpty();
+
+    a4IssueWindowLink($user);
+
+    $ledgerAfter = a4ReadWindowLedger();
+    expect($ledgerAfter['monitoring_cart_id'])->toBe($cartId)
+        ->and($ledgerAfter['customer_id'])->toBe($user->customer->id)
+        ->and($ledgerAfter['test_id'])->toBe($ledgerBefore['test_id'])
+        ->and($ledgerAfter['monitoring_cart_item_ids'])->not->toBe($idsBefore)
+        ->and($ledgerAfter['monitoring_cart_item_ids'])->not->toBeEmpty();
+
+    foreach ($idsBefore as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeFalse();
+    }
+    foreach ($ledgerAfter['monitoring_cart_item_ids'] as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeTrue()
+            ->and((int) CartItem::query()->whereKey($id)->value('cart_id'))->toBe($cartId);
+    }
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--cleanup' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->assertSuccessful();
+
+    expect(Cart::query()->whereKey($cartId)->exists())->toBeFalse();
+    foreach ($ledgerAfter['monitoring_cart_item_ids'] as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeFalse();
+    }
+});
+
+test('A4 cleanup keeps a foreign item of the same study added after issue renews the ledger IDs', function () {
+    $user = a4MonitoringResidueCustomer();
+    $args = a4MonitoringCleanupArgs();
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->assertSuccessful();
+    a4IssueWindowLink($user);
+
+    $ledger = a4ReadWindowLedger();
+    $cartId = (int) $ledger['monitoring_cart_id'];
+    $registeredIds = $ledger['monitoring_cart_item_ids'];
+    $windowItem = CartItem::query()->whereKey($registeredIds[0])->first();
+    $foreign = CartItem::query()->create([
+        'cart_id' => $cartId,
+        'product_id' => $windowItem->product_id,
+        'name' => 'same study added after issue',
+        'price' => $windowItem->price,
+        'quantity' => 1,
+    ]);
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--cleanup' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->expectsOutputToContain('ITEM_NOT_IN_LEDGER_PRESERVED')->assertSuccessful();
+
+    expect(Cart::query()->whereKey($cartId)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($foreign->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->where('cart_id', $cartId)->count())->toBe(1);
+    foreach ($registeredIds as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeFalse();
+    }
+});
+
+test('A4 apply rejects unaccredited Active-cart content before modifying it', function () {
+    $user = a4MonitoringResidueCustomer();
+    $preexisting = Cart::query()->create([
+        'user_id' => $user->id,
+        'type' => MonitoringCartType::Lab,
+        'status' => MonitoringCartStatus::Active,
+        'total' => 9,
+    ]);
+    $preexistingItem = CartItem::query()->create([
+        'cart_id' => $preexisting->id,
+        'product_id' => 'unaccredited-before-apply',
+        'name' => 'present before apply',
+        'price' => 9,
+        'quantity' => 1,
+    ]);
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->expectsOutputToContain('A4_SYNTHETIC_SYNC_UNACCREDITED_CONTENT')->assertFailed();
+
+    expect(Cart::query()->whereKey($preexisting->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($preexistingItem->id)->exists())->toBeTrue()
+        ->and(LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->count())->toBe(0)
+        ->and(a4ReadWindowLedger())->toBeNull();
+});
+
+test('A4 issue rejects unaccredited Active-cart content before modifying it', function () {
+    $user = a4MonitoringResidueCustomer();
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->assertSuccessful();
+
+    $ledger = a4ReadWindowLedger();
+    $registeredIds = $ledger['monitoring_cart_item_ids'];
+    $windowItem = CartItem::query()->whereKey($registeredIds[0])->sole();
+    $foreign = CartItem::query()->create([
+        'cart_id' => $windowItem->cart_id,
+        'product_id' => $windowItem->product_id,
+        'name' => 'unaccredited before issue',
+        'price' => $windowItem->price,
+        'quantity' => 1,
+    ]);
+
+    expect(fn () => a4IssueWindowLink($user))
+        ->toThrow(\DomainException::class, A4SyntheticMonitoringWindow::UNACCREDITED_CONTENT);
+
+    expect(CartItem::query()->whereKey($foreign->id)->exists())->toBeTrue();
+    foreach ($registeredIds as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeTrue();
+    }
+    expect(a4ReadWindowLedger()['monitoring_cart_item_ids'])->toBe($registeredIds);
+});
+
+test('A4 apply rolls back when ledger persistence fails and recovers on retry', function () {
+    $user = a4MonitoringResidueCustomer();
+    A4SyntheticMonitoringWindow::failNextDatabasePersist();
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->expectsOutputToContain('A4_FIXTURE_LEDGER_PERSISTENCE_FAILED')->assertFailed();
+
+    expect(LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->count())->toBe(0)
+        ->and(Cart::query()->where('user_id', $user->id)->where('type', MonitoringCartType::Lab)->count())->toBe(0)
+        ->and(a4ReadWindowLedger())->toBeNull();
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->assertSuccessful();
+
+    $ledger = a4ReadWindowLedger();
+    expect($ledger['customer_id'])->toBe($user->customer->id)
+        ->and($ledger['monitoring_cart_item_ids'])->not->toBeEmpty()
+        ->and(LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->count())->toBe(1);
+});
+
+test('A4 apply does not report success when the ledger replica fails and recovers without adopting foreign items', function () {
+    $user = a4MonitoringResidueCustomer();
+    A4SyntheticMonitoringWindow::failNextReplica();
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->expectsOutputToContain('A4_FIXTURE_LEDGER_REPLICA_PENDING')->assertFailed();
+
+    $dbLedger = a4ReadWindowLedger();
+    expect(LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->count())->toBe(1)
+        ->and($dbLedger['monitoring_cart_item_ids'])->not->toBeEmpty();
+    $registeredIds = $dbLedger['monitoring_cart_item_ids'];
+
+    $foreignCart = Cart::query()->create([
+        'user_id' => $user->id,
+        'type' => MonitoringCartType::Lab,
+        'status' => MonitoringCartStatus::Active,
+        'total' => 3,
+    ]);
+    $foreignItem = CartItem::query()->create([
+        'cart_id' => $foreignCart->id,
+        'product_id' => (string) $dbLedger['test_id'],
+        'name' => 'foreign during replica recovery',
+        'price' => 3,
+        'quantity' => 1,
+    ]);
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->assertSuccessful();
+
+    $recovered = a4ReadWindowLedger();
+    expect($recovered['monitoring_cart_item_ids'])->toBe($registeredIds)
+        ->and(CartItem::query()->whereKey($foreignItem->id)->exists())->toBeTrue()
+        ->and(Cart::query()->whereKey($foreignCart->id)->exists())->toBeTrue();
+});
+
+test('repeated A4 apply and issue do not adopt foreign carts or items of the same study', function () {
+    $user = a4MonitoringResidueCustomer();
+    $args = a4MonitoringCleanupArgs();
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->assertSuccessful();
+
+    $original = a4ReadWindowLedger();
+    $otherCart = Cart::query()->create([
+        'user_id' => $user->id,
+        'type' => MonitoringCartType::Lab,
+        'status' => MonitoringCartStatus::Active,
+        'total' => 8,
+    ]);
+    $otherItem = CartItem::query()->create([
+        'cart_id' => $otherCart->id,
+        'product_id' => (string) $original['test_id'],
+        'name' => 'same study in another cart',
+        'price' => 8,
+        'quantity' => 1,
+    ]);
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->assertSuccessful();
+
+    expect(a4ReadWindowLedger()['monitoring_cart_item_ids'])->toBe($original['monitoring_cart_item_ids'])
+        ->and(Cart::query()->whereKey($otherCart->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($otherItem->id)->exists())->toBeTrue();
+
+    a4IssueWindowLink($user);
+
+    $renewed = a4ReadWindowLedger();
+    expect($renewed['monitoring_cart_item_ids'])->not->toContain($otherItem->id)
+        ->and($renewed['monitoring_cart_item_ids'])->not->toBe($original['monitoring_cart_item_ids'])
+        ->and($renewed['monitoring_cart_id'])->toBe($original['monitoring_cart_id'])
+        ->and(CartItem::query()->whereKey($otherItem->id)->exists())->toBeTrue()
+        ->and(Cart::query()->whereKey($otherCart->id)->exists())->toBeTrue();
 });

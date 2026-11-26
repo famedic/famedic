@@ -14,10 +14,10 @@ use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryTest;
 use App\Models\LaboratoryTestCategory;
 use App\Services\Api\V1\Continuity\LaboratoryCheckoutContinuity;
+use App\Services\Api\V1\Uat\A4SyntheticMonitoringWindow;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * A4-only, namespace-scoped laboratory cart preparation for membership_none.
@@ -117,18 +117,37 @@ final class A4ContinuityCartFixturesCommand extends Command
         }
 
         try {
-            return LaboratoryTest::withoutSyncingToSearch(fn () => DB::transaction(fn () => $apply
+            $result = LaboratoryTest::withoutSyncingToSearch(fn () => DB::transaction(fn () => $apply
                 ? $this->apply($namespace, $customerId, $existingTest, $existingItem)
                 : $this->cleanup($namespace, $customerId, $existingTest, $existingItem)));
+            if (($result['status'] ?? null) === 'ok' && (int) ($result['code'] ?? self::FAILURE) === self::SUCCESS) {
+                try {
+                    A4SyntheticMonitoringWindow::writeReplica($namespace);
+                } catch (\DomainException $exception) {
+                    return $this->emit('error', ['error_code' => $exception->getMessage(), 'namespace' => $namespace], self::FAILURE);
+                }
+            }
+
+            return $this->emit($result['status'], $result['payload'], (int) $result['code']);
         } catch (\DomainException $exception) {
-            return $this->emit('error', ['error_code' => $exception->getMessage()], self::FAILURE);
+            $code = $exception->getMessage();
+            if ($code === A4SyntheticMonitoringWindow::REPLICA_PENDING) {
+                return $this->emit('error', ['error_code' => $code, 'namespace' => $namespace], self::FAILURE);
+            }
+
+            return $this->emit('error', ['error_code' => $code], self::FAILURE);
         } finally {
             $lock->release();
         }
     }
 
-    private function apply(string $namespace, int $customerId, ?LaboratoryTest $existingTest, ?LaboratoryCartItem $existingItem): int
+    private function apply(string $namespace, int $customerId, ?LaboratoryTest $existingTest, ?LaboratoryCartItem $existingItem): array
     {
+        A4SyntheticMonitoringWindow::resetCapture();
+        $existingLedger = $this->readLedger($namespace);
+        if (($existingLedger['status'] ?? null) === 'completed') {
+            $existingLedger = null;
+        }
         if ($existingTest !== null && $existingTest->trashed()) {
             $existingTest->restore();
         }
@@ -170,14 +189,25 @@ final class A4ContinuityCartFixturesCommand extends Command
         if ((int) $item->customer_id !== $customerId || (int) $item->laboratory_test_id !== (int) $test->id) {
             throw new \DomainException('A4_FIXTURE_RESOURCE_COLLISION');
         }
-        $existingLedger = $this->readLedger($namespace);
-        if (($existingLedger['status'] ?? null) === 'completed') {
-            $existingLedger = null;
-        }
         if ($existingLedger !== null && ($existingLedger['category_id'] ?? null) !== (int) $category->id) {
             throw new \DomainException('A4_FIXTURE_LEDGER_COLLISION');
         }
-        $monitoring = $this->snapshotWindowMonitoring($customerId, (int) $test->id, $existingLedger);
+        $captured = A4SyntheticMonitoringWindow::capturedLedger();
+        if ($captured !== null) {
+            $monitoringCartId = $captured['monitoring_cart_id'] ?? null;
+            $monitoringItemIds = $this->ledgerMonitoringCartItemIds($captured);
+        } else {
+            // Idempotent apply without a new sync: keep still-present registered IDs only.
+            // Never deduce replacements with a product_id search.
+            $monitoringCartId = $existingLedger['monitoring_cart_id'] ?? null;
+            $monitoringItemIds = $this->stillPresentLedgerItemIds(
+                (int) ($monitoringCartId ?? 0),
+                $this->ledgerMonitoringCartItemIds($existingLedger),
+            );
+        }
+        if ($monitoringCartId === null || $monitoringItemIds === []) {
+            throw new \DomainException(A4SyntheticMonitoringWindow::TRACE_MISSING);
+        }
         $this->writeLedger($namespace, [
             'namespace' => $namespace,
             'status' => 'active',
@@ -186,11 +216,11 @@ final class A4ContinuityCartFixturesCommand extends Command
             'customer_id' => $customerId,
             'test_id' => (int) $test->id,
             'item_id' => (int) $item->id,
-            'monitoring_cart_id' => $monitoring['cart_id'],
-            'monitoring_cart_item_ids' => $monitoring['cart_item_ids'],
+            'monitoring_cart_id' => (int) $monitoringCartId,
+            'monitoring_cart_item_ids' => $monitoringItemIds,
         ]);
 
-        return $this->emit('ok', [
+        return $this->outcome('ok', [
             'mode' => 'apply',
             'resource_id' => $item->id,
             'test_id' => $test->id,
@@ -203,13 +233,13 @@ final class A4ContinuityCartFixturesCommand extends Command
         ]);
     }
 
-    private function cleanup(string $namespace, int $customerId, ?LaboratoryTest $existingTest, ?LaboratoryCartItem $existingItem): int
+    private function cleanup(string $namespace, int $customerId, ?LaboratoryTest $existingTest, ?LaboratoryCartItem $existingItem): array
     {
         $ledger = $this->readLedger($namespace);
         if (($ledger['status'] ?? null) === 'completed') {
             $monitoring = $this->reconcileWindowMonitoring($namespace, $customerId, $ledger);
 
-            return $this->emit('ok', [
+            return $this->outcome('ok', [
                 'mode' => 'cleanup',
                 'deleted' => [
                     'laboratory_cart_items' => 0,
@@ -227,10 +257,10 @@ final class A4ContinuityCartFixturesCommand extends Command
             $ledgerTest = LaboratoryTest::query()->withTrashed()->find((int) ($ledger['test_id'] ?? 0));
             $ledgerItem = LaboratoryCartItem::query()->withTrashed()->find((int) ($ledger['item_id'] ?? 0));
             if ($existingTest !== null && $ledgerTest !== null && (int) $existingTest->id !== (int) $ledgerTest->id) {
-                return $this->emit('error', ['error_code' => 'A4_FIXTURE_LEDGER_RESOURCE_MISMATCH'], self::FAILURE);
+                return $this->outcome('error', ['error_code' => 'A4_FIXTURE_LEDGER_RESOURCE_MISMATCH'], self::FAILURE);
             }
             if ($existingItem !== null && $ledgerItem !== null && (int) $existingItem->id !== (int) $ledgerItem->id) {
-                return $this->emit('error', ['error_code' => 'A4_FIXTURE_LEDGER_RESOURCE_MISMATCH'], self::FAILURE);
+                return $this->outcome('error', ['error_code' => 'A4_FIXTURE_LEDGER_RESOURCE_MISMATCH'], self::FAILURE);
             }
             $existingTest = $ledgerTest;
             $existingItem = $ledgerItem;
@@ -249,7 +279,7 @@ final class A4ContinuityCartFixturesCommand extends Command
                 ]));
             }
 
-            return $this->emit('ok', [
+            return $this->outcome('ok', [
                 'mode' => 'cleanup',
                 'deleted' => [
                     'laboratory_cart_items' => 0,
@@ -266,10 +296,10 @@ final class A4ContinuityCartFixturesCommand extends Command
         }
         if (($existingTest === null || $existingItem === null) && $ledger !== null) {
             if ($existingItem !== null && ((int) $existingItem->customer_id !== $customerId || (int) $existingItem->laboratory_test_id !== (int) ($ledger['test_id'] ?? 0))) {
-                return $this->emit('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
+                return $this->outcome('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
             }
             if ($existingTest !== null && ! str_starts_with((string) $existingTest->gda_id, self::TEST_PREFIX.$namespace.'-')) {
-                return $this->emit('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
+                return $this->outcome('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
             }
             $itemDeleted = $existingItem === null ? 0 : LaboratoryCartItem::query()->withTrashed()->whereKey($existingItem->id)->forceDelete();
             $testDeleted = 0;
@@ -287,7 +317,7 @@ final class A4ContinuityCartFixturesCommand extends Command
                 'monitoring_limitations' => $monitoring['limitations'],
             ]));
 
-            return $this->emit('ok', [
+            return $this->outcome('ok', [
                 'mode' => 'cleanup',
                 'deleted' => [
                     'laboratory_cart_items' => $itemDeleted,
@@ -303,7 +333,7 @@ final class A4ContinuityCartFixturesCommand extends Command
             ]);
         }
         if ($existingTest === null || $existingItem === null || (int) $existingItem->customer_id !== $customerId || ! str_starts_with((string) $existingTest->gda_id, self::TEST_PREFIX.$namespace.'-')) {
-            return $this->emit('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
+            return $this->outcome('error', ['error_code' => 'A4_FIXTURE_RESOURCE_NOT_OWNED'], self::FAILURE);
         }
         $itemDeleted = LaboratoryCartItem::query()->withTrashed()->whereKey($existingItem->id)->forceDelete();
         $testDeleted = 0;
@@ -328,7 +358,7 @@ final class A4ContinuityCartFixturesCommand extends Command
             ]));
         }
 
-        return $this->emit('ok', [
+        return $this->outcome('ok', [
             'mode' => 'cleanup',
             'deleted' => [
                 'laboratory_cart_items' => $itemDeleted,
@@ -390,41 +420,21 @@ final class A4ContinuityCartFixturesCommand extends Command
             $removedAccredited = 0;
             $items = CartItem::query()->where('cart_id', $cart->id)->orderBy('id')->get();
             $isLedgerWindowCart = $ledgerCartId > 0 && $ledgerCartId === (int) $cart->id;
-            $recordedStillPresent = $items->contains(
-                fn (CartItem $item): bool => in_array((int) $item->id, $ledgerItemIds, true)
-            );
-            $idsSuperseded = $isLedgerWindowCart
-                && $ledgerItemIds !== []
-                && $ledgerTestId > 0
-                && ! $recordedStillPresent
-                && $items->contains(fn (CartItem $item): bool => (string) $item->product_id === (string) $ledgerTestId);
-
-            if ($idsSuperseded) {
-                $limitations[] = [
-                    'reason' => 'LEDGER_ITEM_IDS_SUPERSEDED',
-                    'cart_id' => (int) $cart->id,
-                    'recorded_cart_item_ids' => $ledgerItemIds,
-                    'replacement_cart_item_ids' => $items
-                        ->filter(fn (CartItem $item): bool => (string) $item->product_id === (string) $ledgerTestId)
-                        ->pluck('id')
-                        ->map(fn ($id): int => (int) $id)
-                        ->values()
-                        ->all(),
-                ];
-            }
 
             foreach ($items as $item) {
                 $sameStudy = $ledgerTestId > 0 && (string) $item->product_id === (string) $ledgerTestId;
-                $accredited = $this->monitoringItemAccredited($item, $ledger)
-                    || ($idsSuperseded && $sameStudy);
-                if ($accredited) {
+                if ($this->monitoringItemAccredited($item, $ledger, $customerId)) {
                     $removedAccredited += CartItem::query()->whereKey($item->id)->where('cart_id', $cart->id)->delete();
                     continue;
                 }
                 $inWindowCart = $ledgerCartId > 0 && (int) $item->cart_id === $ledgerCartId;
-                if ($sameStudy || $inWindowCart) {
+                $inLedgerIds = in_array((int) $item->id, $ledgerItemIds, true);
+                $reason = ($inLedgerIds && $isLedgerWindowCart)
+                    ? 'ITEM_LEDGER_INCOHERENT_PRESERVED'
+                    : 'ITEM_NOT_IN_LEDGER_PRESERVED';
+                if ($sameStudy || $inWindowCart || $inLedgerIds) {
                     $limitations[] = [
-                        'reason' => 'ITEM_NOT_IN_LEDGER_PRESERVED',
+                        'reason' => $reason,
                         'cart_id' => (int) $cart->id,
                         'cart_item_id' => (int) $item->id,
                     ];
@@ -479,71 +489,9 @@ final class A4ContinuityCartFixturesCommand extends Command
      *
      * @param  array<string, mixed>|null  $ledger
      */
-    private function monitoringItemAccredited(CartItem $item, ?array $ledger): bool
+    private function monitoringItemAccredited(CartItem $item, ?array $ledger, int $customerId): bool
     {
-        $ids = $this->ledgerMonitoringCartItemIds($ledger);
-        if ($ids === [] || ! in_array((int) $item->id, $ids, true)) {
-            return false;
-        }
-        $cartId = (int) ($ledger['monitoring_cart_id'] ?? 0);
-        if ($cartId > 0 && (int) $item->cart_id !== $cartId) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Record exact Active-cart monitoring item IDs created for this window's test.
-     * Pre-existing items in other carts, completed carts, or later insertions are not adopted.
-     *
-     * @param  array<string, mixed>|null  $existingLedger
-     * @return array{cart_id: int|null, cart_item_ids: list<int>, customer_id: int, test_id: int}
-     */
-    private function snapshotWindowMonitoring(int $customerId, int $testId, ?array $existingLedger): array
-    {
-        $userId = Customer::query()->whereKey($customerId)->value('user_id');
-        $empty = ['cart_id' => null, 'cart_item_ids' => [], 'customer_id' => $customerId, 'test_id' => $testId];
-        if (! $userId || $testId < 1) {
-            return $empty;
-        }
-
-        $activeCart = Cart::query()
-            ->where('user_id', $userId)
-            ->where('type', MonitoringCartType::Lab)
-            ->where('status', MonitoringCartStatus::Active)
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
-            ->first();
-        if ($activeCart === null) {
-            return $empty;
-        }
-
-        $currentIds = CartItem::query()
-            ->where('cart_id', $activeCart->id)
-            ->where('product_id', (string) $testId)
-            ->orderBy('id')
-            ->pluck('id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
-
-        $previousIds = $this->ledgerMonitoringCartItemIds($existingLedger);
-        $previousCartId = (int) ($existingLedger['monitoring_cart_id'] ?? 0);
-        if ($previousIds !== [] && $previousCartId === (int) $activeCart->id) {
-            $ids = array_values(array_intersect($previousIds, $currentIds));
-            if ($ids === []) {
-                $ids = $currentIds;
-            }
-        } else {
-            $ids = $currentIds;
-        }
-
-        return [
-            'cart_id' => (int) $activeCart->id,
-            'cart_item_ids' => $ids,
-            'customer_id' => $customerId,
-            'test_id' => $testId,
-        ];
+        return A4SyntheticMonitoringWindow::itemMatchesLedger($item, $ledger, $customerId);
     }
 
     /**
@@ -773,6 +721,34 @@ final class A4ContinuityCartFixturesCommand extends Command
         return [$deleted, $deleted > 0 ? 'WINDOW_CREATED_NO_REFERENCES' : 'CATEGORY_ALREADY_ABSENT'];
     }
 
+    /**
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private function stillPresentLedgerItemIds(int $cartId, array $ids): array
+    {
+        if ($cartId < 1 || $ids === []) {
+            return [];
+        }
+
+        return CartItem::query()
+            ->where('cart_id', $cartId)
+            ->whereKey($ids)
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{status: string, payload: array<string, mixed>, code: int}
+     */
+    private function outcome(string $status, array $payload, int $code = self::SUCCESS): array
+    {
+        return ['status' => $status, 'payload' => $payload, 'code' => $code];
+    }
+
     private function ledgerPath(string $namespace): string
     {
         return AkubicaUatFixtureContract::storagePath('a4-continuity-cart.json', $namespace);
@@ -780,26 +756,12 @@ final class A4ContinuityCartFixturesCommand extends Command
 
     private function readLedger(string $namespace): ?array
     {
-        $disk = Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK);
-        $path = $this->ledgerPath($namespace);
-        if (! $disk->exists($path)) {
-            return null;
-        }
-        $ledger = json_decode((string) $disk->get($path), true, 512, JSON_THROW_ON_ERROR);
-        if (! is_array($ledger) || ($ledger['namespace'] ?? null) !== $namespace) {
-            throw new \DomainException('A4_FIXTURE_LEDGER_INVALID');
-        }
-
-        return $ledger;
+        return A4SyntheticMonitoringWindow::readAuthoritativeLedger($namespace);
     }
 
     private function writeLedger(string $namespace, array $ledger): void
     {
-        $disk = Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK);
-        $path = $this->ledgerPath($namespace);
-        $temporary = $path.'.tmp.'.bin2hex(random_bytes(6));
-        $disk->put($temporary, json_encode($ledger, JSON_THROW_ON_ERROR));
-        $disk->move($temporary, $path);
+        A4SyntheticMonitoringWindow::persistLedger($namespace, $ledger);
     }
 
     private function testGdaId(string $namespace): string

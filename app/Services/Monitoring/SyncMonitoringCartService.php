@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\OnlinePharmacyCartItem;
+use App\Services\Api\V1\Uat\A4SyntheticMonitoringWindow;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -27,6 +28,11 @@ class SyncMonitoringCartService
             return;
         }
 
+        $window = A4SyntheticMonitoringWindow::forCustomer($customer);
+        if ($window !== null) {
+            $window->assertActiveCartSafeToSync();
+        }
+
         $items = $customer->laboratoryCartItems()->with('laboratoryTest')->get();
 
         if ($items->isEmpty()) {
@@ -39,11 +45,12 @@ class SyncMonitoringCartService
             return;
         }
 
-        DB::transaction(function () use ($userId, $items) {
+        DB::transaction(function () use ($userId, $items, $window, $customer) {
             $cart = $this->firstOrCreateActiveCart($userId, MonitoringCartType::Lab);
             $cart->items()->delete();
 
             $total = 0;
+            $created = [];
             foreach ($items as $row) {
                 /** @var LaboratoryCartItem $row */
                 $test = $row->laboratoryTest;
@@ -51,19 +58,28 @@ class SyncMonitoringCartService
                 $line = numberCents($test?->famedic_price_cents ?? 0);
                 $total += $line;
 
-                $cart->items()->create([
+                $createdItem = $cart->items()->create([
                     'product_id' => $test ? (string) $test->id : (string) $row->laboratory_test_id,
                     'name' => $name,
                     'price' => $line,
                     'quantity' => 1,
                 ]);
+                $created[] = [$createdItem, $row];
             }
 
             $cart->update([
                 'total' => round($total, 2),
                 'status' => MonitoringCartStatus::Active,
             ]);
+
+            $window?->recordCreatedItems($customer, $cart, $created);
         });
+
+        if ($window !== null && DB::transactionLevel() === 0) {
+            A4SyntheticMonitoringWindow::writeReplica(
+                \App\Data\Api\V1\Uat\AkubicaUatFixtureContract::DEDICATED_NAMESPACE
+            );
+        }
     }
 
     public function syncPharmacy(Customer $customer): void

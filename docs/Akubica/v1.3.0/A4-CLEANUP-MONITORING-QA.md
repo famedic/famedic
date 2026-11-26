@@ -125,25 +125,35 @@ concilia también carts/cart_items de monitoreo de la ventana, verifica
 procedencia por recurso y no depende del observer. Sigue siendo
 namespace-scoped.
 
-`--apply` registra en el ledger los IDs exactos de los `cart_items` de
-monitoreo de la ventana (`monitoring_cart_item_ids`), junto con
-`monitoring_cart_id`, `customer_id` y `test_id`. El cleanup sólo elimina
-esos IDs, y sólo en el carrito registrado. Una coincidencia de
-`product_id` no autoriza el borrado: otro carrito del mismo titular con
-el mismo estudio, un ítem no registrado dentro del carrito de la ventana
-(aunque tenga el mismo `product_id`) o cualquier ítem ajeno se conservan.
-Si un ítem no puede acreditarse, se reporta en `monitoring_limitations`
-(`ITEM_NOT_IN_LEDGER_PRESERVED`) y no se adopta automáticamente.
+`--apply` e `issue` de esta ventana registran en el ledger los IDs
+efectivamente creados por el sync, en el punto de creación y con contexto
+de ventana verificado (customer, carrito Active Lab y test con gda_id
+`RC2-A4-CONTINUITY-akubica-uat-batch2-a4-v1-OLAB`). No se deducen IDs
+después con una búsqueda por `product_id`. El ledger autoritativo vive en
+`akubica_uat_fixture_manifests.metadata.a4_continuity_cart`, en la misma
+transacción MySQL que la creación de `cart_items`. El archivo
+`a4-continuity-cart.json` es sólo una réplica posterior al commit: escribir
+un archivo dentro de `DB::transaction` no lo hace transaccional con MySQL.
+Si falla la persistencia en tabla, la transacción se revierte (no quedan
+IDs adoptados ni recursos sin trazabilidad). Si el commit de MySQL
+es correcto y falla la réplica, el comando no responde `ok`
+(`A4_FIXTURE_LEDGER_REPLICA_PENDING`) y la siguiente ejecución reescribe
+la réplica de forma idempotente desde la tabla.
 
-Si, entre `--apply` y `--cleanup`, el sync oficial de monitoreo
-(`LaboratoryCheckoutContinuity::issue` → `syncLaboratory`) recrea los
-ítems del carrito de la ventana, los IDs registrados en el ledger
-desaparecen. En ese caso el cleanup no adopta el ítem en el ledger: sólo
-si **todos** los IDs registrados están ausentes y el carrito sigue siendo
-el `monitoring_cart_id` del ledger, retira los reemplazos con el mismo
-`test_id` en **ese** carrito y lo reporta como
-`LEDGER_ITEM_IDS_SUPERSEDED`. No toca otros carritos ni ítems ajenos
-añadidos mientras los IDs originales siguen presentes.
+Antes de cualquier sync de `--apply` o `issue` de esta ventana, el flujo
+sintético autorizado comprueba que el carrito Active no contiene ítems
+ajenos o no acreditados; si los hay, rechaza con
+`A4_SYNTHETIC_SYNC_UNACCREDITED_CONTENT` antes de modificar. Esta
+protección no altera el sync productivo general (sólo se activa para
+`membership_none` del namespace dedicado A4, en entornos UAT permitidos).
+
+El cleanup sólo elimina IDs registrados y coherentes con el customer, el
+carrito y el test de la ventana. Una coincidencia de `product_id` no
+autoriza el borrado: otro carrito del mismo titular con el mismo estudio,
+un ítem no registrado (aunque coincida el `product_id`) o cualquier ítem
+ajeno se conservan y se reportan en `monitoring_limitations`
+(`ITEM_NOT_IN_LEDGER_PRESERVED`). No existe el fallback
+`LEDGER_ITEM_IDS_SUPERSEDED`.
 
 Los carritos en estado `Completed` quedan fuera tanto del cleanup habitual
 como del retiro histórico; el cleanup los reporta como
