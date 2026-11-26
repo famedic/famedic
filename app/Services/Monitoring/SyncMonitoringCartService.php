@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\LaboratoryCartItem;
 use App\Models\LaboratoryCheckoutDraft;
 use App\Models\OnlinePharmacyCartItem;
+use App\Services\Api\V1\Uat\A4SyntheticMonitoringWindow;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -27,10 +28,18 @@ class SyncMonitoringCartService
             return;
         }
 
+        $window = A4SyntheticMonitoringWindow::forCustomer($customer);
         $items = $customer->laboratoryCartItems()->with('laboratoryTest')->get();
 
         if ($items->isEmpty()) {
-            $this->deleteActiveCartIfEmpty($userId, MonitoringCartType::Lab);
+            if ($window !== null) {
+                $window->runInjectedContentChange();
+                DB::transaction(function () use ($window, $userId): void {
+                    $window->assertAndClearLockedActiveCarts($userId);
+                });
+            } else {
+                $this->deleteActiveCartIfEmpty($userId, MonitoringCartType::Lab);
+            }
             $customer = Customer::query()->where('user_id', $userId)->first();
             if ($customer) {
                 LaboratoryCheckoutDraft::query()->where('customer_id', $customer->id)->delete();
@@ -39,11 +48,19 @@ class SyncMonitoringCartService
             return;
         }
 
-        DB::transaction(function () use ($userId, $items) {
-            $cart = $this->firstOrCreateActiveCart($userId, MonitoringCartType::Lab);
+        if ($window !== null) {
+            $window->runInjectedContentChange();
+        }
+
+        DB::transaction(function () use ($userId, $items, $window, $customer) {
+            $cart = $this->firstOrCreateActiveCart($userId, MonitoringCartType::Lab, $window !== null);
+            if ($window !== null) {
+                $window->assertExactCartSafeToSync($cart);
+            }
             $cart->items()->delete();
 
             $total = 0;
+            $created = [];
             foreach ($items as $row) {
                 /** @var LaboratoryCartItem $row */
                 $test = $row->laboratoryTest;
@@ -51,19 +68,28 @@ class SyncMonitoringCartService
                 $line = numberCents($test?->famedic_price_cents ?? 0);
                 $total += $line;
 
-                $cart->items()->create([
+                $createdItem = $cart->items()->create([
                     'product_id' => $test ? (string) $test->id : (string) $row->laboratory_test_id,
                     'name' => $name,
                     'price' => $line,
                     'quantity' => 1,
                 ]);
+                $created[] = [$createdItem, $row];
             }
 
             $cart->update([
                 'total' => round($total, 2),
                 'status' => MonitoringCartStatus::Active,
             ]);
+
+            $window?->recordCreatedItems($customer, $cart, $created);
         });
+
+        if ($window !== null && DB::transactionLevel() === 0) {
+            A4SyntheticMonitoringWindow::writeReplica(
+                \App\Data\Api\V1\Uat\AkubicaUatFixtureContract::DEDICATED_NAMESPACE
+            );
+        }
     }
 
     public function syncPharmacy(Customer $customer): void
@@ -173,13 +199,16 @@ class SyncMonitoringCartService
             ->update(['updated_at' => now()]);
     }
 
-    private function firstOrCreateActiveCart(int $userId, MonitoringCartType $type): Cart
+    private function firstOrCreateActiveCart(int $userId, MonitoringCartType $type, bool $lockForUpdate = false): Cart
     {
-        $existing = Cart::query()
+        $query = Cart::query()
             ->where('user_id', $userId)
             ->where('type', $type)
-            ->where('status', MonitoringCartStatus::Active)
-            ->first();
+            ->where('status', MonitoringCartStatus::Active);
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+        $existing = $query->first();
 
         if ($existing) {
             return $existing;
