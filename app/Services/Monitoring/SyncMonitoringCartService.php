@@ -29,14 +29,17 @@ class SyncMonitoringCartService
         }
 
         $window = A4SyntheticMonitoringWindow::forCustomer($customer);
-        if ($window !== null) {
-            $window->assertActiveCartSafeToSync();
-        }
-
         $items = $customer->laboratoryCartItems()->with('laboratoryTest')->get();
 
         if ($items->isEmpty()) {
-            $this->deleteActiveCartIfEmpty($userId, MonitoringCartType::Lab);
+            if ($window !== null) {
+                $window->runInjectedContentChange();
+                DB::transaction(function () use ($window, $userId): void {
+                    $window->assertAndClearLockedActiveCarts($userId);
+                });
+            } else {
+                $this->deleteActiveCartIfEmpty($userId, MonitoringCartType::Lab);
+            }
             $customer = Customer::query()->where('user_id', $userId)->first();
             if ($customer) {
                 LaboratoryCheckoutDraft::query()->where('customer_id', $customer->id)->delete();
@@ -45,8 +48,15 @@ class SyncMonitoringCartService
             return;
         }
 
+        if ($window !== null) {
+            $window->runInjectedContentChange();
+        }
+
         DB::transaction(function () use ($userId, $items, $window, $customer) {
-            $cart = $this->firstOrCreateActiveCart($userId, MonitoringCartType::Lab);
+            $cart = $this->firstOrCreateActiveCart($userId, MonitoringCartType::Lab, $window !== null);
+            if ($window !== null) {
+                $window->assertExactCartSafeToSync($cart);
+            }
             $cart->items()->delete();
 
             $total = 0;
@@ -189,13 +199,16 @@ class SyncMonitoringCartService
             ->update(['updated_at' => now()]);
     }
 
-    private function firstOrCreateActiveCart(int $userId, MonitoringCartType $type): Cart
+    private function firstOrCreateActiveCart(int $userId, MonitoringCartType $type, bool $lockForUpdate = false): Cart
     {
-        $existing = Cart::query()
+        $query = Cart::query()
             ->where('user_id', $userId)
             ->where('type', $type)
-            ->where('status', MonitoringCartStatus::Active)
-            ->first();
+            ->where('status', MonitoringCartStatus::Active);
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+        $existing = $query->first();
 
         if ($existing) {
             return $existing;

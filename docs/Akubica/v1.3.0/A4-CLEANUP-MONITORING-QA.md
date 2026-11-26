@@ -135,17 +135,25 @@ transacción MySQL que la creación de `cart_items`. El archivo
 `a4-continuity-cart.json` es sólo una réplica posterior al commit: escribir
 un archivo dentro de `DB::transaction` no lo hace transaccional con MySQL.
 Si falla la persistencia en tabla, la transacción se revierte (no quedan
-IDs adoptados ni recursos sin trazabilidad). Si el commit de MySQL
-es correcto y falla la réplica, el comando no responde `ok`
-(`A4_FIXTURE_LEDGER_REPLICA_PENDING`) y la siguiente ejecución reescribe
-la réplica de forma idempotente desde la tabla.
+IDs adoptados ni recursos sin trazabilidad). `writeReplica` comprueba
+explícitamente que `put` y `move` devuelvan true y convierte cualquier
+excepción real del almacenamiento en `A4_FIXTURE_LEDGER_REPLICA_PENDING`.
+Si el commit de MySQL es correcto y falla la réplica, el comando no
+responde `ok`, el ledger MySQL sigue siendo la autoridad, se retiran los
+temporales propios y la siguiente ejecución reescribe la réplica de
+forma idempotente desde la tabla, sin adoptar recursos.
 
-Antes de cualquier sync de `--apply` o `issue` de esta ventana, el flujo
-sintético autorizado comprueba que el carrito Active no contiene ítems
-ajenos o no acreditados; si los hay, rechaza con
-`A4_SYNTHETIC_SYNC_UNACCREDITED_CONTENT` antes de modificar. Esta
-protección no altera el sync productivo general (sólo se activa para
-`membership_none` del namespace dedicado A4, en entornos UAT permitidos).
+Antes de modificar ítems, el flujo sintético autorizado valida el
+contenido del carrito **dentro de la misma transacción** que lo altera:
+toma el carrito exacto que se va a sincronizar, lo bloquea con
+`lockForUpdate` junto con sus `cart_items`, comprueba que no hay
+contenido ajeno o no acreditado y, si lo hay, rechaza con
+`A4_SYNTHETIC_SYNC_UNACCREDITED_CONTENT` sin intervalo entre la
+validación y el borrado. La rama sin ítems de laboratorio también se
+cubre (se bloquean y validan los carritos Active que se irían a retirar).
+Esta protección no altera el sync productivo general (sólo se activa
+para `membership_none` del namespace dedicado A4, en entornos UAT
+permitidos).
 
 El cleanup sólo elimina IDs registrados y coherentes con el customer, el
 carrito y el test de la ventana. Una coincidencia de `product_id` no

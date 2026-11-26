@@ -107,6 +107,59 @@ function a4IssueWindowLink(User $user): array
     return app(LaboratoryCheckoutContinuity::class)->issue($request, $user->customer, LaboratoryBrand::OLAB);
 }
 
+function a4ReplicaDiskStub(string $mode): object
+{
+    $inner = Storage::disk('local');
+
+    return new class($inner, $mode)
+    {
+        public function __construct(private $inner, private string $mode)
+        {
+        }
+
+        public function put($path, $contents, $options = [])
+        {
+            if ($this->mode === 'exception') {
+                throw new \RuntimeException('storage put failed');
+            }
+            if ($this->mode === 'put-false') {
+                return false;
+            }
+
+            return $this->inner->put($path, $contents, $options);
+        }
+
+        public function move($from, $to)
+        {
+            if ($this->mode === 'move-false') {
+                return false;
+            }
+
+            return $this->inner->move($from, $to);
+        }
+
+        public function exists($path)
+        {
+            return $this->inner->exists($path);
+        }
+
+        public function delete($path)
+        {
+            return $this->inner->delete($path);
+        }
+    };
+}
+
+function a4ReplicaTempFiles(): array
+{
+    $prefix = AkubicaUatFixtureContract::DEDICATED_NAMESPACE.'/a4-continuity-cart.json.tmp.';
+
+    return array_values(array_filter(
+        Storage::disk('local')->allFiles(AkubicaUatFixtureContract::DEDICATED_NAMESPACE),
+        fn (string $path): bool => str_starts_with($path, $prefix),
+    ));
+}
+
 test('query-builder forceDelete leaves a monitoring cart because the observer does not run', function () {
     $user = User::factory()->withRegularCustomer()->create();
     $item = LaboratoryCartItem::factory()->create(['customer_id' => $user->customer->id]);
@@ -884,4 +937,129 @@ test('repeated A4 apply and issue do not adopt foreign carts or items of the sam
         ->and($renewed['monitoring_cart_id'])->toBe($original['monitoring_cart_id'])
         ->and(CartItem::query()->whereKey($otherItem->id)->exists())->toBeTrue()
         ->and(Cart::query()->whereKey($otherCart->id)->exists())->toBeTrue();
+});
+
+test('A4 issue rejects a content change between the early inspection and locked modification and does not delete the foreign item', function () {
+    $user = a4MonitoringResidueCustomer();
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->assertSuccessful();
+
+    $ledger = a4ReadWindowLedger();
+    $registeredIds = $ledger['monitoring_cart_item_ids'];
+    $windowItem = CartItem::query()->whereKey($registeredIds[0])->sole();
+    $foreignId = null;
+
+    A4SyntheticMonitoringWindow::injectBeforeLockedSync(function () use ($windowItem, &$foreignId) {
+        $foreign = CartItem::query()->create([
+            'cart_id' => $windowItem->cart_id,
+            'product_id' => $windowItem->product_id,
+            'name' => 'inserted after early inspection',
+            'price' => $windowItem->price,
+            'quantity' => 1,
+        ]);
+        $foreignId = (int) $foreign->id;
+    });
+
+    expect(fn () => a4IssueWindowLink($user))
+        ->toThrow(\DomainException::class, A4SyntheticMonitoringWindow::UNACCREDITED_CONTENT);
+
+    expect($foreignId)->not->toBeNull()
+        ->and(CartItem::query()->whereKey($foreignId)->exists())->toBeTrue();
+    foreach ($registeredIds as $id) {
+        expect(CartItem::query()->whereKey($id)->exists())->toBeTrue();
+    }
+    expect(a4ReadWindowLedger()['monitoring_cart_item_ids'])->toBe($registeredIds);
+});
+
+test('A4 apply reports REPLICA_PENDING when replica put returns false and recovers from the MySQL ledger', function () {
+    $user = a4MonitoringResidueCustomer();
+    A4SyntheticMonitoringWindow::useReplicaDisk(a4ReplicaDiskStub('put-false'));
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->expectsOutputToContain('A4_FIXTURE_LEDGER_REPLICA_PENDING')->assertFailed();
+
+    $dbLedger = a4ReadWindowLedger();
+    expect(LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->count())->toBe(1)
+        ->and($dbLedger['monitoring_cart_item_ids'])->not->toBeEmpty()
+        ->and(a4ReplicaTempFiles())->toBeEmpty();
+    $registeredIds = $dbLedger['monitoring_cart_item_ids'];
+
+    A4SyntheticMonitoringWindow::clearTestHooks();
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->assertSuccessful();
+
+    expect(a4ReadWindowLedger()['monitoring_cart_item_ids'])->toBe($registeredIds)
+        ->and(a4ReplicaTempFiles())->toBeEmpty();
+});
+
+test('A4 apply reports REPLICA_PENDING when replica move returns false and recovers from the MySQL ledger', function () {
+    $user = a4MonitoringResidueCustomer();
+    A4SyntheticMonitoringWindow::useReplicaDisk(a4ReplicaDiskStub('move-false'));
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->expectsOutputToContain('A4_FIXTURE_LEDGER_REPLICA_PENDING')->assertFailed();
+
+    $dbLedger = a4ReadWindowLedger();
+    expect(LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->count())->toBe(1)
+        ->and($dbLedger['monitoring_cart_item_ids'])->not->toBeEmpty()
+        ->and(a4ReplicaTempFiles())->toBeEmpty();
+    $registeredIds = $dbLedger['monitoring_cart_item_ids'];
+
+    A4SyntheticMonitoringWindow::clearTestHooks();
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->assertSuccessful();
+
+    expect(a4ReadWindowLedger()['monitoring_cart_item_ids'])->toBe($registeredIds)
+        ->and(a4ReplicaTempFiles())->toBeEmpty();
+});
+
+test('A4 apply reports REPLICA_PENDING when storage throws and recovers from the MySQL ledger without adopting foreign items', function () {
+    $user = a4MonitoringResidueCustomer();
+    A4SyntheticMonitoringWindow::useReplicaDisk(a4ReplicaDiskStub('exception'));
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->expectsOutputToContain('A4_FIXTURE_LEDGER_REPLICA_PENDING')->assertFailed();
+
+    $dbLedger = a4ReadWindowLedger();
+    expect(LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->count())->toBe(1)
+        ->and($dbLedger['monitoring_cart_item_ids'])->not->toBeEmpty()
+        ->and(a4ReplicaTempFiles())->toBeEmpty();
+    $registeredIds = $dbLedger['monitoring_cart_item_ids'];
+
+    $foreignCart = Cart::query()->create([
+        'user_id' => $user->id,
+        'type' => MonitoringCartType::Lab,
+        'status' => MonitoringCartStatus::Active,
+        'total' => 4,
+    ]);
+    $foreignItem = CartItem::query()->create([
+        'cart_id' => $foreignCart->id,
+        'product_id' => (string) $dbLedger['test_id'],
+        'name' => 'foreign during storage exception recovery',
+        'price' => 4,
+        'quantity' => 1,
+    ]);
+
+    A4SyntheticMonitoringWindow::clearTestHooks();
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->assertSuccessful();
+
+    expect(a4ReadWindowLedger()['monitoring_cart_item_ids'])->toBe($registeredIds)
+        ->and(CartItem::query()->whereKey($foreignItem->id)->exists())->toBeTrue()
+        ->and(Cart::query()->whereKey($foreignCart->id)->exists())->toBeTrue()
+        ->and(a4ReplicaTempFiles())->toBeEmpty();
 });

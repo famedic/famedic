@@ -42,6 +42,10 @@ final class A4SyntheticMonitoringWindow
 
     private static bool $failNextReplica = false;
 
+    private static mixed $replicaDisk = null;
+
+    private static ?\Closure $beforeLockedSync = null;
+
     public function __construct(
         private readonly AkubicaUatFixtureManifest $manifest,
         private readonly Customer $customer,
@@ -53,6 +57,8 @@ final class A4SyntheticMonitoringWindow
         self::$capturedLedger = null;
         self::$failNextDatabasePersist = false;
         self::$failNextReplica = false;
+        self::$replicaDisk = null;
+        self::$beforeLockedSync = null;
     }
 
     public static function resetCapture(): void
@@ -68,6 +74,29 @@ final class A4SyntheticMonitoringWindow
     public static function failNextReplica(): void
     {
         self::$failNextReplica = true;
+    }
+
+    public static function useReplicaDisk(object $disk): void
+    {
+        self::$replicaDisk = $disk;
+    }
+
+    /**
+     * Test-only hook: runs immediately before the locked transaction, to simulate
+     * a content change after an early inspection and before modification.
+     */
+    public static function injectBeforeLockedSync(\Closure $callback): void
+    {
+        self::$beforeLockedSync = $callback;
+    }
+
+    public function runInjectedContentChange(): void
+    {
+        $callback = self::$beforeLockedSync;
+        self::$beforeLockedSync = null;
+        if ($callback !== null) {
+            $callback();
+        }
     }
 
     public static function capturedLedger(): ?array
@@ -99,26 +128,22 @@ final class A4SyntheticMonitoringWindow
     }
 
     /**
-     * Reject before SyncMonitoringCartService deletes or recreates Active-cart items
-     * when any current item is not an exact, coherent ledger ID of this window.
+     * Lock and validate the exact cart that is about to be synchronised, then
+     * return. Caller must delete immediately in the same transaction.
      */
-    public function assertActiveCartSafeToSync(): void
+    public function assertExactCartSafeToSync(Cart $cart): void
     {
-        $userId = $this->customer->user_id;
-        if (! $userId) {
-            return;
+        $locked = Cart::query()->whereKey($cart->id)->lockForUpdate()->first();
+        if ($locked === null) {
+            throw new \DomainException(self::CONTEXT_MISMATCH);
+        }
+        if ((int) $locked->user_id !== (int) $this->customer->user_id
+            || $locked->type !== MonitoringCartType::Lab
+            || $locked->status !== MonitoringCartStatus::Active) {
+            throw new \DomainException(self::CONTEXT_MISMATCH);
         }
 
-        $cart = Cart::query()
-            ->where('user_id', $userId)
-            ->where('type', MonitoringCartType::Lab)
-            ->where('status', MonitoringCartStatus::Active)
-            ->first();
-        if ($cart === null) {
-            return;
-        }
-
-        $items = CartItem::query()->where('cart_id', $cart->id)->orderBy('id')->get();
+        $items = CartItem::query()->where('cart_id', $locked->id)->lockForUpdate()->orderBy('id')->get();
         if ($items->isEmpty()) {
             return;
         }
@@ -128,6 +153,29 @@ final class A4SyntheticMonitoringWindow
             if (! self::itemMatchesLedger($item, $ledger, (int) $this->customer->id)) {
                 throw new \DomainException(self::UNACCREDITED_CONTENT);
             }
+        }
+    }
+
+    /**
+     * Empty laboratory-item branch: lock every Active Lab cart that would be
+     * cleared, validate each (including carts that currently have no items),
+     * then delete immediately in the same transaction.
+     */
+    public function assertAndClearLockedActiveCarts(int $userId): void
+    {
+        $carts = Cart::query()
+            ->where('user_id', $userId)
+            ->where('type', MonitoringCartType::Lab)
+            ->where('status', MonitoringCartStatus::Active)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($carts as $cart) {
+            $this->assertExactCartSafeToSync($cart);
+        }
+        foreach ($carts as $cart) {
+            CartItem::query()->where('cart_id', $cart->id)->delete();
+            $cart->delete();
         }
     }
 
@@ -279,11 +327,45 @@ final class A4SyntheticMonitoringWindow
             return;
         }
 
-        $disk = Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK);
+        $disk = self::$replicaDisk ?? Storage::disk(AkubicaUatFixtureContract::STORAGE_DISK);
         $path = AkubicaUatFixtureContract::storagePath('a4-continuity-cart.json', $namespace);
         $temporary = $path.'.tmp.'.bin2hex(random_bytes(6));
-        $disk->put($temporary, json_encode($ledger, JSON_THROW_ON_ERROR));
-        $disk->move($temporary, $path);
+        $payload = json_encode($ledger, JSON_THROW_ON_ERROR);
+
+        try {
+            $put = $disk->put($temporary, $payload);
+            if ($put !== true) {
+                throw new \DomainException(self::REPLICA_PENDING);
+            }
+            $moved = $disk->move($temporary, $path);
+            if ($moved !== true) {
+                throw new \DomainException(self::REPLICA_PENDING);
+            }
+        } catch (\DomainException $exception) {
+            self::deleteOwnTemporary($disk, $temporary);
+            if ($exception->getMessage() === self::REPLICA_PENDING) {
+                throw $exception;
+            }
+            throw new \DomainException(self::REPLICA_PENDING, previous: $exception);
+        } catch (\Throwable $exception) {
+            self::deleteOwnTemporary($disk, $temporary);
+            throw new \DomainException(self::REPLICA_PENDING, previous: $exception);
+        }
+    }
+
+    private static function deleteOwnTemporary(object $disk, string $temporary): void
+    {
+        $base = AkubicaUatFixtureContract::storagePath('a4-continuity-cart.json', AkubicaUatFixtureContract::DEDICATED_NAMESPACE);
+        if ($temporary === '' || ! str_starts_with($temporary, $base.'.tmp.')) {
+            return;
+        }
+        try {
+            if ($disk->exists($temporary)) {
+                $disk->delete($temporary);
+            }
+        } catch (\Throwable) {
+            // Best-effort cleanup of our own temp object only.
+        }
     }
 
     /**
