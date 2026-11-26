@@ -56,11 +56,17 @@ Debe ser dry-run (sin `--execute`). Esperado:
 
 - `status=ok`, `reason=DRY_RUN`;
 - plan con `cart_id=1221`, `cart_item_id=10769`;
+- `evidence` explícita: `accredited_historical=true`, IDs pedidos 1221/10769,
+  `continuity_link_ids` de las ligas 6 y 7 (y, si el ledger de una ventana
+  posterior las tuviera, `ledger_monitoring_cart_id` /
+  `ledger_monitoring_cart_item_ids`; el residuo histórico 1221/10769 no se
+  acredita por coincidencia de `product_id`);
 - ninguna fila eliminada.
 
-Si el comando rechaza por procedencia, exclusividad (`CART_NOT_EXCLUSIVE`)
-o porque el titular ya tiene ítems de laboratorio (`LAB_CART_IN_USE`),
-**no** ejecutar el retiro. Reportar el código y el inventario actual.
+Si el comando rechaza por procedencia, exclusividad (`CART_NOT_EXCLUSIVE`),
+carrito completado (`A4_MONITORING_RESIDUE_CART_COMPLETED`) o porque el
+titular ya tiene ítems de laboratorio (`LAB_CART_IN_USE`), **no** ejecutar
+el retiro. Reportar el código, la evidencia del plan y el inventario actual.
 
 ## 2. Retiro real del residuo acreditado
 
@@ -79,15 +85,20 @@ php artisan akubica:a4-continuity-cart \
 
 El comando exige IDs exactos, el namespace dedicado, la confirmación
 distinta de la de `--cleanup`, ownership del titular `membership_none` y
-procedencia (ledger y/o ligas de continuidad con
-`metadata.laboratory_cart_id=1221`). Con `--execute`, adquiere el lock del
-namespace y, dentro de la transacción, revalida con `lockForUpdate`
-ownership, exclusividad, procedencia y ausencia de uso de laboratorio
-antes de cualquier DELETE. Si el contenido cambió desde el dry-run (por
-ejemplo un ítem ajeno añadido al carrito), rechaza con
-`CART_NOT_EXCLUSIVE` y no borra el contenido ajeno ni el ítem acreditado.
-No hace borrados generales. No elimina las ligas 6 y 7 (se conservan como
-evidencia del FAIL histórico).
+procedencia por recurso: IDs del ledger de la ventana (`monitoring_cart_id`
+y, si la lista existe y el ítem sigue presente, pertenencia a
+`monitoring_cart_item_ids`) y/o ligas de continuidad con
+`metadata.laboratory_cart_id=1221`. El par acreditado 1221/10769 se
+documenta de forma explícita en la evidencia; no se acredita por
+`product_id`. Un carrito en estado `Completed` se rechaza con
+`A4_MONITORING_RESIDUE_CART_COMPLETED` y no se borra. Con `--execute`,
+adquiere el lock del namespace y, dentro de la transacción, revalida con
+`lockForUpdate` ownership, estado (no completado), exclusividad,
+procedencia y ausencia de uso de laboratorio antes de cualquier DELETE.
+Si el contenido cambió desde el dry-run (por ejemplo un ítem ajeno
+añadido al carrito), rechaza con `CART_NOT_EXCLUSIVE` y no borra el
+contenido ajeno ni el ítem acreditado. No hace borrados generales. No
+elimina las ligas 6 y 7 (se conservan como evidencia del FAIL histórico).
 
 Si el carrito y el ítem ya no existen y la procedencia se puede acreditar,
 el resultado es idempotente (`ALREADY_ABSENT`).
@@ -111,17 +122,40 @@ Una repetición del comando de retiro debe ser idempotente.
 
 El `--cleanup` de A4 (confirmación `akubica-a4-continuity-cart`) ahora
 concilia también carts/cart_items de monitoreo de la ventana, verifica
-procedencia y no depende del observer. Sigue siendo namespace-scoped.
-Sólo elimina `cart_items` con procedencia acreditada de la ventana
-(product_id = test_id del ledger). Conserva cualquier ítem ajeno o no
-acreditado, aunque el titular ya no tenga `LaboratoryCartItem` activos,
-y sólo retira el carrito si queda vacío y su procedencia de ventana lo
-permite (ledger `monitoring_cart_id` o ítems acreditados recién
-retirados). Una liga histórica no acredita por sí sola todos los ítems
-actuales del carrito; un carrito histórico completado se conserva.
+procedencia por recurso y no depende del observer. Sigue siendo
+namespace-scoped.
+
+`--apply` registra en el ledger los IDs exactos de los `cart_items` de
+monitoreo de la ventana (`monitoring_cart_item_ids`), junto con
+`monitoring_cart_id`, `customer_id` y `test_id`. El cleanup sólo elimina
+esos IDs, y sólo en el carrito registrado. Una coincidencia de
+`product_id` no autoriza el borrado: otro carrito del mismo titular con
+el mismo estudio, un ítem no registrado dentro del carrito de la ventana
+(aunque tenga el mismo `product_id`) o cualquier ítem ajeno se conservan.
+Si un ítem no puede acreditarse, se reporta en `monitoring_limitations`
+(`ITEM_NOT_IN_LEDGER_PRESERVED`) y no se adopta automáticamente.
+
+Si, entre `--apply` y `--cleanup`, el sync oficial de monitoreo
+(`LaboratoryCheckoutContinuity::issue` → `syncLaboratory`) recrea los
+ítems del carrito de la ventana, los IDs registrados en el ledger
+desaparecen. En ese caso el cleanup no adopta el ítem en el ledger: sólo
+si **todos** los IDs registrados están ausentes y el carrito sigue siendo
+el `monitoring_cart_id` del ledger, retira los reemplazos con el mismo
+`test_id` en **ese** carrito y lo reporta como
+`LEDGER_ITEM_IDS_SUPERSEDED`. No toca otros carritos ni ítems ajenos
+añadidos mientras los IDs originales siguen presentes.
+
+Los carritos en estado `Completed` quedan fuera tanto del cleanup habitual
+como del retiro histórico; el cleanup los reporta como
+`CART_COMPLETED_PRESERVED` y conserva carrito e ítems. El carrito de la
+ventana sólo se retira si queda vacío, no está completado y coincide con
+`ledger.monitoring_cart_id`. Una liga histórica no acredita por sí sola
+todos los ítems actuales del carrito.
+
 No usar `--cleanup` como sustituto del retiro histórico con IDs exactos
-si el ledger ya quedó `completed` y sólo resta el residuo acreditado;
-para ese caso usar los pasos 1–3.
+si el ledger ya quedó `completed` y sólo resta el residuo acreditado
+1221/10769; para ese caso usar los pasos 1–3, que son un procedimiento
+separado por IDs y con evidencia explícita.
 
 ## Fuera de alcance
 

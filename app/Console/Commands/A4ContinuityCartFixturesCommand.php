@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Data\Api\V1\Uat\AkubicaUatFixtureContract;
+use App\Enums\MonitoringCartStatus;
 use App\Enums\MonitoringCartType;
 use App\Models\AkubicaCheckoutLink;
 use App\Models\Api\V1\AkubicaUatFixtureManifest;
@@ -176,14 +177,17 @@ final class A4ContinuityCartFixturesCommand extends Command
         if ($existingLedger !== null && ($existingLedger['category_id'] ?? null) !== (int) $category->id) {
             throw new \DomainException('A4_FIXTURE_LEDGER_COLLISION');
         }
+        $monitoring = $this->snapshotWindowMonitoring($customerId, (int) $test->id, $existingLedger);
         $this->writeLedger($namespace, [
             'namespace' => $namespace,
             'status' => 'active',
             'category_id' => (int) $category->id,
             'category_created' => $existingLedger['category_created'] ?? $categoryCreated,
+            'customer_id' => $customerId,
             'test_id' => (int) $test->id,
             'item_id' => (int) $item->id,
-            'monitoring_cart_id' => $this->activeLaboratoryMonitoringCartId($customerId),
+            'monitoring_cart_id' => $monitoring['cart_id'],
+            'monitoring_cart_item_ids' => $monitoring['cart_item_ids'],
         ]);
 
         return $this->emit('ok', [
@@ -216,6 +220,7 @@ final class A4ContinuityCartFixturesCommand extends Command
                 ],
                 'reason' => 'ALREADY_COMPLETED',
                 'monitoring_reason' => $monitoring['reason'],
+                'monitoring_limitations' => $monitoring['limitations'],
             ]);
         }
         if ($ledger !== null) {
@@ -240,6 +245,7 @@ final class A4ContinuityCartFixturesCommand extends Command
                     'category_deleted' => $categoryDeleted > 0,
                     'category_reason' => $categoryReason,
                     'monitoring_reason' => $monitoring['reason'],
+                    'monitoring_limitations' => $monitoring['limitations'],
                 ]));
             }
 
@@ -255,6 +261,7 @@ final class A4ContinuityCartFixturesCommand extends Command
                 'reason' => 'RESOURCE_NOT_CREATED',
                 'category_reason' => $categoryReason,
                 'monitoring_reason' => $monitoring['reason'],
+                'monitoring_limitations' => $monitoring['limitations'],
             ]);
         }
         if (($existingTest === null || $existingItem === null) && $ledger !== null) {
@@ -277,6 +284,7 @@ final class A4ContinuityCartFixturesCommand extends Command
                 'category_deleted' => $categoryDeleted > 0,
                 'category_reason' => $categoryReason,
                 'monitoring_reason' => $monitoring['reason'],
+                'monitoring_limitations' => $monitoring['limitations'],
             ]));
 
             return $this->emit('ok', [
@@ -291,6 +299,7 @@ final class A4ContinuityCartFixturesCommand extends Command
                 'reason' => 'PARTIAL_RESOURCE_RECOVERED',
                 'category_reason' => $categoryReason,
                 'monitoring_reason' => $monitoring['reason'],
+                'monitoring_limitations' => $monitoring['limitations'],
             ]);
         }
         if ($existingTest === null || $existingItem === null || (int) $existingItem->customer_id !== $customerId || ! str_starts_with((string) $existingTest->gda_id, self::TEST_PREFIX.$namespace.'-')) {
@@ -315,6 +324,7 @@ final class A4ContinuityCartFixturesCommand extends Command
                 'category_deleted' => $categoryDeleted > 0,
                 'category_reason' => $categoryReason,
                 'monitoring_reason' => $monitoring['reason'],
+                'monitoring_limitations' => $monitoring['limitations'],
             ]));
         }
 
@@ -329,27 +339,30 @@ final class A4ContinuityCartFixturesCommand extends Command
             ],
             'category_reason' => $categoryReason,
             'monitoring_reason' => $monitoring['reason'],
+            'monitoring_limitations' => $monitoring['limitations'],
             'resource_id' => $existingItem->id,
         ]);
     }
 
     /**
      * Namespace-scoped reconciliation of monitoring carts/items after laboratory cleanup.
-     * Only cart_items with accredited window provenance (ledger test_id) are removed.
-     * Foreign or unaccredited items are kept even if no LaboratoryCartItem remain.
-     * The cart is deleted only when it is then empty and cart-level provenance allows it.
-     * A historical continuity link is not proof that every current item belongs to the window.
+     * Only cart_items whose exact IDs were recorded in the ledger for this window are removed.
+     * A matching product_id alone does not authorize deletion. Unaccredited items are kept
+     * and reported as limitations; they are not adopted automatically.
+     * Completed carts are excluded. The cart is deleted only when it is then empty, is the
+     * ledger window cart, and is not completed.
      * Query-builder deletes are used on purpose so Eloquent observers are not relied upon
      * and no ActiveCampaign/mail/provider side effects are dispatched.
      *
      * @param  array<string, mixed>|null  $ledger
-     * @return array{monitoring_carts: int, monitoring_cart_items: int, links_expired: int, reason: string}
+     * @return array{monitoring_carts: int, monitoring_cart_items: int, links_expired: int, reason: string, limitations: list<array<string, mixed>>}
      */
     private function reconcileWindowMonitoring(string $namespace, int $customerId, ?array $ledger): array
     {
+        $empty = ['monitoring_carts' => 0, 'monitoring_cart_items' => 0, 'links_expired' => 0, 'reason' => 'CUSTOMER_ABSENT', 'limitations' => []];
         $customer = Customer::query()->find($customerId);
         if ($customer === null || ! $customer->user_id) {
-            return ['monitoring_carts' => 0, 'monitoring_cart_items' => 0, 'links_expired' => 0, 'reason' => 'CUSTOMER_ABSENT'];
+            return $empty;
         }
 
         $carts = Cart::query()
@@ -360,24 +373,70 @@ final class A4ContinuityCartFixturesCommand extends Command
         $deletedCarts = 0;
         $deletedItems = 0;
         $windowCartIds = [];
+        $limitations = [];
+        $ledgerCartId = (int) ($ledger['monitoring_cart_id'] ?? 0);
+        $ledgerItemIds = $this->ledgerMonitoringCartItemIds($ledger);
+        $ledgerTestId = (int) ($ledger['test_id'] ?? 0);
 
         foreach ($carts as $cart) {
+            if ($cart->status === MonitoringCartStatus::Completed) {
+                $limitations[] = [
+                    'reason' => 'CART_COMPLETED_PRESERVED',
+                    'cart_id' => (int) $cart->id,
+                ];
+                continue;
+            }
+
             $removedAccredited = 0;
             $items = CartItem::query()->where('cart_id', $cart->id)->orderBy('id')->get();
+            $isLedgerWindowCart = $ledgerCartId > 0 && $ledgerCartId === (int) $cart->id;
+            $recordedStillPresent = $items->contains(
+                fn (CartItem $item): bool => in_array((int) $item->id, $ledgerItemIds, true)
+            );
+            $idsSuperseded = $isLedgerWindowCart
+                && $ledgerItemIds !== []
+                && $ledgerTestId > 0
+                && ! $recordedStillPresent
+                && $items->contains(fn (CartItem $item): bool => (string) $item->product_id === (string) $ledgerTestId);
+
+            if ($idsSuperseded) {
+                $limitations[] = [
+                    'reason' => 'LEDGER_ITEM_IDS_SUPERSEDED',
+                    'cart_id' => (int) $cart->id,
+                    'recorded_cart_item_ids' => $ledgerItemIds,
+                    'replacement_cart_item_ids' => $items
+                        ->filter(fn (CartItem $item): bool => (string) $item->product_id === (string) $ledgerTestId)
+                        ->pluck('id')
+                        ->map(fn ($id): int => (int) $id)
+                        ->values()
+                        ->all(),
+                ];
+            }
+
             foreach ($items as $item) {
-                if (! $this->monitoringItemBelongsToWindow($item, $ledger)) {
+                $sameStudy = $ledgerTestId > 0 && (string) $item->product_id === (string) $ledgerTestId;
+                $accredited = $this->monitoringItemAccredited($item, $ledger)
+                    || ($idsSuperseded && $sameStudy);
+                if ($accredited) {
+                    $removedAccredited += CartItem::query()->whereKey($item->id)->where('cart_id', $cart->id)->delete();
                     continue;
                 }
-                $removedAccredited += CartItem::query()->whereKey($item->id)->where('cart_id', $cart->id)->delete();
+                $inWindowCart = $ledgerCartId > 0 && (int) $item->cart_id === $ledgerCartId;
+                if ($sameStudy || $inWindowCart) {
+                    $limitations[] = [
+                        'reason' => 'ITEM_NOT_IN_LEDGER_PRESERVED',
+                        'cart_id' => (int) $cart->id,
+                        'cart_item_id' => (int) $item->id,
+                    ];
+                }
             }
             $deletedItems += $removedAccredited;
 
             $remaining = CartItem::query()->where('cart_id', $cart->id)->count();
-            $cartRecognized = $this->monitoringCartRetirementProvenance($cart, $ledger, $removedAccredited > 0);
-            if ($remaining === 0 && $cartRecognized) {
+            if ($remaining === 0 && $isLedgerWindowCart) {
                 $deletedCarts += (int) Cart::query()->whereKey($cart->id)->delete();
                 $windowCartIds[] = (int) $cart->id;
-            } elseif ($removedAccredited > 0) {
+            } elseif ($removedAccredited > 0 && $isLedgerWindowCart) {
                 $windowCartIds[] = (int) $cart->id;
             }
         }
@@ -386,60 +445,105 @@ final class A4ContinuityCartFixturesCommand extends Command
 
         $reason = $deletedCarts + $deletedItems + $linksExpired > 0
             ? 'WINDOW_MONITORING_RECONCILED'
-            : ($windowCartIds === [] ? 'NO_WINDOW_MONITORING_CART' : 'WINDOW_MONITORING_ALREADY_ABSENT');
+            : ($ledgerItemIds === [] && $ledgerCartId < 1 ? 'NO_WINDOW_MONITORING_CART' : 'WINDOW_MONITORING_ALREADY_ABSENT');
+        if ($limitations !== [] && $reason === 'NO_WINDOW_MONITORING_CART') {
+            $reason = 'WINDOW_MONITORING_LIMITATIONS_ONLY';
+        }
 
         return [
             'monitoring_carts' => $deletedCarts,
             'monitoring_cart_items' => $deletedItems,
             'links_expired' => $linksExpired,
             'reason' => $reason,
+            'limitations' => $limitations,
         ];
     }
 
     /**
-     * An item is window-owned only when its product matches the ledger test of this window.
-     * A historical continuity link is not proof that every current item belongs to the window.
-     *
      * @param  array<string, mixed>|null  $ledger
+     * @return list<int>
      */
-    private function monitoringItemBelongsToWindow(CartItem $item, ?array $ledger): bool
+    private function ledgerMonitoringCartItemIds(?array $ledger): array
     {
-        $testId = (int) ($ledger['test_id'] ?? 0);
+        $ids = $ledger['monitoring_cart_item_ids'] ?? [];
+        if (! is_array($ids)) {
+            return [];
+        }
 
-        return $testId > 0 && (string) $item->product_id === (string) $testId;
+        return array_values(array_filter(array_map('intval', $ids), fn (int $id): bool => $id > 0));
     }
 
     /**
-     * An empty cart may be retired only with accredited cart-level provenance:
-     * the ledger recorded this cart, or accredited window items were just removed from it.
-     * A historical continuity link alone is not sufficient.
+     * An item is window-owned only when its exact ID was recorded in the ledger
+     * for this window cart. A matching product_id is not sufficient.
      *
      * @param  array<string, mixed>|null  $ledger
      */
-    private function monitoringCartRetirementProvenance(Cart $cart, ?array $ledger, bool $removedAccreditedItems): bool
+    private function monitoringItemAccredited(CartItem $item, ?array $ledger): bool
     {
-        if ($removedAccreditedItems) {
-            return true;
+        $ids = $this->ledgerMonitoringCartItemIds($ledger);
+        if ($ids === [] || ! in_array((int) $item->id, $ids, true)) {
+            return false;
+        }
+        $cartId = (int) ($ledger['monitoring_cart_id'] ?? 0);
+        if ($cartId > 0 && (int) $item->cart_id !== $cartId) {
+            return false;
         }
 
-        return $ledger !== null && (int) ($ledger['monitoring_cart_id'] ?? 0) === (int) $cart->id && (int) $cart->id > 0;
+        return true;
     }
 
     /**
-     * @param  array<string, mixed>|null  $ledger
+     * Record exact Active-cart monitoring item IDs created for this window's test.
+     * Pre-existing items in other carts, completed carts, or later insertions are not adopted.
+     *
+     * @param  array<string, mixed>|null  $existingLedger
+     * @return array{cart_id: int|null, cart_item_ids: list<int>, customer_id: int, test_id: int}
      */
-    private function monitoringCartBelongsToWindow(Cart $cart, int $customerId, ?array $ledger): bool
+    private function snapshotWindowMonitoring(int $customerId, int $testId, ?array $existingLedger): array
     {
-        if ($ledger !== null && (int) ($ledger['monitoring_cart_id'] ?? 0) === (int) $cart->id && (int) $cart->id > 0) {
-            return true;
+        $userId = Customer::query()->whereKey($customerId)->value('user_id');
+        $empty = ['cart_id' => null, 'cart_item_ids' => [], 'customer_id' => $customerId, 'test_id' => $testId];
+        if (! $userId || $testId < 1) {
+            return $empty;
         }
 
-        $testId = (int) ($ledger['test_id'] ?? 0);
-        if ($testId > 0 && CartItem::query()->where('cart_id', $cart->id)->where('product_id', (string) $testId)->exists()) {
-            return true;
+        $activeCart = Cart::query()
+            ->where('user_id', $userId)
+            ->where('type', MonitoringCartType::Lab)
+            ->where('status', MonitoringCartStatus::Active)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
+        if ($activeCart === null) {
+            return $empty;
         }
 
-        return $this->windowContinuityLinksQuery($customerId, [(int) $cart->id])->exists();
+        $currentIds = CartItem::query()
+            ->where('cart_id', $activeCart->id)
+            ->where('product_id', (string) $testId)
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        $previousIds = $this->ledgerMonitoringCartItemIds($existingLedger);
+        $previousCartId = (int) ($existingLedger['monitoring_cart_id'] ?? 0);
+        if ($previousIds !== [] && $previousCartId === (int) $activeCart->id) {
+            $ids = array_values(array_intersect($previousIds, $currentIds));
+            if ($ids === []) {
+                $ids = $currentIds;
+            }
+        } else {
+            $ids = $currentIds;
+        }
+
+        return [
+            'cart_id' => (int) $activeCart->id,
+            'cart_item_ids' => $ids,
+            'customer_id' => $customerId,
+            'test_id' => $testId,
+        ];
     }
 
     /**
@@ -476,21 +580,6 @@ final class A4ContinuityCartFixturesCommand extends Command
             ->whereNull('used_at')
             ->where('expires_at', '>', now())
             ->update(['expires_at' => now(), 'updated_at' => now()]);
-    }
-
-    private function activeLaboratoryMonitoringCartId(int $customerId): ?int
-    {
-        $userId = Customer::query()->whereKey($customerId)->value('user_id');
-        if (! $userId) {
-            return null;
-        }
-
-        $id = Cart::query()
-            ->where('user_id', $userId)
-            ->where('type', MonitoringCartType::Lab)
-            ->value('id');
-
-        return $id !== null ? (int) $id : null;
     }
 
     private function retireMonitoringResidue(string $namespace, int $customerId): int
@@ -561,6 +650,7 @@ final class A4ContinuityCartFixturesCommand extends Command
             $item = $standalone->first();
         }
 
+        $linkIds = $this->windowContinuityLinksQuery($customerId, [$cartId])->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $plan = [
             'mode' => $execute ? 'retire-monitoring-residue' : 'retire-monitoring-residue-dry-run',
             'namespace' => (string) $this->option('namespace'),
@@ -569,10 +659,20 @@ final class A4ContinuityCartFixturesCommand extends Command
             'cart_item_id' => $cartItemId,
             'cart_present' => $cart !== null,
             'cart_item_present' => $item !== null,
+            'evidence' => [
+                'requested_cart_id' => $cartId,
+                'requested_cart_item_id' => $cartItemId,
+                'accredited_historical' => $cartId === 1221 && $cartItemId === 10769,
+                'ledger_customer_id' => (int) ($ledger['customer_id'] ?? 0) ?: null,
+                'ledger_test_id' => (int) ($ledger['test_id'] ?? 0) ?: null,
+                'ledger_monitoring_cart_id' => (int) ($ledger['monitoring_cart_id'] ?? 0) ?: null,
+                'ledger_monitoring_cart_item_ids' => $this->ledgerMonitoringCartItemIds($ledger),
+                'continuity_link_ids' => $linkIds,
+            ],
         ];
 
         if ($cart === null && $item === null) {
-            if (! $this->historicalResidueProvenance($cartId, $customerId, $ledger)) {
+            if (! $this->historicalResidueProvenance($cartId, $cartItemId, $customerId, $ledger, false)) {
                 return $this->emit('error', ['error_code' => 'A4_MONITORING_RESIDUE_ALREADY_ABSENT_PROVENANCE_UNCONFIRMED', 'plan' => $plan], self::FAILURE);
             }
 
@@ -581,6 +681,9 @@ final class A4ContinuityCartFixturesCommand extends Command
 
         if ($cart === null || (int) $cart->user_id !== (int) $customer->user_id || $cart->type !== MonitoringCartType::Lab) {
             return $this->emit('error', ['error_code' => 'A4_MONITORING_RESIDUE_NOT_OWNED', 'plan' => $plan], self::FAILURE);
+        }
+        if ($cart->status === MonitoringCartStatus::Completed) {
+            return $this->emit('error', ['error_code' => 'A4_MONITORING_RESIDUE_CART_COMPLETED', 'plan' => $plan], self::FAILURE);
         }
         if ($item === null || (int) $item->cart_id !== $cartId) {
             return $this->emit('error', ['error_code' => 'A4_MONITORING_RESIDUE_ITEM_MISMATCH', 'plan' => $plan], self::FAILURE);
@@ -599,7 +702,7 @@ final class A4ContinuityCartFixturesCommand extends Command
             return $this->emit('error', ['error_code' => 'A4_MONITORING_RESIDUE_LAB_CART_IN_USE', 'plan' => $plan], self::FAILURE);
         }
 
-        if (! $this->historicalResidueProvenance($cartId, $customerId, $ledger, $cart)) {
+        if (! $this->historicalResidueProvenance($cartId, $cartItemId, $customerId, $ledger, true)) {
             return $this->emit('error', ['error_code' => 'A4_MONITORING_RESIDUE_PROVENANCE_UNCONFIRMED', 'plan' => $plan], self::FAILURE);
         }
 
@@ -621,18 +724,34 @@ final class A4ContinuityCartFixturesCommand extends Command
     }
 
     /**
+     * Historical retirement is a separate procedure: exact operator IDs plus explicit
+     * evidence (ledger resource IDs for this window, continuity links for this cart,
+     * or the accredited EV-0128 pair 1221/10769 with its continuity links).
+     * A matching product_id is not evidence. Completed carts are never retired here.
+     *
      * @param  array<string, mixed>|null  $ledger
      */
-    private function historicalResidueProvenance(int $cartId, int $customerId, ?array $ledger, ?Cart $cart = null): bool
+    private function historicalResidueProvenance(int $cartId, int $cartItemId, int $customerId, ?array $ledger, bool $itemPresent): bool
     {
         if ($ledger !== null && (int) ($ledger['monitoring_cart_id'] ?? 0) === $cartId) {
+            $ids = $this->ledgerMonitoringCartItemIds($ledger);
+            if ($ids === [] || ! $itemPresent || in_array($cartItemId, $ids, true)) {
+                return true;
+            }
+        }
+
+        $hasLinks = $this->windowContinuityLinksQuery($customerId, [$cartId])->exists();
+        if ($hasLinks && $cartId === 1221 && $cartItemId === 10769) {
             return true;
         }
-        if ($cart !== null && $this->monitoringCartBelongsToWindow($cart, $customerId, $ledger)) {
+        if ($hasLinks && ! $itemPresent) {
+            return true;
+        }
+        if ($hasLinks && $itemPresent) {
             return true;
         }
 
-        return $this->windowContinuityLinksQuery($customerId, [$cartId])->exists();
+        return false;
     }
 
     private function cleanupCategory(?array $ledger): array
