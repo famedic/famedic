@@ -341,3 +341,133 @@ test('historical monitoring residue retirement requires exact IDs, provenance an
         '--confirm' => A4ContinuityCartFixturesCommand::RETIRE_MONITORING_CONFIRM,
     ]))->assertSuccessful();
 });
+
+test('A4 cleanup keeps a foreign monitoring item inside a recognized window cart and does not delete the cart', function () {
+    $user = a4MonitoringResidueCustomer();
+    $args = a4MonitoringCleanupArgs();
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->assertSuccessful();
+
+    $cart = Cart::query()->where('user_id', $user->id)->where('type', MonitoringCartType::Lab)->sole();
+    $windowItem = CartItem::query()->where('cart_id', $cart->id)->sole();
+    $foreignItem = CartItem::query()->create([
+        'cart_id' => $cart->id,
+        'product_id' => 'foreign-monitoring-item',
+        'name' => 'unaccredited monitoring item',
+        'price' => 5,
+        'quantity' => 1,
+    ]);
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--cleanup' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->assertSuccessful();
+
+    expect(Cart::query()->whereKey($cart->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($foreignItem->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($windowItem->id)->exists())->toBeFalse()
+        ->and(CartItem::query()->where('cart_id', $cart->id)->count())->toBe(1);
+});
+
+test('A4 cleanup preserves a completed historical monitoring cart even when a continuity link points to it', function () {
+    $user = a4MonitoringResidueCustomer();
+    $args = a4MonitoringCleanupArgs();
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->assertSuccessful();
+
+    $historicalCart = Cart::query()->create([
+        'user_id' => $user->id,
+        'type' => MonitoringCartType::Lab,
+        'status' => MonitoringCartStatus::Completed,
+        'total' => 15,
+    ]);
+    $historicalItem = CartItem::query()->create([
+        'cart_id' => $historicalCart->id,
+        'product_id' => 'historical-completed',
+        'name' => 'historical completed item',
+        'price' => 15,
+        'quantity' => 1,
+    ]);
+    $historicalLink = AkubicaCheckoutLink::query()->create([
+        'customer_id' => $user->customer->id,
+        'token_hash' => hash('sha256', 'historical-completed-link'),
+        'laboratory_brand' => LaboratoryBrand::OLAB,
+        'expires_at' => now()->subDay(),
+        'used_at' => null,
+        'metadata' => [
+            'purpose' => LaboratoryCheckoutContinuity::PURPOSE,
+            'service_line' => 'laboratory',
+            'laboratory_cart_id' => (int) $historicalCart->id,
+        ],
+    ]);
+
+    $this->artisan('akubica:a4-continuity-cart', $args + [
+        '--cleanup' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ])->assertSuccessful();
+
+    $historicalLink->refresh();
+    expect(Cart::query()->whereKey($historicalCart->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($historicalItem->id)->exists())->toBeTrue()
+        ->and(AkubicaCheckoutLink::query()->whereKey($historicalLink->id)->exists())->toBeTrue()
+        ->and($historicalLink->used_at)->toBeNull()
+        ->and($historicalCart->fresh()->status)->toBe(MonitoringCartStatus::Completed);
+});
+
+test('historical monitoring residue execute rejects a content change after precheck and does not delete foreign items', function () {
+    $user = a4MonitoringResidueCustomer();
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--apply' => true,
+        '--confirm' => A4ContinuityCartFixturesCommand::CONFIRM,
+    ]))->assertSuccessful();
+
+    $token = $user->createToken('a4-cleanup-pat');
+    $user->withAccessToken($token->accessToken);
+    $request = Request::create('https://famedic-a4.test/api/v1/checkout/prepare', 'GET', [
+        'service_line' => 'laboratory',
+        'brand' => 'olab',
+    ]);
+    $request->setUserResolver(fn () => $user);
+    app(LaboratoryCheckoutContinuity::class)->issue($request, $user->customer, LaboratoryBrand::OLAB);
+
+    $cart = Cart::query()->where('user_id', $user->id)->where('type', MonitoringCartType::Lab)->sole();
+    $item = CartItem::query()->where('cart_id', $cart->id)->sole();
+
+    LaboratoryCartItem::query()->where('customer_id', $user->customer->id)->forceDelete();
+    expect(Cart::query()->whereKey($cart->id)->exists())->toBeTrue();
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--retire-monitoring-residue' => true,
+        '--cart-id' => $cart->id,
+        '--cart-item-id' => $item->id,
+    ]))->assertSuccessful();
+    expect(Cart::query()->whereKey($cart->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($item->id)->exists())->toBeTrue();
+
+    $foreignItem = CartItem::query()->create([
+        'cart_id' => $cart->id,
+        'product_id' => 'injected-after-precheck',
+        'name' => 'foreign item added after dry-run',
+        'price' => 1,
+        'quantity' => 1,
+    ]);
+
+    $this->artisan('akubica:a4-continuity-cart', a4MonitoringCleanupArgs([
+        '--retire-monitoring-residue' => true,
+        '--execute' => true,
+        '--cart-id' => $cart->id,
+        '--cart-item-id' => $item->id,
+        '--confirm' => A4ContinuityCartFixturesCommand::RETIRE_MONITORING_CONFIRM,
+    ]))->assertFailed();
+
+    expect(Cart::query()->whereKey($cart->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($item->id)->exists())->toBeTrue()
+        ->and(CartItem::query()->whereKey($foreignItem->id)->exists())->toBeTrue();
+});
+

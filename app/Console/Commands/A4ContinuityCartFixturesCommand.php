@@ -335,6 +335,10 @@ final class A4ContinuityCartFixturesCommand extends Command
 
     /**
      * Namespace-scoped reconciliation of monitoring carts/items after laboratory cleanup.
+     * Only cart_items with accredited window provenance (ledger test_id) are removed.
+     * Foreign or unaccredited items are kept even if no LaboratoryCartItem remain.
+     * The cart is deleted only when it is then empty and cart-level provenance allows it.
+     * A historical continuity link is not proof that every current item belongs to the window.
      * Query-builder deletes are used on purpose so Eloquent observers are not relied upon
      * and no ActiveCampaign/mail/provider side effects are dispatched.
      *
@@ -358,24 +362,24 @@ final class A4ContinuityCartFixturesCommand extends Command
         $windowCartIds = [];
 
         foreach ($carts as $cart) {
-            if (! $this->monitoringCartBelongsToWindow($cart, $customerId, $ledger)) {
-                continue;
-            }
-            $windowCartIds[] = (int) $cart->id;
-
-            if (LaboratoryCartItem::query()->where('customer_id', $customerId)->exists()) {
-                $testId = (int) ($ledger['test_id'] ?? 0);
-                $itemQuery = CartItem::query()->where('cart_id', $cart->id);
-                if ($testId > 0) {
-                    $itemQuery->where('product_id', (string) $testId);
+            $removedAccredited = 0;
+            $items = CartItem::query()->where('cart_id', $cart->id)->orderBy('id')->get();
+            foreach ($items as $item) {
+                if (! $this->monitoringItemBelongsToWindow($item, $ledger)) {
+                    continue;
                 }
-                $deletedItems += $itemQuery->delete();
-
-                continue;
+                $removedAccredited += CartItem::query()->whereKey($item->id)->where('cart_id', $cart->id)->delete();
             }
+            $deletedItems += $removedAccredited;
 
-            $deletedItems += CartItem::query()->where('cart_id', $cart->id)->delete();
-            $deletedCarts += (int) Cart::query()->whereKey($cart->id)->delete();
+            $remaining = CartItem::query()->where('cart_id', $cart->id)->count();
+            $cartRecognized = $this->monitoringCartRetirementProvenance($cart, $ledger, $removedAccredited > 0);
+            if ($remaining === 0 && $cartRecognized) {
+                $deletedCarts += (int) Cart::query()->whereKey($cart->id)->delete();
+                $windowCartIds[] = (int) $cart->id;
+            } elseif ($removedAccredited > 0) {
+                $windowCartIds[] = (int) $cart->id;
+            }
         }
 
         $linksExpired = $this->expireUnusedWindowLinks($customerId, $windowCartIds);
@@ -390,6 +394,35 @@ final class A4ContinuityCartFixturesCommand extends Command
             'links_expired' => $linksExpired,
             'reason' => $reason,
         ];
+    }
+
+    /**
+     * An item is window-owned only when its product matches the ledger test of this window.
+     * A historical continuity link is not proof that every current item belongs to the window.
+     *
+     * @param  array<string, mixed>|null  $ledger
+     */
+    private function monitoringItemBelongsToWindow(CartItem $item, ?array $ledger): bool
+    {
+        $testId = (int) ($ledger['test_id'] ?? 0);
+
+        return $testId > 0 && (string) $item->product_id === (string) $testId;
+    }
+
+    /**
+     * An empty cart may be retired only with accredited cart-level provenance:
+     * the ledger recorded this cart, or accredited window items were just removed from it.
+     * A historical continuity link alone is not sufficient.
+     *
+     * @param  array<string, mixed>|null  $ledger
+     */
+    private function monitoringCartRetirementProvenance(Cart $cart, ?array $ledger, bool $removedAccreditedItems): bool
+    {
+        if ($removedAccreditedItems) {
+            return true;
+        }
+
+        return $ledger !== null && (int) ($ledger['monitoring_cart_id'] ?? 0) === (int) $cart->id && (int) $cart->id > 0;
     }
 
     /**
@@ -478,13 +511,59 @@ final class A4ContinuityCartFixturesCommand extends Command
             return $this->emit('error', ['error_code' => 'A4_FIXTURE_MEMBERSHIP_NONE_NOT_IN_MANIFEST'], self::FAILURE);
         }
 
-        $cart = Cart::query()->find($cartId);
-        $item = CartItem::query()->find($cartItemId);
         $ledger = $this->readLedger($namespace);
+
+        if (! $execute) {
+            return $this->inspectAndMaybeRetireMonitoringResidue($customer, $customerId, $cartId, $cartItemId, $ledger, false);
+        }
+
+        $lock = Cache::lock('akubica-a4-continuity-cart:'.$namespace, 30);
+        if (! $lock->get()) {
+            return $this->emit('error', ['error_code' => 'A4_FIXTURE_LOCK_UNAVAILABLE'], self::FAILURE);
+        }
+
+        try {
+            return DB::transaction(function () use ($customerId, $cartId, $cartItemId, $ledger) {
+                $customer = Customer::query()->whereKey($customerId)->lockForUpdate()->first();
+                if ($customer === null || ! $customer->user_id) {
+                    return $this->emit('error', ['error_code' => 'A4_FIXTURE_MEMBERSHIP_NONE_NOT_IN_MANIFEST'], self::FAILURE);
+                }
+
+                return $this->inspectAndMaybeRetireMonitoringResidue($customer, $customerId, $cartId, $cartItemId, $ledger, true);
+            });
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $ledger
+     */
+    private function inspectAndMaybeRetireMonitoringResidue(Customer $customer, int $customerId, int $cartId, int $cartItemId, ?array $ledger, bool $execute): int
+    {
+        $cartQuery = Cart::query()->whereKey($cartId);
+        if ($execute) {
+            $cartQuery->lockForUpdate();
+        }
+        $cart = $cartQuery->first();
+
+        $itemQuery = CartItem::query()->where('cart_id', $cartId)->orderBy('id');
+        if ($execute) {
+            $itemQuery->lockForUpdate();
+        }
+        $cartItems = $itemQuery->get();
+        $item = $cartItems->firstWhere('id', $cartItemId);
+        if ($item === null) {
+            $standalone = CartItem::query()->whereKey($cartItemId);
+            if ($execute) {
+                $standalone->lockForUpdate();
+            }
+            $item = $standalone->first();
+        }
 
         $plan = [
             'mode' => $execute ? 'retire-monitoring-residue' : 'retire-monitoring-residue-dry-run',
-            'namespace' => $namespace,
+            'namespace' => (string) $this->option('namespace'),
             'customer_id' => $customerId,
             'cart_id' => $cartId,
             'cart_item_id' => $cartItemId,
@@ -507,12 +586,16 @@ final class A4ContinuityCartFixturesCommand extends Command
             return $this->emit('error', ['error_code' => 'A4_MONITORING_RESIDUE_ITEM_MISMATCH', 'plan' => $plan], self::FAILURE);
         }
 
-        $otherItems = CartItem::query()->where('cart_id', $cartId)->whereKeyNot($cartItemId)->count();
+        $otherItems = $cartItems->where('id', '!=', $cartItemId)->count();
         if ($otherItems > 0) {
             return $this->emit('error', ['error_code' => 'A4_MONITORING_RESIDUE_CART_NOT_EXCLUSIVE', 'plan' => $plan + ['other_item_count' => $otherItems]], self::FAILURE);
         }
 
-        if (LaboratoryCartItem::query()->where('customer_id', $customerId)->exists()) {
+        $labItems = LaboratoryCartItem::query()->where('customer_id', $customerId);
+        if ($execute) {
+            $labItems->lockForUpdate();
+        }
+        if ($labItems->exists()) {
             return $this->emit('error', ['error_code' => 'A4_MONITORING_RESIDUE_LAB_CART_IN_USE', 'plan' => $plan], self::FAILURE);
         }
 
@@ -524,24 +607,17 @@ final class A4ContinuityCartFixturesCommand extends Command
             return $this->emit('ok', $plan + ['reason' => 'DRY_RUN', 'would_delete' => ['monitoring_carts' => 1, 'monitoring_cart_items' => 1]]);
         }
 
-        $lock = Cache::lock('akubica-a4-continuity-cart:'.$namespace, 30);
-        if (! $lock->get()) {
-            return $this->emit('error', ['error_code' => 'A4_FIXTURE_LOCK_UNAVAILABLE'], self::FAILURE);
+        $itemsDeleted = CartItem::query()->where('cart_id', $cartId)->whereKey($cartItemId)->delete();
+        $remaining = CartItem::query()->where('cart_id', $cartId)->lockForUpdate()->count();
+        $cartsDeleted = 0;
+        if ($remaining === 0) {
+            $cartsDeleted = (int) Cart::query()->whereKey($cartId)->delete();
         }
 
-        try {
-            return DB::transaction(function () use ($cartId, $cartItemId, $plan) {
-                $itemsDeleted = CartItem::query()->where('cart_id', $cartId)->whereKey($cartItemId)->delete();
-                $cartsDeleted = (int) Cart::query()->whereKey($cartId)->delete();
-
-                return $this->emit('ok', $plan + [
-                    'reason' => 'MONITORING_RESIDUE_REMOVED',
-                    'deleted' => ['monitoring_carts' => $cartsDeleted, 'monitoring_cart_items' => $itemsDeleted],
-                ]);
-            });
-        } finally {
-            $lock->release();
-        }
+        return $this->emit('ok', $plan + [
+            'reason' => 'MONITORING_RESIDUE_REMOVED',
+            'deleted' => ['monitoring_carts' => $cartsDeleted, 'monitoring_cart_items' => $itemsDeleted],
+        ]);
     }
 
     /**

@@ -80,8 +80,14 @@ php artisan akubica:a4-continuity-cart \
 El comando exige IDs exactos, el namespace dedicado, la confirmación
 distinta de la de `--cleanup`, ownership del titular `membership_none` y
 procedencia (ledger y/o ligas de continuidad con
-`metadata.laboratory_cart_id=1221`). No hace borrados generales. No elimina
-las ligas 6 y 7 (se conservan como evidencia del FAIL histórico).
+`metadata.laboratory_cart_id=1221`). Con `--execute`, adquiere el lock del
+namespace y, dentro de la transacción, revalida con `lockForUpdate`
+ownership, exclusividad, procedencia y ausencia de uso de laboratorio
+antes de cualquier DELETE. Si el contenido cambió desde el dry-run (por
+ejemplo un ítem ajeno añadido al carrito), rechaza con
+`CART_NOT_EXCLUSIVE` y no borra el contenido ajeno ni el ítem acreditado.
+No hace borrados generales. No elimina las ligas 6 y 7 (se conservan como
+evidencia del FAIL histórico).
 
 Si el carrito y el ítem ya no existen y la procedencia se puede acreditar,
 el resultado es idempotente (`ALREADY_ABSENT`).
@@ -106,6 +112,13 @@ Una repetición del comando de retiro debe ser idempotente.
 El `--cleanup` de A4 (confirmación `akubica-a4-continuity-cart`) ahora
 concilia también carts/cart_items de monitoreo de la ventana, verifica
 procedencia y no depende del observer. Sigue siendo namespace-scoped.
+Sólo elimina `cart_items` con procedencia acreditada de la ventana
+(product_id = test_id del ledger). Conserva cualquier ítem ajeno o no
+acreditado, aunque el titular ya no tenga `LaboratoryCartItem` activos,
+y sólo retira el carrito si queda vacío y su procedencia de ventana lo
+permite (ledger `monitoring_cart_id` o ítems acreditados recién
+retirados). Una liga histórica no acredita por sí sola todos los ítems
+actuales del carrito; un carrito histórico completado se conserva.
 No usar `--cleanup` como sustituto del retiro histórico con IDs exactos
 si el ledger ya quedó `completed` y sólo resta el residuo acreditado;
 para ese caso usar los pasos 1–3.
