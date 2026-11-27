@@ -14,7 +14,9 @@ test('new users can register', function () {
         'birth_date' => '1990-01-01',
         'gender' => 1,
         'email' => 'test@example.com',
-        'phone' => '1234567890',
+        // INT-031 (RC13): RegisterRequest requires a valid phone and phone_country (size:2).
+        'phone' => '5512345678',
+        'phone_country' => 'MX',
         'password' => 'password',
         'password_confirmation' => 'password',
     ]);

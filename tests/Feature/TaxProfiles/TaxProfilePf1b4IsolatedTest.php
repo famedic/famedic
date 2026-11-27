@@ -749,7 +749,8 @@ class TaxProfilePf1b4IsolatedTest extends TestCase
         Schema::create('invoice_requests', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tax_profile_id')->nullable()->constrained('tax_profiles')->nullOnDelete();
-            $table->morphs('invoice_requestable');
+            // INT-031 (RC09): same explicit index name as the real migration 2025_01_10_070315 (MySQL 64-char limit).
+            $table->morphs('invoice_requestable', 'invoice_requestable_index');
             $table->string('name');
             $table->string('rfc');
             $table->string('zipcode');

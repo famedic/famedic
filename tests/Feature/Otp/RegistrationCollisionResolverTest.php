@@ -88,7 +88,9 @@ test('collision resolver marks ambiguous phone when historical duplicates exist'
     ]);
     User::factory()->create([
         'email' => 'dup2@ejemplo.com',
-        'phone' => '5511110007',
+        // INT-031 (RC12): users_phone_country_phone_unique (2026_07_28_130000) now rejects an identical raw value, so
+        // the historical duplicate is the legacy +52 format that the index cannot see and the resolver still matches.
+        'phone' => '+525511110007',
         'phone_country' => 'MX',
     ]);
 

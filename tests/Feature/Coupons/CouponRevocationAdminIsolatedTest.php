@@ -42,6 +42,8 @@ class CouponRevocationAdminIsolatedTest extends TestCase
         parent::setUp();
 
         bootstrapIsolatedCouponRevocationSchema();
+        // INT-031 (RC09): the cancel/revoke endpoints load the beneficiary customer; create the isolated customers table.
+        bootstrapIsolatedCouponBeneficiaryReportSchema();
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->couponService = app(CouponService::class);
@@ -287,6 +289,9 @@ class CouponRevocationAdminIsolatedTest extends TestCase
             'guard_name' => 'web',
         ]);
         $administrator->givePermissionTo($permission);
+        // INT-031 (RC09): the admin layout asks hasPermissionTo('administrators.manage'), which throws when the
+        // permission row does not exist in the isolated schema. Create it WITHOUT granting it.
+        Permission::query()->firstOrCreate(['name' => 'administrators.manage', 'guard_name' => 'web']);
 
         return $user;
     }

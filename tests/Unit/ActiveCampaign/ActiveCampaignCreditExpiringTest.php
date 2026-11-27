@@ -18,6 +18,11 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 
+// INT-031 (RC05): this Unit file reads and writes the schema; migrate it and roll back per test instead of
+// depending on a Feature test having migrated the database first.
+uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
+
+
 beforeEach(function () {
     if (! Schema::hasTable('users')) {
         Schema::create('users', function (Blueprint $table) {

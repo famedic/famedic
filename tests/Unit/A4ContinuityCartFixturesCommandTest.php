@@ -17,7 +17,9 @@ use Tests\TestCase;
 
 final class A4ContinuityCartFixturesCommandTest extends TestCase
 {
-    use DatabaseTransactions;
+    // INT-031 (RC05): RefreshDatabase migrates the schema when this Unit class runs on its own, then wraps each
+    // test in the same transaction DatabaseTransactions used.
+    use \Illuminate\Foundation\Testing\RefreshDatabase;
 
     private function manifest(): array
     {

@@ -34,6 +34,8 @@ class CouponBeneficiaryReportIsolatedTest extends TestCase
         parent::setUp();
         bootstrapIsolatedCouponModuleSchema();
         bootstrapIsolatedCouponBeneficiaryReportSchema();
+        // INT-031 (RC09): User::can() resolves the administrator relation; create the isolated permission tables too.
+        bootstrapIsolatedCouponRevocationAdminSchema();
         $this->service = app(CouponBeneficiaryReportService::class);
     }
 

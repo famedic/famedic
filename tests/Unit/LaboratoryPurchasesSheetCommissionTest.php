@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\EfevooPayCommissionCalculator;
 use Illuminate\Database\Eloquent\Collection;
 
+
 test('hoja de pedidos exporta comisión total EfevooPay calculada', function () {
     config([
         'efevoopay.commission.rate_percent' => 2.99,
@@ -28,6 +29,8 @@ test('hoja de pedidos exporta comisión total EfevooPay calculada', function () 
 
     $purchase = LaboratoryPurchase::factory()->make([
         'gda_order_id' => 'GDA-TEST',
+        // INT-031 (RC16): LaboratoryPurchaseFactory sets no brand and the sheet prints brand->value.
+        'brand' => \App\Enums\LaboratoryBrand::OLAB,
         'total_cents' => 26900,
     ]);
     $purchase->setRelation('customer', $customer);

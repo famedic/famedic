@@ -307,7 +307,8 @@ class GdaResultsNotAvailableTest extends TestCase
             'phone' => '8181234567',
             'phone_country' => 'MX',
             'birth_date' => '1990-01-01',
-            'gender' => 'male',
+            // INT-031 (RC11): gender is cast to App\Enums\Gender (int-backed).
+            'gender' => \App\Enums\Gender::MALE->value,
             'street' => 'Calle',
             'number' => '123',
             'neighborhood' => 'Centro',

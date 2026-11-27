@@ -2,6 +2,11 @@
 
 use App\Models\LaboratoryNotification;
 
+// INT-031 (RC05): this Unit file reads and writes the schema; migrate it and roll back per test instead of
+// depending on a Feature test having migrated the database first.
+uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
+
+
 function makeResultsNotification(array $overrides = []): LaboratoryNotification
 {
     return LaboratoryNotification::query()->create(array_merge([
