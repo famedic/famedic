@@ -33,6 +33,9 @@ abstract class TestCase extends BaseTestCase
 
         TestingDatabaseGuard::assertSafeTestingDatabase();
 
+        // INT-031 (harness, RC04): tests never build front-end assets; render @vite tags without public/build/manifest.json.
+        $this->withoutVite();
+
         $this->withoutMiddleware([
             'password.confirm',
             \App\Http\Middleware\ExcludePasswordConfirm::class,
@@ -40,6 +43,34 @@ abstract class TestCase extends BaseTestCase
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
         ]);
+    }
+
+    /** INT-031 (harness only): see enableDefaultOtpBackend(). */
+    private bool $defaultOtpBackend = false;
+
+    /**
+     * INT-031 (harness only, opt-in per legacy test file): enroll one registered OTP backend actor
+     * (OtpEnrollmentFixture::anyCustomer) and attach its machine credential to /api/v1 requests that do not carry
+     * one. It authenticates the backend client only; a Bearer bound to another consumer/channel is still rejected
+     * by the application, and requests without a Bearer stay unauthenticated where a Bearer is required.
+     */
+    public function enableDefaultOtpBackend(string $kind = 'native'): void
+    {
+        if (getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') !== '1') {
+            return;
+        }
+        \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::anyCustomer($kind, \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor($kind, akubicaApiV1RouteNames()));
+        $this->defaultOtpBackend = true;
+    }
+
+    public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null)
+    {
+        if ($this->defaultOtpBackend && ! isset($server['HTTP_X_SYNTHETIC_MACHINE_CREDENTIAL']) && str_contains((string) $uri, '/api/v1/')
+            && ($machine = \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::machine()) !== null) {
+            $server['HTTP_X_SYNTHETIC_MACHINE_CREDENTIAL'] = $machine;
+        }
+
+        return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
     }
 
     /**
@@ -72,8 +103,11 @@ abstract class TestCase extends BaseTestCase
      */
     protected function tearDown(): void
     {
+        // INT-031 (RC17): a test may swap the DB facade for a Mockery double (TestingDatabaseGuardTest); it has no real
+        // connections to inspect, so it cannot have committed rows.
         if (isset($this->app) && ! $this->runsInsideWrappingTransaction()
-            && $this->app->resolved('db') && $this->app->make('db')->getConnections() !== []) {
+            && $this->app->resolved('db') && ! $this->app->make('db') instanceof \Mockery\MockInterface
+            && $this->app->make('db')->getConnections() !== []) {
             RefreshDatabaseState::$migrated = false;
         }
 

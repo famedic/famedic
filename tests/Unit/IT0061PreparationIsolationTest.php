@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 
-uses(Tests\TestCase::class);
+// INT-031 (harness): Tests\TestCase is already applied to tests/Unit by tests/Pest.php; a second uses() makes Pest
+// abort the whole run with TestCaseAlreadyInUse.
 
 beforeEach(function () {
     DB::table('laboratory_appointments')->whereIn('notes', ['it0061-isolation:preexisting', 'akubica-uat-batch2-a4-v1:rc2-r04r05'])->delete();
