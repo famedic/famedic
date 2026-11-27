@@ -62,8 +62,9 @@ test('contact info can be updated', function () {
 });
 
 test('email and phone verification status is unchanged when unchanged', function () {
-    // INT-031 (RC13): the scenario needs a user that already has a verified phone (factory default has none).
-    $user = User::factory()->withVerifiedPhone()->create();
+    // INT-031 (RC13 + fase 2): the scenario needs a user whose email AND phone are already verified; the factory
+    // default has neither, so use withCompleteProfile() (verified phone + verified email). Assertions unchanged.
+    $user = User::factory()->withCompleteProfile()->create();
 
     $response = $this
         ->actingAs($user)
