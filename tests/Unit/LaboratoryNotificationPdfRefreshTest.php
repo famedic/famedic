@@ -6,6 +6,39 @@ use App\Models\LaboratoryNotification;
 // depending on a Feature test having migrated the database first.
 uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
 
+// INT-031 (fase 2, RC18): laboratory_notifications.laboratory_purchase_id has a FK to laboratory_purchases; the
+// helper's literal purchase id 100 was an orphan, and LaboratoryPurchaseFactory has an empty definition (the table
+// requires gda_order_id, name, ...). Create the referenced purchase with explicit synthetic data. Assertions unchanged.
+function pdfRefreshLaboratoryPurchase(array $attributes = []): \App\Models\LaboratoryPurchase
+{
+    $user = \App\Models\User::factory()->withRegularCustomer()->create();
+
+    return \App\Models\LaboratoryPurchase::query()->forceCreate(array_merge([
+        'customer_id' => $user->customer->id,
+        'brand' => \App\Enums\LaboratoryBrand::OLAB,
+        'gda_order_id' => 'GDA-ORDER-1',
+        'gda_consecutivo' => 1,
+        'name' => 'Paciente',
+        'paternal_lastname' => 'Sintetico',
+        'maternal_lastname' => 'Prueba',
+        'phone' => '5500000000',
+        'phone_country' => 'MX',
+        'birth_date' => '1990-01-01',
+        'gender' => \App\Enums\Gender::MALE,
+        'street' => 'Calle Test',
+        'number' => '100',
+        'neighborhood' => 'Centro',
+        'state' => 'CDMX',
+        'city' => 'CDMX',
+        'zipcode' => '01000',
+        'total_cents' => 35000,
+    ], $attributes));
+}
+
+beforeEach(function () {
+    pdfRefreshLaboratoryPurchase(['id' => 100]);
+});
+
 
 function makeResultsNotification(array $overrides = []): LaboratoryNotification
 {
@@ -46,7 +79,10 @@ it('refreshes cached pdf when a newer results notification exists for the same o
 });
 
 it('does not refresh when results are stored on purchase', function () {
-    $purchase = \App\Models\LaboratoryPurchase::factory()->create([
+    // INT-031 (fase 2, RC18): explicit synthetic purchase instead of the empty LaboratoryPurchaseFactory.
+    $purchase = pdfRefreshLaboratoryPurchase([
+        'gda_order_id' => 'GDA-ORDER-2',
+        'gda_consecutivo' => 2,
         'results' => 'results/gda-1-abc.pdf',
     ]);
 
