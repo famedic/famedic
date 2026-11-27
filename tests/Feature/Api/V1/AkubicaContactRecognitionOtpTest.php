@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Carbon;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
 
+
 beforeEach(function () {
     Carbon::setTestNow(Carbon::parse('2026-10-21 12:00:00'));
     disableAllAkubicaOtpFeatures();
@@ -102,6 +103,9 @@ function requestContactChallenge(array $payload): string
         ->assertStatus(202)
         ->json('data.challenge_id');
 }
+
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
 
 test('does not enumerate nonexistent, unverified, inactive, or ambiguous contacts', function () {
     $challengesBefore = OtpChallenge::query()->count();

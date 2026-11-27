@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
 
+
 function p0a57aEnableSecureRegister(): void
 {
     enableRegisterOtpWithoutDelivery();
@@ -52,6 +53,9 @@ beforeEach(function () {
 });
 
 // ── A. Normalization / uniqueness ──────────────────────────────────────
+
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
 
 test('p0a57a equivalent phone formats collapse to one canonical identity', function () {
     $user = User::factory()->create([
@@ -140,7 +144,7 @@ test('p0a57a concurrent-style phone collision via verify returns invalid code wi
         ->and($body)->not->toContain('users_phone')
         ->and($body)->not->toContain('23000')
         ->and(User::query()->where('email', 'race.phone.p0a57a@ejemplo.test')->exists())->toBeFalse()
-        ->and(PersonalAccessToken::query()->count())->toBe(0);
+        ->and(akubicaNonHarnessTokenCount())->toBe(0);
 });
 
 test('p0a57a legacy remains with flags off', function () {
@@ -292,7 +296,7 @@ test('p0a57a token issuance failure keeps account consumed and requires login', 
     $beforeUsers = User::query()->count();
     $beforeRa = RegularAccount::query()->count();
     $beforeCustomers = Customer::query()->count();
-    $beforeTokens = PersonalAccessToken::query()->count();
+    $beforeTokens = akubicaNonHarnessTokenCount();
 
     $response = $this->postJson('/api/v1/auth/register/verify-code', [
         'challenge_id' => $start['challenge_id'],
@@ -305,7 +309,7 @@ test('p0a57a token issuance failure keeps account consumed and requires login', 
     expect(User::query()->count())->toBe($beforeUsers + 1)
         ->and(RegularAccount::query()->count())->toBe($beforeRa + 1)
         ->and(Customer::query()->count())->toBe($beforeCustomers + 1)
-        ->and(PersonalAccessToken::query()->count())->toBe($beforeTokens)
+        ->and(akubicaNonHarnessTokenCount())->toBe($beforeTokens)
         ->and(User::query()->where('email', 'token.fail.p0a57a@ejemplo.test')->count())->toBe(1);
 
     $challenge = OtpChallenge::query()->where('public_id', $start['challenge_id'])->first();
@@ -323,7 +327,7 @@ test('p0a57a token issuance failure keeps account consumed and requires login', 
 
     $repeat->assertStatus(422);
     expect(User::query()->where('email', 'token.fail.p0a57a@ejemplo.test')->count())->toBe(1)
-        ->and(PersonalAccessToken::query()->count())->toBe($beforeTokens)
+        ->and(akubicaNonHarnessTokenCount())->toBe($beforeTokens)
         ->and(json_encode($response->json()))->not->toContain('forced token')
         ->and(AkubicaRegistrationPolicy::isPatientReady())->toBeFalse();
 
@@ -341,7 +345,7 @@ test('p0a57a happy path still issues one token without delivery', function () {
         'code' => '444444',
     ])->assertOk();
 
-    expect(PersonalAccessToken::query()->count())->toBe(1)
+    expect(akubicaNonHarnessTokenCount())->toBe(1)
         ->and($response->json('data.token'))->not->toBeEmpty();
 
     Notification::assertNothingSent();

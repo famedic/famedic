@@ -20,7 +20,7 @@ beforeEach(function () {
 });
 
 test('p0 retry read-back invoice request status reconciles a prior mutation', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $certificatePath = 'fiscal-certificates/ti-06/cert.pdf';
     Storage::put($certificatePath, 'certificate-content');
 
@@ -55,7 +55,7 @@ test('p0 retry read-back invoice request status reconciles a prior mutation', fu
 });
 
 test('p0 retry read-back create without idempotency key is discoverable in address list', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $created = $this->postJson(
         '/api/v1/user/addresses',

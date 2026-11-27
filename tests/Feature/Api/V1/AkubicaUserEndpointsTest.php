@@ -28,7 +28,7 @@ test('GET /user/family with user without customer returns 403 FORBIDDEN', functi
 // ── Family ────────────────────────────────────────────────────────────
 
 test('GET /user/family with customer and no family returns empty array', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/user/family', authHeaders($token))
         ->assertOk()
@@ -39,7 +39,7 @@ test('GET /user/family with customer and no family returns empty array', functio
 });
 
 test('GET /user/family returns family members with expected structure', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     FamilyAccount::factory()->create([
         'customer_id' => $user->customer->id,
@@ -62,8 +62,8 @@ test('GET /user/family returns family members with expected structure', function
 });
 
 test('GET /user/family only returns family of authenticated customer', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = akubicaRouteCustomerToken();
+    [$other] = akubicaRouteCustomerToken();
 
     FamilyAccount::factory()->create([
         'customer_id' => $owner->customer->id,
@@ -87,7 +87,7 @@ test('GET /user/family only returns family of authenticated customer', function 
 // ── Tax profiles ──────────────────────────────────────────────────────
 
 test('GET /user/tax-profiles with no profiles returns empty array', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/user/tax-profiles', authHeaders($token))
         ->assertOk()
@@ -98,7 +98,7 @@ test('GET /user/tax-profiles with no profiles returns empty array', function () 
 });
 
 test('GET /user/tax-profiles returns profiles with expected structure', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     TaxProfile::factory()->for($user->customer)->create([
         'name' => 'Perfil principal',
@@ -120,8 +120,8 @@ test('GET /user/tax-profiles returns profiles with expected structure', function
 });
 
 test('GET /user/tax-profiles only returns profiles of authenticated customer', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = akubicaRouteCustomerToken();
+    [$other] = akubicaRouteCustomerToken();
 
     TaxProfile::factory()->for($owner->customer)->create(['rfc' => 'OWNER111111111']);
     TaxProfile::factory()->for($other->customer)->create(['rfc' => 'OTHER222222222']);
@@ -135,7 +135,7 @@ test('GET /user/tax-profiles only returns profiles of authenticated customer', f
 // ── Addresses ─────────────────────────────────────────────────────────
 
 test('GET /user/addresses with no addresses returns empty array', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/user/addresses', authHeaders($token))
         ->assertOk()
@@ -146,7 +146,7 @@ test('GET /user/addresses with no addresses returns empty array', function () {
 });
 
 test('GET /user/addresses returns addresses with expected structure', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     Address::factory()->for($user->customer)->create([
         'street' => 'Calle Reforma',
@@ -170,8 +170,8 @@ test('GET /user/addresses returns addresses with expected structure', function (
 });
 
 test('GET /user/addresses only returns addresses of authenticated customer', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = akubicaRouteCustomerToken();
+    [$other] = akubicaRouteCustomerToken();
 
     Address::factory()->for($owner->customer)->create(['street' => 'Calle Propia']);
     Address::factory()->for($other->customer)->create(['street' => 'Calle Ajena']);
@@ -185,7 +185,7 @@ test('GET /user/addresses only returns addresses of authenticated customer', fun
 // ── Payment methods ───────────────────────────────────────────────────
 
 test('GET /user/payment-methods with no methods returns empty array', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/user/payment-methods', authHeaders($token))
         ->assertOk()
@@ -196,7 +196,7 @@ test('GET /user/payment-methods with no methods returns empty array', function (
 });
 
 test('GET /user/payment-methods returns safe payment method structure', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     EfevooToken::query()->create([
         'customer_id' => $user->customer->id,
@@ -222,7 +222,7 @@ test('GET /user/payment-methods returns safe payment method structure', function
 });
 
 test('GET /user/payment-methods does not expose sensitive fields', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     EfevooToken::query()->create([
         'customer_id' => $user->customer->id,
@@ -247,8 +247,8 @@ test('GET /user/payment-methods does not expose sensitive fields', function () {
 });
 
 test('GET /user/payment-methods only returns methods of authenticated customer', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = akubicaRouteCustomerToken();
+    [$other] = akubicaRouteCustomerToken();
 
     EfevooToken::query()->create([
         'customer_id' => $owner->customer->id,
@@ -277,7 +277,7 @@ test('GET /user/payment-methods only returns methods of authenticated customer',
 // ── Regresión 501 ─────────────────────────────────────────────────────
 
 test('GET /catalog/medications/{id} returns 503 CATALOG_UNAVAILABLE', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/catalog/medications/1', authHeaders($token))
         ->assertStatus(503)

@@ -92,6 +92,9 @@ afterEach(function () {
     Carbon::setTestNow();
 });
 
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
+
 test('usuario sin permiso recibe 403 en listado otp movements', function () {
     $user = User::factory()->create();
     Administrator::factory()->create(['user_id' => $user->id]);
@@ -231,7 +234,9 @@ test('login otp registra challenge y delivery aceptado', function () {
     enableLoginOtpWithFakeDelivery();
     $this->app->instance(\App\Contracts\Otp\OtpCodeGenerator::class, new \Tests\Support\Otp\FakeOtpCodeGenerator('123456'));
 
-    User::factory()->create([
+    // INT-031: login OTP only delivers to an eligible user, and eligibility requires a customer
+    // (AkubicaLoginOtpService::findEligibleUser, REASON_CUSTOMER_MISSING => decoy). Fixture aligned, assertions unchanged.
+    User::factory()->withRegularCustomer()->create([
         'phone' => '5512345678',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),

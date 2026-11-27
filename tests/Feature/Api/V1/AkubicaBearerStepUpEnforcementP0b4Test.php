@@ -25,7 +25,7 @@ function p0b4CustomerToken(array $userAttrs = []): array
         'phone_verified_at' => now(),
     ], $userAttrs));
 
-    $newToken = $user->createToken('akubica-test');
+    $newToken = akubicaRegisteredToken($user);
 
     return [$user, $newToken->plainTextToken, (int) $newToken->accessToken->id];
 }

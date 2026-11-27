@@ -33,6 +33,8 @@ final class AtixPhoneLookupRc1Phase1IsolatedTest extends TestCase
         config()->set('atix.sandbox.keys', ['sandbox-test' => 'sandbox-secret']);
         config()->set('otp.p0a.account_context.ttl_minutes', 10);
         app(FakeOtpDeliveryProvider::class)->sent = [];
+        // INT-031 (harness): written before the OTP enrollment contract; one registered backend actor per test.
+        $this->enableDefaultOtpBackend();
     }
 
     protected function tearDown(): void

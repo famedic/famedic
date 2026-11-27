@@ -3,6 +3,10 @@
 use App\Support\Api\V1\AkubicaCorrelationId;
 use App\Support\Api\V1\ApiErrorRetryability;
 
+
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
+
 test('correlation id is generated when header is missing', function () {
     $response = $this->getJson('/api/v1/catalog/laboratory-brands');
 
@@ -90,10 +94,10 @@ test('soft-deny and unknown route errors are non-retryable with correlation', fu
 
 test('feature disabled is non-retryable', function () {
     $user = \App\Models\User::factory()->withRegularCustomer()->create();
-    $token = $user->createToken('akubica-test')->plainTextToken;
+    $token = akubicaRegisteredToken($user)->plainTextToken;
 
     $response = $this->withHeaders([
-        'Authorization' => 'Bearer '.$token,
+        ...authHeaders($token),
         AkubicaCorrelationId::HEADER => 'feat-corr-id-abcde03',
     ])->putJson('/api/v1/orders/1/cancel');
 

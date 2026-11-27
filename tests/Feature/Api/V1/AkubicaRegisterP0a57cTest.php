@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
 
+
 function p0a57cEnableSecureRegister(): void
 {
     enableRegisterOtpWithoutDelivery();
@@ -35,6 +36,9 @@ beforeEach(function () {
     disableAllAkubicaOtpFeatures();
     app(FakeOtpDeliveryProvider::class)->alwaysAccept();
 });
+
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
 
 test('p0a57c infrastructure off ignores register flag and uses legacy', function () {
     config()->set('otp.p0a.flags.akubica_register_enabled', true);

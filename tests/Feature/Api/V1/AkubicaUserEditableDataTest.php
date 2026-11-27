@@ -46,12 +46,14 @@ test('POST /user/addresses without token returns 401 UNAUTHENTICATED', function 
 });
 
 test('POST /user/contacts with user without customer returns 403 FORBIDDEN', function () {
+    // INT-031: contact/address routes are gated by AuthorizeNativeConsumerOperation, which answers a user without
+    // customer with 403 CONSUMER_NOT_AUTHORIZED (no delegation can exist without a customer). Status stays 403.
     $user = User::factory()->create();
     $token = $user->createToken('akubica-test')->plainTextToken;
 
     $this->postJson('/api/v1/user/contacts', validContactPayload(), authHeaders($token))
         ->assertForbidden()
-        ->assertJsonPath('error.code', 'FORBIDDEN');
+        ->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
 });
 
 test('address and contact write routes with user without customer return 403 FORBIDDEN', function () {
@@ -60,21 +62,21 @@ test('address and contact write routes with user without customer return 403 FOR
 
     $this->postJson('/api/v1/user/addresses', validAddressPayload(), authHeaders($token))
         ->assertForbidden()
-        ->assertJsonPath('error.code', 'FORBIDDEN');
+        ->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
 
     $this->putJson('/api/v1/user/addresses/1', validAddressPayload(), authHeaders($token))
         ->assertForbidden()
-        ->assertJsonPath('error.code', 'FORBIDDEN');
+        ->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
 
     $this->putJson('/api/v1/user/contacts/1', validContactPayload(), authHeaders($token))
         ->assertForbidden()
-        ->assertJsonPath('error.code', 'FORBIDDEN');
+        ->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
 });
 
 // ── Contacts ────────────────────────────────────────────────────────
 
 test('GET /user/contacts with no contacts returns empty array', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/user/contacts', authHeaders($token))
         ->assertOk()
@@ -85,7 +87,7 @@ test('GET /user/contacts with no contacts returns empty array', function () {
 });
 
 test('GET /user/contacts returns contacts with expected structure', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     Contact::factory()->for($user->customer)->create([
         'name' => 'María',
@@ -110,8 +112,8 @@ test('GET /user/contacts returns contacts with expected structure', function () 
 });
 
 test('GET /user/contacts only returns contacts of authenticated customer', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = akubicaRouteCustomerToken();
+    [$other] = akubicaRouteCustomerToken();
 
     Contact::factory()->for($owner->customer)->create(['name' => 'Propio']);
     Contact::factory()->for($other->customer)->create(['name' => 'Ajeno']);
@@ -123,7 +125,7 @@ test('GET /user/contacts only returns contacts of authenticated customer', funct
 });
 
 test('POST /user/contacts with valid payload returns 201', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->postJson('/api/v1/user/contacts', validContactPayload(), authHeaders($token))
         ->assertCreated()
@@ -135,7 +137,7 @@ test('POST /user/contacts with valid payload returns 201', function () {
 });
 
 test('POST /user/contacts with invalid payload returns 422 VALIDATION_ERROR', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->postJson('/api/v1/user/contacts', ['name' => ''], authHeaders($token))
         ->assertUnprocessable()
@@ -143,7 +145,7 @@ test('POST /user/contacts with invalid payload returns 422 VALIDATION_ERROR', fu
 });
 
 test('PUT /user/contacts/{id} updates own contact', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $contact = Contact::factory()->for($user->customer)->create([
         'name' => 'Original',
@@ -165,8 +167,8 @@ test('PUT /user/contacts/{id} updates own contact', function () {
 });
 
 test('PUT /user/contacts/{id} for another customer returns 404 CONTACT_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = akubicaRouteCustomerToken();
+    [$other] = akubicaRouteCustomerToken();
 
     $otherContact = Contact::factory()->for($other->customer)->create();
 
@@ -180,7 +182,7 @@ test('PUT /user/contacts/{id} for another customer returns 404 CONTACT_NOT_FOUND
 });
 
 test('DELETE /user/contacts/{id} deletes own contact', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $contact = Contact::factory()->for($user->customer)->create();
 
@@ -192,8 +194,8 @@ test('DELETE /user/contacts/{id} deletes own contact', function () {
 });
 
 test('DELETE /user/contacts/{id} for another customer returns 404 CONTACT_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = akubicaRouteCustomerToken();
+    [$other] = akubicaRouteCustomerToken();
 
     $otherContact = Contact::factory()->for($other->customer)->create();
 
@@ -203,7 +205,7 @@ test('DELETE /user/contacts/{id} for another customer returns 404 CONTACT_NOT_FO
 });
 
 test('DELETE /user/contacts/{id} when contact does not exist returns 404 CONTACT_NOT_FOUND', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->deleteJson('/api/v1/user/contacts/999999', [], authHeaders($token))
         ->assertNotFound()
@@ -213,7 +215,7 @@ test('DELETE /user/contacts/{id} when contact does not exist returns 404 CONTACT
 // ── Addresses ───────────────────────────────────────────────────────
 
 test('POST /user/addresses with valid payload returns 201', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->postJson('/api/v1/user/addresses', validAddressPayload(), authHeaders($token))
         ->assertCreated()
@@ -227,7 +229,7 @@ test('POST /user/addresses with valid payload returns 201', function () {
 });
 
 test('POST /user/addresses with invalid payload returns 422 VALIDATION_ERROR', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->postJson('/api/v1/user/addresses', ['street' => ''], authHeaders($token))
         ->assertUnprocessable()
@@ -235,7 +237,7 @@ test('POST /user/addresses with invalid payload returns 422 VALIDATION_ERROR', f
 });
 
 test('PUT /user/addresses/{id} updates own address', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $address = Address::factory()->for($user->customer)->create([
         'street' => 'Calle Original',
@@ -256,8 +258,8 @@ test('PUT /user/addresses/{id} updates own address', function () {
 });
 
 test('PUT /user/addresses/{id} for another customer returns 404 ADDRESS_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = akubicaRouteCustomerToken();
+    [$other] = akubicaRouteCustomerToken();
 
     $otherAddress = Address::factory()->for($other->customer)->create();
 
@@ -271,7 +273,7 @@ test('PUT /user/addresses/{id} for another customer returns 404 ADDRESS_NOT_FOUN
 });
 
 test('DELETE /user/addresses/{id} deletes own address', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $address = Address::factory()->for($user->customer)->create();
 
@@ -283,8 +285,8 @@ test('DELETE /user/addresses/{id} deletes own address', function () {
 });
 
 test('DELETE /user/addresses/{id} for another customer returns 404 ADDRESS_NOT_FOUND', function () {
-    [$owner, $ownerToken] = akubicaCustomerToken();
-    [$other] = akubicaCustomerToken();
+    [$owner, $ownerToken] = akubicaRouteCustomerToken();
+    [$other] = akubicaRouteCustomerToken();
 
     $otherAddress = Address::factory()->for($other->customer)->create();
 
@@ -294,7 +296,7 @@ test('DELETE /user/addresses/{id} for another customer returns 404 ADDRESS_NOT_F
 });
 
 test('DELETE /user/addresses/{id} when address does not exist returns 404 ADDRESS_NOT_FOUND', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->deleteJson('/api/v1/user/addresses/999999', [], authHeaders($token))
         ->assertNotFound()
@@ -302,7 +304,7 @@ test('DELETE /user/addresses/{id} when address does not exist returns 404 ADDRES
 });
 
 test('GET /user/addresses still works and shows created address', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $this->postJson('/api/v1/user/addresses', validAddressPayload(), authHeaders($token))
         ->assertCreated();
@@ -318,7 +320,7 @@ test('GET /user/addresses still works and shows created address', function () {
 // ── Regresión ───────────────────────────────────────────────────────
 
 test('GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/catalog/medications/1', authHeaders($token))
         ->assertStatus(503)
@@ -326,7 +328,7 @@ test('GET /catalog/medications/{id} still returns 503 CATALOG_UNAVAILABLE', func
 });
 
 test('PUT /orders/{id}/cancel still returns 503 FEATURE_DISABLED', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->putJson('/api/v1/orders/1/cancel', [], authHeaders($token))
         ->assertStatus(503)
