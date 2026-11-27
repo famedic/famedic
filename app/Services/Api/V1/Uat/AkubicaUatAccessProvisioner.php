@@ -141,11 +141,15 @@ final class AkubicaUatAccessProvisioner
         // Only present when --delegate-v1-user is given; default output is unchanged.
         $plan['effects']['v1_delegations'] = 1;
         $plan['effects']['v1_tokens'] = 0;
+        // INT-029: verify-code only enrolls through a registered OTP issuer
+        // authority on the Leo channel; apply authorizes it and reset revokes it.
+        $plan['effects']['v1_otp_issuers'] = 1;
         $plan['v1_delegation'] = [
             'identity' => 'UAT-'.AkubicaUatFixtureContract::NAMESPACE.'-'.$v1Delegate['role'].'-U'.$v1Delegate['user_id'],
             'profile' => 'leo',
             'capabilities' => self::WINDOW2_CAPABILITIES[self::V1_DELEGATE_KEY],
             'user_changes' => 0,
+            'otp_issuer' => 'leo channel; expires with the Leo machine credential; revoked by --reset',
         ];
 
         return $plan;
@@ -202,7 +206,7 @@ final class AkubicaUatAccessProvisioner
             $this->assertNoUnownedAccess([$v1Delegate['user_id']]);
             $inventoryUserIds[self::V1_DELEGATE_ROLE] = $v1Delegate['user_id'];
         }
-        $created = ['consumers' => [], 'channels' => [], 'delegations' => [], 'credentials' => [], 'bindings' => [], 'tokens' => [], 'secrets' => [], 'scenario_delegations' => [], 'scenario_bindings' => [], 'scenario_tokens' => [], 'scenario_secrets' => [], 'v1_delegations' => [], 'v1_delegate_user_id' => $v1Delegate['user_id'] ?? null];
+        $created = ['consumers' => [], 'channels' => [], 'delegations' => [], 'credentials' => [], 'bindings' => [], 'tokens' => [], 'secrets' => [], 'scenario_delegations' => [], 'scenario_bindings' => [], 'scenario_tokens' => [], 'scenario_secrets' => [], 'v1_delegations' => [], 'v1_otp_issuers' => [], 'v1_delegate_user_id' => $v1Delegate['user_id'] ?? null];
         // Establish a recoverable, secret-free ledger before the first write.
         $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
         $registry = app(ConsumerRegistryWriter::class);
@@ -278,6 +282,18 @@ final class AkubicaUatAccessProvisioner
                 $created['v1_delegations'][self::V1_DELEGATE_KEY] = $delegation->id;
                 $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
                 $lifecycle->transition($operator, $delegation, true, self::APPROVAL);
+
+                // INT-029: RegistryOtpEnrollmentOperator::operatorFor() requires an
+                // enabled OTP issuer authority for this exact consumer/channel. Grant
+                // it only on the Leo channel created by this run, never beyond the
+                // Leo machine credential's expiry; reset revokes it. The channel is
+                // new, so any existing issuer row on it is a collision (fail closed).
+                if (DB::table('api_consumer_otp_issuers')->where('channel_id', $channel->id)->exists()) throw new \DomainException('UAT_ACCESS_V1_OTP_ISSUER_COLLISION');
+                $credentialExpiry = Carbon::parse(ApiConsumerCredential::query()->findOrFail($created['credentials']['leo'])->expires_at);
+                $channelExpiry = Carbon::parse($channel->fresh()->expires_at);
+                $lifecycle->authorizeOtp($operator, $channel, $operator, self::APPROVAL, $credentialExpiry->lt($channelExpiry) ? $credentialExpiry : $channelExpiry);
+                $created['v1_otp_issuers'][self::V1_DELEGATE_KEY] = (int) DB::table('api_consumer_otp_issuers')->where('channel_id', $channel->id)->where('consumer_id', $consumer->id)->value('id');
+                $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
             }
 
             $state = [
@@ -297,11 +313,11 @@ final class AkubicaUatAccessProvisioner
                 'scenario_token_ids' => $created['scenario_tokens'],
                 'scenario_encrypted_secrets' => $created['scenario_secrets'],
                 'expires_at' => $expiresAt->toIso8601String(),
-            ] + $this->v1StateKeys($created['v1_delegations'], $created['v1_delegate_user_id']);
+            ] + $this->v1StateKeys($created['v1_delegations'], $created['v1_delegate_user_id'], $created['v1_otp_issuers']);
             $this->writeState($namespace, $state);
             $this->writeInventory($namespace, $state, 'active');
 
-            return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'created' => ['consumers' => 2, 'channels' => 2, 'delegations' => 4 + count($created['scenario_delegations']) + count($created['v1_delegations']), 'credentials' => 2, 'bindings' => 4 + count($created['scenario_bindings']), 'tokens' => count($created['tokens']) + count($created['scenario_tokens'])], 'external_calls' => 0];
+            return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'created' => ['consumers' => 2, 'channels' => 2, 'delegations' => 4 + count($created['scenario_delegations']) + count($created['v1_delegations']), 'credentials' => 2, 'bindings' => 4 + count($created['scenario_bindings']), 'tokens' => count($created['tokens']) + count($created['scenario_tokens'])] + ($v1Delegate !== null ? ['otp_issuers' => count($created['v1_otp_issuers'])] : []), 'external_calls' => 0];
         } catch (\Throwable $exception) {
             try {
                 $this->revokeCreated($operator, $created, $lifecycle);
@@ -336,6 +352,8 @@ final class AkubicaUatAccessProvisioner
             foreach ($derived as $id) $this->revokeModel($operator, ApiConsumerTokenBinding::class, (int) $id, $lifecycle);
             foreach ($v1DelegationIds as $id) $this->revokeModel($operator, ApiConsumerDelegation::class, $id, $lifecycle);
         }
+        $v1OtpIssuerIds = $this->flattenIds($state['v1_otp_issuer_ids'] ?? []);
+        $this->revokeV1OtpIssuers($operator, $state, $lifecycle);
         foreach (array_reverse(array_values($state['scenario_binding_ids'] ?? [])) as $id) $this->revokeModel($operator, ApiConsumerTokenBinding::class, $id, $lifecycle);
         foreach (array_reverse(array_values($state['scenario_delegation_ids'] ?? [])) as $id) $this->revokeModel($operator, ApiConsumerDelegation::class, $id, $lifecycle);
         foreach ($state['scenario_token_ids'] ?? [] as $id) PersonalAccessToken::query()->whereKey($id)->delete();
@@ -349,7 +367,26 @@ final class AkubicaUatAccessProvisioner
         $this->writeInventory($namespace, $state, 'completed');
         Storage::disk('local')->delete($this->statePath($namespace));
 
-        return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'deleted' => 2 + 2 + 4 + 2 + 4 + 6 + count($state['scenario_binding_ids'] ?? []) + count($state['scenario_delegation_ids'] ?? []) + count($state['scenario_token_ids'] ?? []) + count($v1DelegationIds)];
+        return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'deleted' => 2 + 2 + 4 + 2 + 4 + 6 + count($state['scenario_binding_ids'] ?? []) + count($state['scenario_delegation_ids'] ?? []) + count($state['scenario_token_ids'] ?? []) + count($v1DelegationIds) + count($v1OtpIssuerIds)];
+    }
+
+    /**
+     * INT-029: revoke the OTP issuer authority this run granted. Recorded ids
+     * must belong to a channel and consumer of this state; without recorded ids
+     * (interrupted apply) the Leo channel of a v1 state is revoked by channel.
+     */
+    private function revokeV1OtpIssuers(User $operator, array $state, ConsumerLifecycle $lifecycle): void
+    {
+        if (($state['v1_delegate_user_id'] ?? null) === null) return;
+        $channelIds = array_values(array_map('intval', $state['channel_ids'] ?? []));
+        $issuerIds = $this->flattenIds($state['v1_otp_issuer_ids'] ?? []);
+        $targets = $issuerIds !== []
+            ? DB::table('api_consumer_otp_issuers')->whereIn('id', $issuerIds)->pluck('channel_id')->map(fn ($id): int => (int) $id)->all()
+            : (isset($state['channel_ids']['leo']) ? [(int) $state['channel_ids']['leo']] : []);
+        foreach ($targets as $channelId) {
+            if (! in_array($channelId, $channelIds, true)) throw new \DomainException('UAT_ACCESS_INVENTORY_OTP_ISSUER_SCOPE_INVALID');
+            if ($channel = ApiConsumerChannel::query()->find($channelId)) $lifecycle->revokeOtp($operator, $channel, self::APPROVAL);
+        }
     }
 
     /** @return array{user_ids: array<string,int>, identities: array<string,string>} */
@@ -449,6 +486,7 @@ final class AkubicaUatAccessProvisioner
     private function revokeCreated(User $operator, array $created, ConsumerLifecycle $lifecycle): void
     {
         foreach ($this->flattenIds($created['v1_delegations'] ?? []) as $id) $this->revokeModel($operator, ApiConsumerDelegation::class, $id, $lifecycle);
+        $this->revokeV1OtpIssuers($operator, ['v1_delegate_user_id' => $created['v1_delegate_user_id'] ?? null, 'channel_ids' => $created['channels'], 'v1_otp_issuer_ids' => $created['v1_otp_issuers'] ?? []], $lifecycle);
         foreach (array_reverse(array_values($created['scenario_bindings'])) as $id) $this->revokeModel($operator, ApiConsumerTokenBinding::class, $id, $lifecycle);
         foreach (array_reverse(array_values($created['scenario_delegations'])) as $id) $this->revokeModel($operator, ApiConsumerDelegation::class, $id, $lifecycle);
         foreach (array_reverse(array_values($created['bindings'])) as $ids) foreach ($ids as $id) $this->revokeModel($operator, ApiConsumerTokenBinding::class, $id, $lifecycle);
@@ -463,6 +501,8 @@ final class AkubicaUatAccessProvisioner
     private function purgeCreated(array $created): void
     {
         foreach ($this->flattenIds($created['v1_delegations'] ?? []) as $id) ApiConsumerDelegation::query()->whereKey($id)->delete();
+        // INT-029: the issuer row references the channel (FK); remove it first.
+        if (($created['v1_delegate_user_id'] ?? null) !== null && isset($created['channels']['leo'])) DB::table('api_consumer_otp_issuers')->where('channel_id', (int) $created['channels']['leo'])->delete();
         foreach (array_reverse(array_values($created['bindings'])) as $id) ApiConsumerTokenBinding::query()->whereKey($id)->delete();
         foreach (array_reverse(array_values($created['scenario_bindings'])) as $id) ApiConsumerTokenBinding::query()->whereKey($id)->delete();
         foreach (array_reverse(array_values($created['delegations'])) as $ids) foreach ($ids as $id) ApiConsumerDelegation::query()->whereKey($id)->delete();
@@ -506,6 +546,11 @@ final class AkubicaUatAccessProvisioner
             })->exists()) {
                 throw new \DomainException('UAT_ACCESS_CLEANUP_FAILED');
             }
+        }
+        if (($state['v1_delegate_user_id'] ?? null) !== null && DB::table('api_consumer_otp_issuers')->where(function ($query) use ($state): void {
+            $query->whereIn('id', $this->flattenIds($state['v1_otp_issuer_ids'] ?? []))->orWhereIn('channel_id', array_values(array_map('intval', $state['channel_ids'] ?? [])));
+        })->where('enabled', true)->exists()) {
+            throw new \DomainException('UAT_ACCESS_CLEANUP_FAILED');
         }
         $tokenIds = array_merge(array_values($state['token_ids']), array_values($state['scenario_token_ids'] ?? []));
         if (PersonalAccessToken::query()->whereIn('id', $tokenIds)->exists()) {
@@ -567,7 +612,7 @@ final class AkubicaUatAccessProvisioner
                 'scenario_binding_ids' => $state['scenario_binding_ids'] ?? [],
                 'scenario_token_ids' => $state['scenario_token_ids'] ?? [],
                 'expires_at' => $state['expires_at'] ?? null,
-            ] + $this->v1StateKeys($state['v1_delegation_ids'] ?? [], $state['v1_delegate_user_id'] ?? null),
+            ] + $this->v1StateKeys($state['v1_delegation_ids'] ?? [], $state['v1_delegate_user_id'] ?? null, $state['v1_otp_issuer_ids'] ?? []),
         ];
         $this->atomicWrite($this->inventoryPath($namespace), json_encode($inventory, JSON_THROW_ON_ERROR));
     }
@@ -593,15 +638,15 @@ final class AkubicaUatAccessProvisioner
             'scenario_binding_ids' => $created['scenario_bindings'] ?? [],
             'scenario_token_ids' => $created['scenario_tokens'] ?? [],
             'expires_at' => $expiresAt->toIso8601String(),
-        ] + $this->v1StateKeys($created['v1_delegations'] ?? [], $created['v1_delegate_user_id'] ?? null);
+        ] + $this->v1StateKeys($created['v1_delegations'] ?? [], $created['v1_delegate_user_id'] ?? null, $created['v1_otp_issuers'] ?? []);
     }
 
-    /** INT-028 keys exist only when the opt-in delegate was requested. */
-    private function v1StateKeys(array $delegationIds, mixed $userId): array
+    /** INT-028/INT-029 keys exist only when the opt-in delegate was requested. */
+    private function v1StateKeys(array $delegationIds, mixed $userId, array $otpIssuerIds = []): array
     {
         if ($userId === null) return [];
 
-        return ['v1_delegate_user_id' => (int) $userId, 'v1_delegation_ids' => $delegationIds];
+        return ['v1_delegate_user_id' => (int) $userId, 'v1_delegation_ids' => $delegationIds, 'v1_otp_issuer_ids' => $otpIssuerIds];
     }
 
     private function assertInventoryReferences(array $state, bool $allowMissing): void
@@ -612,7 +657,7 @@ final class AkubicaUatAccessProvisioner
                 if ((int) $id <= 0) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
             }
         }
-        foreach (['delegation_ids', 'binding_ids', 'scenario_delegation_ids', 'scenario_binding_ids', 'v1_delegation_ids'] as $key) {
+        foreach (['delegation_ids', 'binding_ids', 'scenario_delegation_ids', 'scenario_binding_ids', 'v1_delegation_ids', 'v1_otp_issuer_ids'] as $key) {
             $values = collect($state[$key] ?? [])->flatten()->all();
             foreach ($values as $id) {
                 if (! is_int($id) && ! ctype_digit((string) $id)) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
@@ -646,6 +691,10 @@ final class AkubicaUatAccessProvisioner
         if ($foreignBinding) throw new \DomainException('UAT_ACCESS_INVENTORY_BINDING_SCOPE_INVALID');
         if (ApiConsumerTokenBinding::query()->whereIn('id', $bindingIds)->whereNotIn('channel_id', $channelIds)->exists()) throw new \DomainException('UAT_ACCESS_INVENTORY_BINDING_CHANNEL_INVALID');
         if (ApiConsumerTokenBinding::query()->whereIn('id', $bindingIds)->whereNotIn('delegation_id', $delegationIds)->exists()) throw new \DomainException('UAT_ACCESS_INVENTORY_BINDING_DELEGATION_INVALID');
+        $otpIssuerIds = $this->flattenIds($state['v1_otp_issuer_ids'] ?? []);
+        if ($otpIssuerIds !== [] && DB::table('api_consumer_otp_issuers')->whereIn('id', $otpIssuerIds)->where(function ($query) use ($consumerIds, $channelIds): void {
+            $query->whereNotIn('consumer_id', $consumerIds)->orWhereNotIn('channel_id', $channelIds);
+        })->exists()) throw new \DomainException('UAT_ACCESS_INVENTORY_OTP_ISSUER_SCOPE_INVALID');
         $credentialIds = array_values(array_map('intval', $state['credential_ids'] ?? []));
         if (ApiConsumerCredential::query()->whereIn('id', $credentialIds)->where(function ($query) use ($consumerIds, $channelIds): void {
             $query->whereNotIn('consumer_id', $consumerIds)->orWhereNotIn('channel_id', $channelIds);

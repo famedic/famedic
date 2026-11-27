@@ -18,7 +18,7 @@ final class ProvisionAkubicaUatAccessCommand extends Command
         {--reset : Revocar y limpiar sólo el estado del namespace}
         {--scenario= : Perfil adicional explícito (functional-window-2)}
         {--confirm= : Confirmación exacta del namespace}
-        {--delegate-v1-user= : INT-028: id de un usuario existente de akubica-uat-v1 a delegar en el consumer/canal Leo (sólo functional-window-2-continuity; no aplica a --reset)}';
+        {--delegate-v1-user= : INT-028/INT-029: id de un usuario existente de akubica-uat-v1 a delegar en el consumer/canal Leo; también autoriza el emisor OTP de ese canal hasta el vencimiento de la credencial Leo y --reset lo revoca (sólo functional-window-2-continuity; no aplica a --reset)}';
 
     public function handle(AkubicaUatAccessProvisioner $provisioner): int
     {
