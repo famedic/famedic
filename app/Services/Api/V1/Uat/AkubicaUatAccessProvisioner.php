@@ -81,18 +81,28 @@ final class AkubicaUatAccessProvisioner
         'leo_membership_none_olab' => [
             'checkout:prepare', 'cart:laboratory:read',
         ],
+        // INT-028 (opt-in): the akubica-uat-v1 user whose phone the operator
+        // controls only needs one Leo delegation so verify-code (A10) can
+        // enroll it; A10r reads memberships/status with the issued Bearer.
+        'leo_v1_otp_delegate' => [
+            'memberships:read',
+        ],
     ];
 
-    public function dryRun(string $namespace, ?User $operator, string $scenario = ''): array
+    private const V1_DELEGATE_KEY = 'leo_v1_otp_delegate';
+    private const V1_DELEGATE_ROLE = 'v1_otp_delegate';
+
+    public function dryRun(string $namespace, ?User $operator, string $scenario = '', ?int $v1UserId = null): array
     {
         $context = $this->context($namespace);
+        $v1Delegate = $v1UserId === null ? null : $this->v1DelegateContext($scenario, $v1UserId);
         $authorized = $operator !== null && Gate::forUser($operator)->allows('manageApiConsumerRegistry');
 
         $scenarioIdentities = $this->isScenario($scenario)
             ? $this->scenarioContext($namespace, $scenario)['user_ids']
             : [];
 
-        return [
+        $plan = [
             'namespace' => $namespace,
             'operator_authorized' => $authorized,
             'identities' => $context['identities'],
@@ -127,12 +137,26 @@ final class AkubicaUatAccessProvisioner
             'credentials' => 'created only by apply; plaintext never emitted',
             'expires_at' => Carbon::now()->addMinutes($this->ttlMinutes())->toIso8601String(),
         ];
+        if ($v1Delegate === null) return $plan;
+        // Only present when --delegate-v1-user is given; default output is unchanged.
+        $plan['effects']['v1_delegations'] = 1;
+        $plan['effects']['v1_tokens'] = 0;
+        $plan['v1_delegation'] = [
+            'identity' => 'UAT-'.AkubicaUatFixtureContract::NAMESPACE.'-'.$v1Delegate['role'].'-U'.$v1Delegate['user_id'],
+            'profile' => 'leo',
+            'capabilities' => self::WINDOW2_CAPABILITIES[self::V1_DELEGATE_KEY],
+            'user_changes' => 0,
+        ];
+
+        return $plan;
     }
 
-    public function apply(string $namespace, User $operator, string $scenario = ''): array
+    public function apply(string $namespace, User $operator, string $scenario = '', ?int $v1UserId = null): array
     {
         $this->assertNamespace($namespace);
         Gate::forUser($operator)->authorize('manageApiConsumerRegistry');
+        // Validate the opt-in v1 delegate before any read of state or write.
+        $v1Delegate = $v1UserId === null ? null : $this->v1DelegateContext($scenario, $v1UserId);
         $state = $this->readState($namespace);
         $stateFromInventory = false;
         if ($state !== null) {
@@ -161,6 +185,7 @@ final class AkubicaUatAccessProvisioner
         if ($state !== null) {
             $this->assertState($state, $namespace, $stateFromInventory);
             if (($state['scenario'] ?? '') !== $scenario) throw new \DomainException('UAT_ACCESS_SCENARIO_MISMATCH');
+            if ((isset($state['v1_delegate_user_id']) ? (int) $state['v1_delegate_user_id'] : null) !== $v1UserId) throw new \DomainException('UAT_ACCESS_V1_DELEGATE_MISMATCH');
 
             return ['status' => 'idempotent', 'namespace' => $namespace, 'scenario' => $scenario, 'created' => 0, 'active_credentials' => count($state['token_ids'])];
         }
@@ -172,7 +197,12 @@ final class AkubicaUatAccessProvisioner
         if ($this->isScenario($scenario)) {
             $inventoryUserIds = array_merge($inventoryUserIds, $this->scenarioContext($namespace, $scenario)['user_ids']);
         }
-        $created = ['consumers' => [], 'channels' => [], 'delegations' => [], 'credentials' => [], 'bindings' => [], 'tokens' => [], 'secrets' => [], 'scenario_delegations' => [], 'scenario_bindings' => [], 'scenario_tokens' => [], 'scenario_secrets' => []];
+        if ($v1Delegate !== null) {
+            if (in_array($v1Delegate['user_id'], array_map('intval', array_values($inventoryUserIds)), true)) throw new \DomainException('UAT_ACCESS_V1_DELEGATE_COLLISION');
+            $this->assertNoUnownedAccess([$v1Delegate['user_id']]);
+            $inventoryUserIds[self::V1_DELEGATE_ROLE] = $v1Delegate['user_id'];
+        }
+        $created = ['consumers' => [], 'channels' => [], 'delegations' => [], 'credentials' => [], 'bindings' => [], 'tokens' => [], 'secrets' => [], 'scenario_delegations' => [], 'scenario_bindings' => [], 'scenario_tokens' => [], 'scenario_secrets' => [], 'v1_delegations' => [], 'v1_delegate_user_id' => $v1Delegate['user_id'] ?? null];
         // Establish a recoverable, secret-free ledger before the first write.
         $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
         $registry = app(ConsumerRegistryWriter::class);
@@ -238,6 +268,18 @@ final class AkubicaUatAccessProvisioner
                 }
             }
 
+            if ($v1Delegate !== null) {
+                // Delegation only: no PAT, no binding, no change to the v1 user,
+                // its phone, customer or fixtures. verify-code issues the Bearer.
+                $user = User::query()->findOrFail($v1Delegate['user_id']);
+                $channel = ApiConsumerChannel::query()->findOrFail($created['channels']['leo']);
+                $consumer = ApiConsumer::query()->findOrFail($created['consumers']['leo']);
+                $delegation = $registry->delegate($operator, $channel, $user, self::WINDOW2_CAPABILITIES[self::V1_DELEGATE_KEY], Carbon::parse($consumer->expires_at));
+                $created['v1_delegations'][self::V1_DELEGATE_KEY] = $delegation->id;
+                $this->writeInventorySnapshot($namespace, $scenario, $inventoryUserIds, $created, $expiresAt, 'active');
+                $lifecycle->transition($operator, $delegation, true, self::APPROVAL);
+            }
+
             $state = [
                 'namespace' => $namespace,
                 'user_ids' => $inventoryUserIds,
@@ -255,11 +297,11 @@ final class AkubicaUatAccessProvisioner
                 'scenario_token_ids' => $created['scenario_tokens'],
                 'scenario_encrypted_secrets' => $created['scenario_secrets'],
                 'expires_at' => $expiresAt->toIso8601String(),
-            ];
+            ] + $this->v1StateKeys($created['v1_delegations'], $created['v1_delegate_user_id']);
             $this->writeState($namespace, $state);
             $this->writeInventory($namespace, $state, 'active');
 
-            return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'created' => ['consumers' => 2, 'channels' => 2, 'delegations' => 4 + count($created['scenario_delegations']), 'credentials' => 2, 'bindings' => 4 + count($created['scenario_bindings']), 'tokens' => count($created['tokens']) + count($created['scenario_tokens'])], 'external_calls' => 0];
+            return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'created' => ['consumers' => 2, 'channels' => 2, 'delegations' => 4 + count($created['scenario_delegations']) + count($created['v1_delegations']), 'credentials' => 2, 'bindings' => 4 + count($created['scenario_bindings']), 'tokens' => count($created['tokens']) + count($created['scenario_tokens'])], 'external_calls' => 0];
         } catch (\Throwable $exception) {
             try {
                 $this->revokeCreated($operator, $created, $lifecycle);
@@ -286,6 +328,14 @@ final class AkubicaUatAccessProvisioner
         $this->assertState($state, $namespace, true);
         if (($state['scenario'] ?? '') !== $scenario) throw new \DomainException('UAT_ACCESS_SCENARIO_MISMATCH');
         $lifecycle = app(ConsumerLifecycle::class);
+        $v1DelegationIds = $this->flattenIds($state['v1_delegation_ids'] ?? []);
+        if ($v1DelegationIds !== []) {
+            // Bindings that verify-code attached to the v1 delegation are revoked
+            // (not deleted); the PAT row stays and is unusable once revoked.
+            $derived = ApiConsumerTokenBinding::query()->whereIn('delegation_id', $v1DelegationIds)->whereIn('consumer_id', array_map('intval', array_values($state['consumer_ids'])))->whereNull('revoked_at')->pluck('id');
+            foreach ($derived as $id) $this->revokeModel($operator, ApiConsumerTokenBinding::class, (int) $id, $lifecycle);
+            foreach ($v1DelegationIds as $id) $this->revokeModel($operator, ApiConsumerDelegation::class, $id, $lifecycle);
+        }
         foreach (array_reverse(array_values($state['scenario_binding_ids'] ?? [])) as $id) $this->revokeModel($operator, ApiConsumerTokenBinding::class, $id, $lifecycle);
         foreach (array_reverse(array_values($state['scenario_delegation_ids'] ?? [])) as $id) $this->revokeModel($operator, ApiConsumerDelegation::class, $id, $lifecycle);
         foreach ($state['scenario_token_ids'] ?? [] as $id) PersonalAccessToken::query()->whereKey($id)->delete();
@@ -299,7 +349,7 @@ final class AkubicaUatAccessProvisioner
         $this->writeInventory($namespace, $state, 'completed');
         Storage::disk('local')->delete($this->statePath($namespace));
 
-        return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'deleted' => 2 + 2 + 4 + 2 + 4 + 6 + count($state['scenario_binding_ids'] ?? []) + count($state['scenario_delegation_ids'] ?? []) + count($state['scenario_token_ids'] ?? [])];
+        return ['status' => 'ok', 'namespace' => $namespace, 'scenario' => $scenario, 'deleted' => 2 + 2 + 4 + 2 + 4 + 6 + count($state['scenario_binding_ids'] ?? []) + count($state['scenario_delegation_ids'] ?? []) + count($state['scenario_token_ids'] ?? []) + count($v1DelegationIds)];
     }
 
     /** @return array{user_ids: array<string,int>, identities: array<string,string>} */
@@ -325,6 +375,23 @@ final class AkubicaUatAccessProvisioner
         $userIds = collect($roles)->mapWithKeys(fn (string $role): array => [$role => (int) ($ids[$role] ?? 0)])->all();
         if (in_array(0, $userIds, true)) throw new \DomainException('UAT_ACCESS_SCENARIO_IDENTITIES_INCOMPLETE');
         return ['user_ids' => $userIds];
+    }
+
+    /** @return array{user_id:int, role:string} */
+    private function v1DelegateContext(string $scenario, int $userId): array
+    {
+        if ($scenario !== self::WINDOW2_CONTINUITY_SCENARIO) throw new \DomainException('UAT_ACCESS_V1_DELEGATE_SCENARIO_NOT_ALLOWED');
+        if ($userId <= 0) throw new \DomainException('UAT_ACCESS_V1_DELEGATE_INVALID');
+        $manifest = AkubicaUatFixtureManifest::query()->where('namespace', AkubicaUatFixtureContract::NAMESPACE)->first();
+        if (! $manifest || $manifest->status !== AkubicaUatFixtureContract::STATUS_ACTIVE || ! is_array($manifest->metadata)) throw new \DomainException('UAT_ACCESS_V1_FIXTURES_NOT_ACTIVE');
+        $roles = array_keys(array_filter((array) data_get($manifest->metadata, 'ids.users', []), fn ($id): bool => (int) $id === $userId));
+        if (count($roles) !== 1) throw new \DomainException('UAT_ACCESS_V1_USER_NOT_IN_MANIFEST');
+        $user = User::query()->find($userId);
+        if (! $user) throw new \DomainException('UAT_ACCESS_V1_USER_NOT_FOUND');
+        if ($user->phone_verified_at === null) throw new \DomainException('UAT_ACCESS_V1_USER_NOT_VERIFIED');
+        if (\App\Models\Customer::query()->where('user_id', $userId)->limit(2)->count() !== 1) throw new \DomainException('UAT_ACCESS_V1_USER_CUSTOMER_INVALID');
+
+        return ['user_id' => $userId, 'role' => (string) $roles[0]];
     }
 
     private function isScenario(string $scenario): bool
@@ -381,6 +448,7 @@ final class AkubicaUatAccessProvisioner
 
     private function revokeCreated(User $operator, array $created, ConsumerLifecycle $lifecycle): void
     {
+        foreach ($this->flattenIds($created['v1_delegations'] ?? []) as $id) $this->revokeModel($operator, ApiConsumerDelegation::class, $id, $lifecycle);
         foreach (array_reverse(array_values($created['scenario_bindings'])) as $id) $this->revokeModel($operator, ApiConsumerTokenBinding::class, $id, $lifecycle);
         foreach (array_reverse(array_values($created['scenario_delegations'])) as $id) $this->revokeModel($operator, ApiConsumerDelegation::class, $id, $lifecycle);
         foreach (array_reverse(array_values($created['bindings'])) as $ids) foreach ($ids as $id) $this->revokeModel($operator, ApiConsumerTokenBinding::class, $id, $lifecycle);
@@ -394,6 +462,7 @@ final class AkubicaUatAccessProvisioner
 
     private function purgeCreated(array $created): void
     {
+        foreach ($this->flattenIds($created['v1_delegations'] ?? []) as $id) ApiConsumerDelegation::query()->whereKey($id)->delete();
         foreach (array_reverse(array_values($created['bindings'])) as $id) ApiConsumerTokenBinding::query()->whereKey($id)->delete();
         foreach (array_reverse(array_values($created['scenario_bindings'])) as $id) ApiConsumerTokenBinding::query()->whereKey($id)->delete();
         foreach (array_reverse(array_values($created['delegations'])) as $ids) foreach ($ids as $id) ApiConsumerDelegation::query()->whereKey($id)->delete();
@@ -429,7 +498,7 @@ final class AkubicaUatAccessProvisioner
             }
         }
         foreach ([
-            ApiConsumerDelegation::class => array_merge($this->flattenIds($state['delegation_ids']), $this->flattenIds($state['scenario_delegation_ids'] ?? [])),
+            ApiConsumerDelegation::class => array_merge($this->flattenIds($state['delegation_ids']), $this->flattenIds($state['scenario_delegation_ids'] ?? []), $this->flattenIds($state['v1_delegation_ids'] ?? [])),
             ApiConsumerTokenBinding::class => array_merge($this->flattenIds($state['binding_ids']), $this->flattenIds($state['scenario_binding_ids'] ?? [])),
         ] as $class => $ids) {
             if ($class::query()->whereIn('id', $ids)->where(function ($query): void {
@@ -498,7 +567,7 @@ final class AkubicaUatAccessProvisioner
                 'scenario_binding_ids' => $state['scenario_binding_ids'] ?? [],
                 'scenario_token_ids' => $state['scenario_token_ids'] ?? [],
                 'expires_at' => $state['expires_at'] ?? null,
-            ],
+            ] + $this->v1StateKeys($state['v1_delegation_ids'] ?? [], $state['v1_delegate_user_id'] ?? null),
         ];
         $this->atomicWrite($this->inventoryPath($namespace), json_encode($inventory, JSON_THROW_ON_ERROR));
     }
@@ -524,7 +593,15 @@ final class AkubicaUatAccessProvisioner
             'scenario_binding_ids' => $created['scenario_bindings'] ?? [],
             'scenario_token_ids' => $created['scenario_tokens'] ?? [],
             'expires_at' => $expiresAt->toIso8601String(),
-        ];
+        ] + $this->v1StateKeys($created['v1_delegations'] ?? [], $created['v1_delegate_user_id'] ?? null);
+    }
+
+    /** INT-028 keys exist only when the opt-in delegate was requested. */
+    private function v1StateKeys(array $delegationIds, mixed $userId): array
+    {
+        if ($userId === null) return [];
+
+        return ['v1_delegate_user_id' => (int) $userId, 'v1_delegation_ids' => $delegationIds];
     }
 
     private function assertInventoryReferences(array $state, bool $allowMissing): void
@@ -535,7 +612,7 @@ final class AkubicaUatAccessProvisioner
                 if ((int) $id <= 0) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
             }
         }
-        foreach (['delegation_ids', 'binding_ids', 'scenario_delegation_ids', 'scenario_binding_ids'] as $key) {
+        foreach (['delegation_ids', 'binding_ids', 'scenario_delegation_ids', 'scenario_binding_ids', 'v1_delegation_ids'] as $key) {
             $values = collect($state[$key] ?? [])->flatten()->all();
             foreach ($values as $id) {
                 if (! is_int($id) && ! ctype_digit((string) $id)) throw new \DomainException('UAT_ACCESS_INVENTORY_ID_INVALID');
@@ -555,7 +632,7 @@ final class AkubicaUatAccessProvisioner
     {
         $consumerIds = array_values(array_map('intval', $state['consumer_ids'] ?? []));
         $channelIds = array_values(array_map('intval', $state['channel_ids'] ?? []));
-        $delegationIds = $this->flattenIds(array_merge(array_values($state['delegation_ids'] ?? []), array_values($state['scenario_delegation_ids'] ?? [])));
+        $delegationIds = $this->flattenIds(array_merge(array_values($state['delegation_ids'] ?? []), array_values($state['scenario_delegation_ids'] ?? []), array_values($state['v1_delegation_ids'] ?? [])));
         $bindingIds = $this->flattenIds(array_merge(array_values($state['binding_ids'] ?? []), array_values($state['scenario_binding_ids'] ?? [])));
         if (! $allowMissing && $consumerIds !== [] && ApiConsumer::query()->whereIn('id', $consumerIds)->count() !== count($consumerIds)) throw new \DomainException('UAT_ACCESS_INVENTORY_CONSUMER_REFERENCE_INVALID');
         if (! $allowMissing && $channelIds !== [] && ApiConsumerChannel::query()->whereIn('id', $channelIds)->count() !== count($channelIds)) throw new \DomainException('UAT_ACCESS_INVENTORY_CHANNEL_REFERENCE_INVALID');
