@@ -24,7 +24,9 @@ class IssueAkubicaTokenAction
 
         $tokenResult = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $expiresAt) {
             $grant = app(\App\Services\Api\V1\Auth\OtpConsumerEnrollment::class)->grant($user, request());
-            $expiry = $grant ? \Illuminate\Support\Carbon::createFromTimestampUTC(min($expiresAt->timestamp, $grant->expiresAt)) : $expiresAt;
+            // INT-032: build the capped instant in the app timezone. A UTC-zoned Carbon is persisted by Eloquent as UTC
+            // wall-clock time and read back in the app timezone, which pushed PAT/binding expiry 6 h late in QA.
+            $expiry = $grant ? \Illuminate\Support\Carbon::createFromTimestamp(min($expiresAt->timestamp, $grant->expiresAt), config('app.timezone')) : $expiresAt;
             $token = $user->createToken(config('akubica.token_name'), $grant?->capabilities ?? config('akubica.token_abilities'), ($grant || $this->shouldPersistExpiresAt()) ? $expiry : null);
             if ($grant) {
                 app(\App\Services\Api\V1\Auth\ConsumerTokenBindingWriter::class)->bind($grant->operator, $token->accessToken, $grant->delegation, $grant->capabilities, $expiry);

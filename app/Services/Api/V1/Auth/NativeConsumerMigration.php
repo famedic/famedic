@@ -19,7 +19,8 @@ final class NativeConsumerMigration
         if (! $machine || (string) $delegation->consumer_id !== $machine->consumerId || (string) $delegation->channel_id !== $machine->channelId || ! $expires->isFuture() || $expires->timestamp > $machine->expiresAt) {
             throw new \Illuminate\Auth\Access\AuthorizationException;
         }
-        $expires = Carbon::createFromTimestampUTC($expires->timestamp);
+        // INT-032: same instant, in the app timezone, so the renewed PAT and binding persist the requested expiry (not +6 h).
+        $expires = Carbon::createFromTimestamp($expires->timestamp, config('app.timezone'));
 
         return DB::transaction(function () use ($operator, $delegation, $expires) {
             $d = $delegation->newQuery()->lockForUpdate()->findOrFail($delegation->id);
