@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
 
+
 function p0a55EnableSecureRegister(): void
 {
     enableRegisterOtpWithoutDelivery();
@@ -50,6 +51,9 @@ beforeEach(function () {
 });
 
 // ── A. Feature gating ──────────────────────────────────────────────────
+
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
 
 test('p0a55 flags off keep legacy verify email+code token flow', function () {
     $email = 'legacy.verify.p0a55@ejemplo.test';
@@ -104,7 +108,7 @@ test('p0a55 happy path creates accounts consumes intent and issues one token', f
     $beforeUsers = User::query()->count();
     $beforeRa = RegularAccount::query()->count();
     $beforeCustomers = Customer::query()->count();
-    $beforeTokens = PersonalAccessToken::query()->count();
+    $beforeTokens = akubicaNonHarnessTokenCount();
 
     $response = $this->postJson('/api/v1/auth/register/verify-code', [
         'challenge_id' => $start['challenge_id'],
@@ -122,7 +126,7 @@ test('p0a55 happy path creates accounts consumes intent and issues one token', f
         ->and(User::query()->count())->toBe($beforeUsers + 1)
         ->and(RegularAccount::query()->count())->toBe($beforeRa + 1)
         ->and(Customer::query()->count())->toBe($beforeCustomers + 1)
-        ->and(PersonalAccessToken::query()->count())->toBe($beforeTokens + 1);
+        ->and(akubicaNonHarnessTokenCount())->toBe($beforeTokens + 1);
 
     $user = User::query()->where('email', 'happy.p0a55@ejemplo.test')->first();
     expect($user)->not->toBeNull()
@@ -218,7 +222,7 @@ test('p0a55 wrong otp does not create accounts or token', function () {
         ->assertJsonPath('error.code', 'INVALID_CODE');
 
     expect(User::query()->where('email', 'wrong.p0a55@ejemplo.test')->exists())->toBeFalse()
-        ->and(PersonalAccessToken::query()->count())->toBe(0)
+        ->and(akubicaNonHarnessTokenCount())->toBe(0)
         ->and(AkubicaRegistrationIntent::query()->where('status', 'PENDING')->count())->toBe(1);
 });
 
@@ -247,10 +251,10 @@ test('p0a55 decoy verify never creates accounts or token', function () {
     $response->assertStatus(422)
         ->assertJsonPath('error.code', 'INVALID_CODE');
 
-    expect(User::query()->where('email', '!=', 'decoy.owner.p0a55@ejemplo.test')->count())->toBe(0)
+    expect(User::query()->where('email', '!=', 'decoy.owner.p0a55@ejemplo.test')->count())->toBe(akubicaHarnessBaseline('users'))
         ->and(OtpChallenge::query()->count())->toBe(0)
         ->and(AkubicaRegistrationIntent::query()->count())->toBe(0)
-        ->and(PersonalAccessToken::query()->count())->toBe(0)
+        ->and(akubicaNonHarnessTokenCount())->toBe(0)
         ->and(json_encode($response->json()))->not->toContain('decoy');
 });
 
@@ -321,7 +325,7 @@ test('p0a55 mid verify collision returns invalid code without accounts', functio
 
     expect(json_encode($response->json()))->not->toContain('EMAIL_ALREADY')
         ->and(json_encode($response->json()))->not->toContain('race.p0a55')
-        ->and(PersonalAccessToken::query()->count())->toBe(0);
+        ->and(akubicaNonHarnessTokenCount())->toBe(0);
 
     $intent = AkubicaRegistrationIntent::query()->first();
     expect($intent->status)->toBe(AkubicaRegistrationIntentStatus::Invalidated)
@@ -378,9 +382,9 @@ test('p0a55 create failure rolls back without consuming challenge or intent', fu
     ])->assertStatus(500);
 
     expect(User::query()->where('email', 'fail.create.p0a55@ejemplo.test')->exists())->toBeFalse()
-        ->and(RegularAccount::query()->count())->toBe(0)
-        ->and(Customer::query()->count())->toBe(0)
-        ->and(PersonalAccessToken::query()->count())->toBe(0);
+        ->and(RegularAccount::query()->count())->toBe(akubicaHarnessBaseline('regular_accounts'))
+        ->and(Customer::query()->count())->toBe(akubicaHarnessBaseline('customers'))
+        ->and(akubicaNonHarnessTokenCount())->toBe(0);
 
     $challenge = OtpChallenge::query()->where('public_id', $start['challenge_id'])->first();
     $intent = AkubicaRegistrationIntent::query()->where('otp_challenge_id', $challenge->id)->first();
@@ -407,7 +411,7 @@ test('p0a55 token issuance failure leaves consumed registration without second t
         ->assertJsonPath('error.code', 'LOGIN_REQUIRED');
 
     expect(User::query()->where('email', 'token.fail.p0a55@ejemplo.test')->exists())->toBeTrue()
-        ->and(PersonalAccessToken::query()->count())->toBe(0);
+        ->and(akubicaNonHarnessTokenCount())->toBe(0);
 
     $challenge = OtpChallenge::query()->where('public_id', $start['challenge_id'])->first();
     expect($challenge->consumed_at)->not->toBeNull();
@@ -441,7 +445,7 @@ test('p0a55 sequential double submit creates one account and one token', functio
         ->assertJsonPath('error.code', 'CODE_ALREADY_USED');
 
     expect(User::query()->where('email', 'double.p0a55@ejemplo.test')->count())->toBe(1)
-        ->and(PersonalAccessToken::query()->count())->toBe(1)
+        ->and(akubicaNonHarnessTokenCount())->toBe(1)
         ->and($first->json('data.token'))->not->toBeNull()
         ->and($second->json())->not->toHaveKey('data.token');
 });

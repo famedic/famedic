@@ -15,6 +15,9 @@ beforeEach(function () {
     disableAllAkubicaOtpFeatures();
 });
 
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
+
 test('sms registration verification marks phone verified and eligible login sends exactly one sms', function () {
     enableRegisterOtpWithFakeDelivery();
     app()->instance(OtpCodeGenerator::class, new FakeOtpCodeGenerator('654321'));

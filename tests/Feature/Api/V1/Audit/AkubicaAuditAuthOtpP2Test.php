@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
 
+
 beforeEach(function () {
     Carbon::setTestNow(Carbon::parse('2026-08-03 20:00:00'));
     Notification::fake();
@@ -60,6 +61,9 @@ function auditAssertNoSecrets(?ApiV1AuditEvent $event = null): void
             ->and($blob)->not->toContain('idem-key-');
     }
 }
+
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
 
 test('flag OFF login otp works and inserts no audit rows', function () {
     enableLoginOtpWithFakeDelivery();
@@ -246,7 +250,7 @@ test('step-up results and invoices request verify audit with purpose metadata', 
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $token = $user->createToken('akubica-test')->plainTextToken;
+    $token = akubicaRegisteredToken($user)->plainTextToken;
     $order = createAkubicaLaboratoryPurchase($user);
 
     $corr = 'corr-audit-stepup-results';
@@ -318,7 +322,7 @@ test('step-up ownership miss audits rejection without foreign resource leak beyo
     enableResultsStepUpWithFakeDelivery();
     enableAuthOtpAudit();
 
-    [$user, $token] = akubicaCustomerToken(User::factory()->withRegularCustomer()->create([
+    [$user, $token] = akubicaRouteCustomerToken(User::factory()->withRegularCustomer()->create([
         'phone' => '5512345678',
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
@@ -462,7 +466,7 @@ test('idempotent login request-code replay does not duplicate SMS challenge or s
 
 test('auth otp audit does not instrument cart checkout or secure-link routes', function () {
     enableAuthOtpAudit();
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/cart?brand=olab', authHeaders($token))->assertOk();
     $this->getJson('/api/v1/checkout/prepare?brand=olab', authHeaders($token));

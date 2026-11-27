@@ -105,6 +105,8 @@ trait GdaResultsStorageIsolatedSchema
             $table->string('email_recipient_email')->nullable();
             $table->text('email_error')->nullable();
             $table->timestamp('email_attempted_at')->nullable();
+            // INT-031 (RC09): column added by migration 2025_11_27_180249_add_read_at_to_laboratory_notifications_table.
+            $table->timestamp('read_at')->nullable()->index();
             $table->timestamps();
             $table->softDeletes();
         });

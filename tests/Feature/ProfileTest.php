@@ -44,7 +44,9 @@ test('contact info can be updated', function () {
         ->actingAs($user)
         ->put('/contact-info', [
             'email' => 'new@email.com',
-            'phone' => '987654321',
+            // INT-031 (RC13): contact-info validation now requires a valid phone plus phone_country.
+            'phone' => '5598765432',
+            'phone_country' => 'MX',
         ]);
 
     $response
@@ -54,19 +56,22 @@ test('contact info can be updated', function () {
     $user->refresh();
 
     $this->assertSame('new@email.com', $user->email);
-    $this->assertSame('987654321', $user->phone);
+    $this->assertSame('5598765432', $user->getRawOriginal('phone'));
     $this->assertNull($user->email_verified_at);
     $this->assertNull($user->phone_verified_at);
 });
 
 test('email and phone verification status is unchanged when unchanged', function () {
-    $user = User::factory()->create();
+    // INT-031 (RC13 + fase 2): the scenario needs a user whose email AND phone are already verified; the factory
+    // default has neither, so use withCompleteProfile() (verified phone + verified email). Assertions unchanged.
+    $user = User::factory()->withCompleteProfile()->create();
 
     $response = $this
         ->actingAs($user)
         ->put('/contact-info', [
             'email' => $user->email,
-            'phone' => $user->phone,
+            'phone' => $user->getRawOriginal('phone'),
+            'phone_country' => $user->phone_country,
         ]);
 
     $response

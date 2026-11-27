@@ -53,7 +53,8 @@ test('password can be reset with valid token', function () {
 
         $response
             ->assertSessionHasNoErrors()
-            ->assertRedirect(route('login'));
+            // INT-031 (RC13): NewPasswordController now signs the user in and redirects home after a successful reset.
+            ->assertRedirect(route('home'));
 
         return true;
     });

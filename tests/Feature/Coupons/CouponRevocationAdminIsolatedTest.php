@@ -42,6 +42,20 @@ class CouponRevocationAdminIsolatedTest extends TestCase
         parent::setUp();
 
         bootstrapIsolatedCouponRevocationSchema();
+        // INT-031 (RC09): the cancel/revoke endpoints load the beneficiary customer; create the isolated customers table.
+        bootstrapIsolatedCouponBeneficiaryReportSchema();
+        // INT-031 (fase 2): EnsureUserHasAdminAccount (admin navigation) and CouponPolicy call hasPermissionTo('<name>');
+        // Spatie throws PermissionDoesNotExist (500) when the permission ROW is missing, which only happens in this
+        // isolated schema (no permission seed). Create those rows WITHOUT granting any of them, so the endpoint tests
+        // still exercise a real "administrator without cupones.edit" denial.
+        $int031Permissions = [];
+        preg_match_all("/hasPermissionTo\\('([^']+)'\\)/", (string) file_get_contents(app_path('Http/Middleware/EnsureUserHasAdminAccount.php')), $int031Matches);
+        $int031Permissions = array_merge($int031Permissions, $int031Matches[1]);
+        preg_match_all("/'((?:cupones|coupons)\\.[a-z_.-]+)'/", (string) file_get_contents(app_path('Policies/CouponPolicy.php')), $int031Matches);
+        $int031Permissions = array_merge($int031Permissions, $int031Matches[1]);
+        foreach (array_unique($int031Permissions) as $int031Permission) {
+            Permission::query()->firstOrCreate(['name' => $int031Permission, 'guard_name' => 'web']);
+        }
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->couponService = app(CouponService::class);
@@ -254,7 +268,8 @@ class CouponRevocationAdminIsolatedTest extends TestCase
                 'coupon' => $parent->id,
                 'beneficiary' => $beneficiary->id,
             ]))
-            ->assertRedirect();
+            // INT-031 (fase 2): CouponController authorize('update', $coupon) -> CouponPolicy denies without cupones.edit -> 403.
+            ->assertForbidden();
 
         $this->assertSame(CouponBeneficiaryStatus::PendingUser, $beneficiary->fresh()->status);
         $this->assertNull($beneficiary->fresh()->cancelled_at);
@@ -272,7 +287,8 @@ class CouponRevocationAdminIsolatedTest extends TestCase
                 'coupon' => $child->id,
                 'couponUser' => $assignment->id,
             ]))
-            ->assertRedirect();
+            // INT-031 (fase 2): CouponController authorize('update', $coupon) -> CouponPolicy denies without cupones.edit -> 403.
+            ->assertForbidden();
 
         $this->assertTrue($child->fresh()->is_active);
         $this->assertGreaterThan(0, $child->fresh()->remaining_cents);
@@ -287,6 +303,9 @@ class CouponRevocationAdminIsolatedTest extends TestCase
             'guard_name' => 'web',
         ]);
         $administrator->givePermissionTo($permission);
+        // INT-031 (RC09): the admin layout asks hasPermissionTo('administrators.manage'), which throws when the
+        // permission row does not exist in the isolated schema. Create it WITHOUT granting it.
+        Permission::query()->firstOrCreate(['name' => 'administrators.manage', 'guard_name' => 'web']);
 
         return $user;
     }

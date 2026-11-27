@@ -2,6 +2,10 @@
 
 use App\Models\User;
 
+
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
+
 test('GET /api/v1/cart without token returns 401 JSON', function () {
     $response = $this->getJson('/api/v1/cart?brand=olab');
 

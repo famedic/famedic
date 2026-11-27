@@ -9,6 +9,11 @@ use App\Models\User;
 use App\Services\ActiveCampaign\CouponActiveCampaignPayloadBuilder;
 use App\Services\CouponService;
 
+// INT-031 (RC05): this Unit file reads and writes the schema; migrate it and roll back per test instead of
+// depending on a Feature test having migrated the database first.
+uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
+
+
 test('credit_assigned payload no contiene datos sensibles', function () {
     $couponService = Mockery::mock(CouponService::class);
     $couponService->shouldReceive('buildCheckoutCreditPresentation')

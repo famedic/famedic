@@ -454,7 +454,15 @@ test('billing.invoice_completed is not emitted on rollback', function () {
     $admin = User::factory()->create();
     $purchase = p7bLaboratoryPurchase($user);
 
-    Schema::rename('invoices', 'invoices_offline');
+    // INT-031 (fase 2, RC15): Schema::rename is DDL; on MySQL it implicitly commits the RefreshDatabase transaction
+    // and the action's nested savepoint then fails ("SAVEPOINT trans2 does not exist") instead of the invoice write.
+    // Simulate the same failure (invoice insert throws inside the action transaction) without DDL. Assertion unchanged.
+    $int031FailInvoiceWrite = true;
+    Invoice::creating(function () use (&$int031FailInvoiceWrite) {
+        if ($int031FailInvoiceWrite) {
+            throw new RuntimeException('INT-031 simulated invoices write failure');
+        }
+    });
     $before = BusinessAuditEvent::query()->count();
 
     try {
@@ -468,7 +476,7 @@ test('billing.invoice_completed is not emitted on rollback', function () {
     } catch (Throwable) {
         // expected
     } finally {
-        Schema::rename('invoices_offline', 'invoices');
+        $int031FailInvoiceWrite = false;
     }
 
     expect(BusinessAuditEvent::query()->count())->toBe($before);

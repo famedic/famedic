@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Queue;
 beforeEach(function () {
     Queue::fake();
 
-    Documentation::create([
+    // INT-031 (RC10): App\Models\Documentation declares no $fillable (model unchanged); seed the row explicitly.
+    Documentation::forceCreate([
         'privacy_policy' => 'Política de privacidad de prueba.',
         'terms_of_service' => 'Términos de servicio de prueba.',
     ]);

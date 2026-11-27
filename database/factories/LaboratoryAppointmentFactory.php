@@ -35,7 +35,8 @@ class LaboratoryAppointmentFactory extends Factory
                 'patient_maternal_lastname' => fake()->lastName(),
                 'patient_phone' => fake()->phoneNumber(),
                 'patient_birth_date' => fake()->date(),
-                'patient_gender' => fake()->randomElement(array_keys(config('mexicanstates'))),
+                // INT-031 (RC11): patient_gender is cast to App\Enums\Gender (int); it was drawn from the Mexican state keys.
+                'patient_gender' => fake()->randomElement(\App\Enums\Gender::cases())->value,
                 'confirmed_at' => $confirmedAt ?? fake()->dateTimeBetween('-1 month', 'now'),
                 'appointment_date' => $appointmentDate ?? fake()->dateTimeBetween('now', '+1 month'),
             ];

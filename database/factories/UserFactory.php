@@ -38,13 +38,17 @@ class UserFactory extends Factory
 
     public function withVerifiedPhone(?PhoneNumber $phone = null): static
     {
-        $phone ??= app(GeneratePhoneNumberAction::class)();
+        // INT-031 (RC12): draw the phone per created row; users.users_phone_country_phone_unique (2026_07_28_130000)
+        // rejected ->count(n)->withVerifiedPhone() because every row shared one generated number.
+        return $this->state(function (array $attributes) use ($phone) {
+            $number = $phone ?? app(GeneratePhoneNumberAction::class)();
 
-        return $this->state(fn(array $attributes) => [
-            'phone' => str_replace(' ', '', $phone->formatNational()),
-            'phone_country' => $phone->getCountry(),
-            'phone_verified_at' => now(),
-        ]);
+            return [
+                'phone' => str_replace(' ', '', $number->formatNational()),
+                'phone_country' => $number->getCountry(),
+                'phone_verified_at' => now(),
+            ];
+        });
     }
 
     public function withUnverifiedEmail(): static

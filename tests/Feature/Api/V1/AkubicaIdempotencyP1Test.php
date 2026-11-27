@@ -107,7 +107,7 @@ function idemReadyCheckout(User $user, LaboratoryBrand $brand = LaboratoryBrand:
 
 test('idempotency flag off ignores Idempotency-Key', function () {
     config()->set('api_v1.idempotency.enabled', false);
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     idemReadyCheckout($user);
 
     $this->postJson('/api/v1/checkout/payment-link', ['brand' => 'olab'], idemHeaders($token, idemKey('off')))
@@ -123,7 +123,7 @@ test('idempotency flag off ignores Idempotency-Key', function () {
 });
 
 test('idempotency without header keeps current behaviour', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     idemReadyCheckout($user);
 
     $this->postJson('/api/v1/checkout/payment-link', ['brand' => 'olab'], authHeaders($token))
@@ -136,7 +136,7 @@ test('idempotency without header keeps current behaviour', function () {
 });
 
 test('idempotency invalid header returns VALIDATION_ERROR', function () {
-    [, $token] = akubicaCustomerToken();
+    [, $token] = akubicaRouteCustomerToken();
 
     $this->postJson('/api/v1/checkout/payment-link', ['brand' => 'olab'], array_merge(authHeaders($token), [
         IdempotencyKey::HEADER => 'bad key!',
@@ -158,7 +158,7 @@ test('idempotency config defaults are safe', function () {
 // ── Payment link ──────────────────────────────────────────────────────
 
 test('idempotency payment-link first creates one link and replay returns same url', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     idemReadyCheckout($user);
     $key = idemKey('pay');
     $corr = 'corr-pay-original1';
@@ -187,7 +187,7 @@ test('idempotency payment-link first creates one link and replay returns same ur
 });
 
 test('idempotency payment-link same key different payload conflicts', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     idemReadyCheckout($user);
     $key = idemKey('paydiff');
 
@@ -206,8 +206,8 @@ test('idempotency payment-link same key different payload conflicts', function (
 });
 
 test('idempotency payment-link cross-user isolation', function () {
-    [$userA, $tokenA] = akubicaCustomerToken();
-    [$userB, $tokenB] = akubicaCustomerToken();
+    [$userA, $tokenA] = akubicaRouteCustomerToken();
+    [$userB, $tokenB] = akubicaRouteCustomerToken();
     idemReadyCheckout($userA);
     idemReadyCheckout($userB);
     $key = idemKey('cross');
@@ -238,7 +238,7 @@ test('idempotency payment-link cross-user isolation', function () {
 // ── Concurrent / processing / uncertain ───────────────────────────────
 
 test('idempotency active processing returns IN_PROGRESS', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     idemReadyCheckout($user);
     $key = idemKey('proc');
 
@@ -268,7 +268,7 @@ test('idempotency active processing returns IN_PROGRESS', function () {
 });
 
 test('idempotency expired processing becomes UNCERTAIN and does not execute controller', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     idemReadyCheckout($user);
     $key = idemKey('exp');
 
@@ -302,7 +302,7 @@ test('idempotency expired processing becomes UNCERTAIN and does not execute cont
 });
 
 test('idempotency unique constraint is the concurrency barrier', function () {
-    [$user] = akubicaCustomerToken();
+    [$user] = akubicaRouteCustomerToken();
     $attrs = [
         'actor_key' => getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') === '1'
                 ? \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::actorKey($user)
@@ -327,7 +327,7 @@ test('idempotency oversized response marks uncertain without truncating', functi
     config()->set('api_v1.idempotency.max_response_bytes', 10);
     expect(config('api_v1.idempotency.max_response_bytes'))->toBe(10);
 
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     idemReadyCheckout($user);
     $key = idemKey('big');
 
@@ -351,7 +351,7 @@ test('idempotency oversized response marks uncertain without truncating', functi
 // ── Appointments / invoice-request ────────────────────────────────────
 
 test('idempotency laboratory appointment creates once on replay', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     [$contact, $address] = (function () use ($user) {
         $test = createOlabTest(['requires_appointment' => true]);
         LaboratoryCartItem::factory()->create([
@@ -392,7 +392,7 @@ test('idempotency laboratory appointment creates once on replay', function () {
 
 test('idempotency invoice-request creates once on replay', function () {
     Storage::fake();
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $order = LaboratoryPurchase::query()->create([
         'customer_id' => $user->customer->id,
@@ -458,7 +458,7 @@ test('idempotency results secure-link replays same url', function () {
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $newToken = $user->createToken('akubica-test');
+    $newToken = akubicaRegisteredToken($user);
     $token = $newToken->plainTextToken;
     $tokenId = (int) $newToken->accessToken->id;
 
@@ -532,16 +532,17 @@ test('idempotency login request-code creates one challenge on replay', function 
     ]);
 
     $key = idemKey('login');
+    $otp = akubicaOtpBackendHeaders();
     $payload = ['phone' => '+525512345678'];
 
-    $first = $this->postJson('/api/v1/auth/login/request-code', $payload, idemPublicHeaders($key))
+    $first = $this->postJson('/api/v1/auth/login/request-code', $payload, idemPublicHeaders($key) + $otp)
         ->assertStatus(202);
 
     $challengeId = $first->json('data.challenge_id');
     expect(OtpChallenge::query()->count())->toBe(1)
         ->and(OtpDeliveryOperation::query()->count())->toBe(1);
 
-    $second = $this->postJson('/api/v1/auth/login/request-code', $payload, idemPublicHeaders($key))
+    $second = $this->postJson('/api/v1/auth/login/request-code', $payload, idemPublicHeaders($key) + $otp)
         ->assertStatus(202)
         ->assertHeader('Idempotency-Replayed', 'true');
 
@@ -567,10 +568,11 @@ test('idempotency public actors differ by phone', function () {
     ]);
 
     $key = idemKey('phones');
+    $otp = akubicaOtpBackendHeaders();
 
-    $this->postJson('/api/v1/auth/login/request-code', ['phone' => '+525511111111'], idemPublicHeaders($key))
+    $this->postJson('/api/v1/auth/login/request-code', ['phone' => '+525511111111'], idemPublicHeaders($key) + $otp)
         ->assertStatus(202);
-    $this->postJson('/api/v1/auth/login/request-code', ['phone' => '+525522222222'], idemPublicHeaders($key))
+    $this->postJson('/api/v1/auth/login/request-code', ['phone' => '+525522222222'], idemPublicHeaders($key) + $otp)
         ->assertStatus(202);
 
     expect(OtpChallenge::query()->count())->toBe(2)
@@ -615,7 +617,7 @@ test('idempotency step-up results request creates one challenge on replay', func
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $token = $user->createToken('akubica-test')->plainTextToken;
+    $token = akubicaRegisteredToken($user)->plainTextToken;
 
     $path = 'results/idem-stepup.pdf';
     storeFakePdf($path);
@@ -654,7 +656,7 @@ test('idempotency invoices step-up request creates one challenge and delivery on
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $token = $user->createToken('akubica-test')->plainTextToken;
+    $token = akubicaRegisteredToken($user)->plainTextToken;
     $order = createAkubicaLaboratoryPurchase($user);
     $invoice = createAkubicaLaboratoryInvoice($order);
 
@@ -695,7 +697,7 @@ test('idempotency invoices step-up same key different invoice conflicts', functi
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $token = $user->createToken('akubica-test')->plainTextToken;
+    $token = akubicaRegisteredToken($user)->plainTextToken;
     $order = createAkubicaLaboratoryPurchase($user);
     $invoiceA = createAkubicaLaboratoryInvoice($order, 'invoices/idem-a.pdf');
     $invoiceB = createAkubicaLaboratoryInvoice($order, 'invoices/idem-b.pdf');
@@ -732,8 +734,8 @@ test('idempotency invoices step-up cross-user isolation', function () {
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $tokenA = $userA->createToken('akubica-test')->plainTextToken;
-    $tokenB = $userB->createToken('akubica-test')->plainTextToken;
+    $tokenA = akubicaRegisteredToken($userA)->plainTextToken;
+    $tokenB = akubicaRegisteredToken($userB)->plainTextToken;
     $orderA = createAkubicaLaboratoryPurchase($userA);
     $orderB = createAkubicaLaboratoryPurchase($userB);
     $invoiceA = createAkubicaLaboratoryInvoice($orderA);
@@ -769,7 +771,7 @@ test('idempotency invoices secure-link creates one link and replay returns same 
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $newToken = $user->createToken('akubica-test');
+    $newToken = akubicaRegisteredToken($user);
     $token = $newToken->plainTextToken;
     $tokenId = (int) $newToken->accessToken->id;
 
@@ -842,7 +844,7 @@ test('idempotency invoices secure-link same key different payload conflicts', fu
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $newToken = $user->createToken('akubica-test');
+    $newToken = akubicaRegisteredToken($user);
     $token = $newToken->plainTextToken;
     $tokenId = (int) $newToken->accessToken->id;
     $order = createAkubicaLaboratoryPurchase($user);
@@ -912,8 +914,8 @@ test('idempotency invoices secure-link respects ownership isolation', function (
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $ownerTok = $owner->createToken('akubica-test');
-    $strangerTok = $stranger->createToken('akubica-test')->plainTextToken;
+    $ownerTok = akubicaRegisteredToken($owner);
+    $strangerTok = akubicaRegisteredToken($stranger)->plainTextToken;
     $order = createAkubicaLaboratoryPurchase($owner);
     $invoice = createAkubicaLaboratoryInvoice($order);
 
@@ -973,7 +975,7 @@ test('idempotency invoices secure-link respects ownership isolation', function (
 // ── failed_final / 5xx uncertain / persistence ────────────────────────
 
 test('idempotency failed_final 4xx is replayed without re-running controller', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     // Empty cart → 409 EMPTY_CART
     $key = idemKey('fail4xx');
     $corr = 'corr-fail-4xx-0001';
@@ -1012,7 +1014,7 @@ test('idempotency 5xx marks failed_uncertain without persisting body and blocks 
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $tok = $user->createToken('akubica-test')->plainTextToken;
+    $tok = akubicaRegisteredToken($user)->plainTextToken;
     $order = createAkubicaLaboratoryPurchase($user);
     $key = idemKey('fail5xx');
     $body = ['grant_id' => (string) Str::uuid()];
@@ -1048,7 +1050,7 @@ test('idempotency 5xx uncertain same payload does not re-execute', function () {
         'phone_country' => 'MX',
         'phone_verified_at' => now(),
     ]);
-    $tok = $user->createToken('akubica-test')->plainTextToken;
+    $tok = akubicaRegisteredToken($user)->plainTextToken;
     $order = createAkubicaLaboratoryPurchase($user);
     $key = idemKey('fail5xx2');
     $grantId = (string) Str::uuid();
@@ -1070,7 +1072,7 @@ test('idempotency 5xx uncertain same payload does not re-execute', function () {
 });
 
 test('idempotency persistence encrypts response and never stores raw key or request body', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     idemReadyCheckout($user);
     $key = idemKey('persist');
     $secretMarker = 'no-store-this-payload-marker';
@@ -1110,7 +1112,7 @@ test('idempotency persistence encrypts response and never stores raw key or requ
 });
 
 test('idempotency processing in progress and expired semantics', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     idemReadyCheckout($user);
     $key = idemKey('lease2');
 
@@ -1154,7 +1156,7 @@ test('idempotency processing in progress and expired semantics', function () {
 // ── Prune ─────────────────────────────────────────────────────────────
 
 test('idempotency prune dry-run and force', function () {
-    [$user] = akubicaCustomerToken();
+    [$user] = akubicaRouteCustomerToken();
 
     IdempotencyRecord::query()->create([
         'actor_key' => getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') === '1'

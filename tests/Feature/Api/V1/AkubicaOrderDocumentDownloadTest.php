@@ -24,23 +24,25 @@ test('GET invoice download without token returns 401', function () {
 });
 
 test('document download endpoints return 403 for user without customer', function () {
+    // INT-031: download routes are native-only operations (AuthorizeNativeConsumerOperation): a user without customer
+    // gets 403 CONSUMER_NOT_AUTHORIZED (no delegation can exist without a customer). Status stays 403.
     $user = User::factory()->create();
     $token = $user->createToken('akubica-test')->plainTextToken;
     $headers = authHeaders($token);
 
     $this->get('/api/v1/orders/1/results/download', $headers)
         ->assertForbidden()
-        ->assertJsonPath('error.code', 'FORBIDDEN');
+        ->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
 
     $this->get('/api/v1/orders/1/invoices/1/download', $headers)
         ->assertForbidden()
-        ->assertJsonPath('error.code', 'FORBIDDEN');
+        ->assertJsonPath('error.code', 'CONSUMER_NOT_AUTHORIZED');
 });
 
 // ── Results download ────────────────────────────────────────────────────
 
 test('result download for nonexistent order returns 404 ORDER_NOT_FOUND', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/orders/99999/results/download', authHeaders($token))
         ->assertNotFound()
@@ -48,8 +50,8 @@ test('result download for nonexistent order returns 404 ORDER_NOT_FOUND', functi
 });
 
 test('result download for another customer order returns 404 ORDER_NOT_FOUND', function () {
-    [$userA, $tokenA] = akubicaCustomerToken();
-    [$userB] = akubicaCustomerToken();
+    [$userA, $tokenA] = akubicaRouteCustomerToken();
+    [$userB] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($userB);
 
     $this->getJson("/api/v1/orders/{$order->id}/results/download", authHeaders($tokenA))
@@ -58,7 +60,7 @@ test('result download for another customer order returns 404 ORDER_NOT_FOUND', f
 });
 
 test('result download for order without results returns 409 RESULT_NOT_READY', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
 
     $this->getJson("/api/v1/orders/{$order->id}/results/download", authHeaders($token))
@@ -67,7 +69,7 @@ test('result download for order without results returns 409 RESULT_NOT_READY', f
 });
 
 test('result download with manual storage PDF returns 200 application/pdf', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $path = 'results/manual-100.pdf';
     storeFakePdf($path);
     $order = createAkubicaLaboratoryPurchase($user, ['results' => $path]);
@@ -82,7 +84,7 @@ test('result download with manual storage PDF returns 200 application/pdf', func
 });
 
 test('result download with cached GDA notification returns 200 application/pdf', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
     createAkubicaResultsNotification($order, '%PDF-1.4 gda cached results');
 
@@ -95,7 +97,7 @@ test('result download with cached GDA notification returns 200 application/pdf',
 });
 
 test('result download does not expose base64 or internal paths in response', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
     $pdfContent = '%PDF-1.4 secret results content';
     createAkubicaResultsNotification($order, $pdfContent);
@@ -110,7 +112,7 @@ test('result download does not expose base64 or internal paths in response', fun
 });
 
 test('result download response includes expected filename in Content-Disposition', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $path = 'results/manual.pdf';
     storeFakePdf($path);
     $order = createAkubicaLaboratoryPurchase($user, ['results' => $path]);
@@ -120,7 +122,7 @@ test('result download response includes expected filename in Content-Disposition
 });
 
 test('result download response includes secure Cache-Control header', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $path = 'results/manual.pdf';
     storeFakePdf($path);
     $order = createAkubicaLaboratoryPurchase($user, ['results' => $path]);
@@ -138,7 +140,7 @@ test('result download response includes secure Cache-Control header', function (
 // ── Invoice download ────────────────────────────────────────────────────
 
 test('invoice download for nonexistent order returns 404 ORDER_NOT_FOUND', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/orders/99999/invoices/1/download', authHeaders($token))
         ->assertNotFound()
@@ -146,8 +148,8 @@ test('invoice download for nonexistent order returns 404 ORDER_NOT_FOUND', funct
 });
 
 test('invoice download for another customer order returns 404 ORDER_NOT_FOUND', function () {
-    [$userA, $tokenA] = akubicaCustomerToken();
-    [$userB] = akubicaCustomerToken();
+    [$userA, $tokenA] = akubicaRouteCustomerToken();
+    [$userB] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($userB);
     $invoice = createAkubicaLaboratoryInvoice($order);
 
@@ -157,7 +159,7 @@ test('invoice download for another customer order returns 404 ORDER_NOT_FOUND', 
 });
 
 test('invoice download for nonexistent invoice returns 404 INVOICE_NOT_FOUND', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
 
     $this->getJson("/api/v1/orders/{$order->id}/invoices/99999/download", authHeaders($token))
@@ -166,7 +168,7 @@ test('invoice download for nonexistent invoice returns 404 INVOICE_NOT_FOUND', f
 });
 
 test('invoice download for invoice belonging to another order returns 404 INVOICE_NOT_FOUND', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $orderA = createAkubicaLaboratoryPurchase($user);
     $orderB = createAkubicaLaboratoryPurchase($user);
     $invoice = createAkubicaLaboratoryInvoice($orderB);
@@ -177,7 +179,7 @@ test('invoice download for invoice belonging to another order returns 404 INVOIC
 });
 
 test('invoice download when PDF file is missing returns 409 INVOICE_NOT_READY', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
     $invoice = Invoice::query()->create([
         'invoiceable_type' => LaboratoryPurchase::class,
@@ -191,7 +193,7 @@ test('invoice download when PDF file is missing returns 409 INVOICE_NOT_READY', 
 });
 
 test('invoice download with available PDF returns 200 application/pdf', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
     $invoice = createAkubicaLaboratoryInvoice($order);
 
@@ -204,7 +206,7 @@ test('invoice download with available PDF returns 200 application/pdf', function
 });
 
 test('invoice download does not expose internal storage paths', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
     $invoice = createAkubicaLaboratoryInvoice($order, 'invoices/secret-path.pdf');
 
@@ -215,7 +217,7 @@ test('invoice download does not expose internal storage paths', function () {
 });
 
 test('invoice download response includes expected filename in Content-Disposition', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
     $invoice = createAkubicaLaboratoryInvoice($order);
 
@@ -224,7 +226,7 @@ test('invoice download response includes expected filename in Content-Dispositio
 });
 
 test('invoice download response includes secure Cache-Control header', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
     $invoice = createAkubicaLaboratoryInvoice($order);
 
@@ -241,7 +243,7 @@ test('invoice download response includes secure Cache-Control header', function 
 // ── Integración con resources ───────────────────────────────────────────
 
 test('GET order results includes bearer download metadata', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $path = 'results/manual.pdf';
     storeFakePdf($path);
     $order = createAkubicaLaboratoryPurchase($user, ['results' => $path]);
@@ -253,7 +255,7 @@ test('GET order results includes bearer download metadata', function () {
 });
 
 test('GET order results with GDA notification includes bearer download metadata', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
     createAkubicaResultsNotification($order);
 
@@ -264,7 +266,7 @@ test('GET order results with GDA notification includes bearer download metadata'
 });
 
 test('GET order invoices includes bearer download metadata for issued invoice', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
     $invoice = createAkubicaLaboratoryInvoice($order);
 
@@ -277,7 +279,7 @@ test('GET order invoices includes bearer download metadata for issued invoice', 
 // ── Regresión ───────────────────────────────────────────────────────────
 
 test('payment link still works after document download endpoints', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     addOlabCartItemReadyForPaymentLink($user);
     setupAkubicaCheckoutDraft($user);
 
@@ -287,7 +289,7 @@ test('payment link still works after document download endpoints', function () {
 });
 
 test('cart coupon apply still works after document download endpoints', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     addOlabCartItem($user);
     createBalanceCouponForUser($user, 'PROMO10', 7000);
 
@@ -298,7 +300,7 @@ test('cart coupon apply still works after document download endpoints', function
 });
 
 test('invoice request status endpoint still responds for owned order', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
     $order = createAkubicaLaboratoryPurchase($user);
 
     $this->getJson("/api/v1/orders/{$order->id}/invoice-request/status", authHeaders($token))
@@ -307,7 +309,7 @@ test('invoice request status endpoint still responds for owned order', function 
 });
 
 test('medications catalog endpoint still returns 503', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $this->getJson('/api/v1/catalog/medications/1', authHeaders($token))
         ->assertStatus(503)
@@ -315,7 +317,7 @@ test('medications catalog endpoint still returns 503', function () {
 });
 
 test('order cancellation still returns 503', function () {
-    [$user, $token] = akubicaCustomerToken();
+    [$user, $token] = akubicaRouteCustomerToken();
 
     $this->putJson('/api/v1/orders/1/cancel', [], authHeaders($token))
         ->assertStatus(503)

@@ -33,6 +33,11 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <!-- INT-031 (harness, RC06/RC07): synthetic, non-secret values. The application runs in America/Mexico_City and
+             several suites assert wall-clock dates in that zone; GDA_URL only needs to be a well-formed base URL because
+             every GDA call in tests is faked (Http::fake) and must never reach a real host. -->
+        <env name="APP_TIMEZONE" value="America/Mexico_City"/>
+        <env name="GDA_URL" value="https://gda.invalid/"/>
 
         <!--
           P0-T1: deterministic Akubica OTP baseline for PHPUnit/Pest.

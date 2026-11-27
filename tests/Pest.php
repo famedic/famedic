@@ -89,6 +89,106 @@ function akubicaCustomerToken(?\App\Models\User $user = null): array
     return [$user, $token];
 }
 
+/** INT-031 (harness only): every named api.v1.* route, used to derive literal per-route capabilities. */
+function akubicaApiV1RouteNames(): array
+{
+    return collect(\Illuminate\Support\Facades\Route::getRoutes()->getRoutes())
+        ->map(fn ($route) => $route->getName())
+        ->filter(fn ($name) => is_string($name) && str_starts_with($name, 'api.v1.'))
+        ->values()->all();
+}
+
+/** INT-031 (harness only): see OtpEnrollmentFixture::baseline(). */
+function akubicaHarnessBaseline(string $table): int
+{
+    return \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::baseline($table);
+}
+
+/**
+ * INT-031 (harness only): issue the Sanctum token of a legacy Akubica test through the CURRENT registered-consumer
+ * contract (consumer + channel + machine credential + delegation + binding) when FAMEDIC_REGISTERED_NATIVE_FIXTURES=1.
+ * Replaces the pre-RC2 bare `$user->createToken('akubica-test')`, which the API now rejects by design.
+ * Capabilities are LITERAL: the fixture default set plus each route's own capability derived with the application's
+ * rules (SyntheticConsumerRegistryFixture::capabilitiesFor). Never '*'. When $routeNames is null every named
+ * api.v1.* route is listed (the old token had '*'); ConsumerCapabilityPolicy, ownership checks and Leo denials still
+ * decide. The machine credential travels through authHeaders(). Production code is not touched.
+ */
+function akubicaRegisteredToken(\App\Models\User $user, ?array $routeNames = null, string $kind = 'native', array $laboratoryBrands = []): \Laravel\Sanctum\NewAccessToken
+{
+    if (getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') !== '1') {
+        return $user->createToken('akubica-test');
+    }
+    if ($user->customer === null) {
+        throw new \LogicException('akubicaRegisteredToken() requires a user with a customer (delegations are customer-bound).');
+    }
+    $routeNames ??= akubicaApiV1RouteNames();
+    $caps = \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::capabilitiesFor($kind, $routeNames);
+
+    return \Tests\Support\Api\V1\Identity\SyntheticConsumerRegistryFixture::issue($user, $kind, $caps, $laboratoryBrands)['token'];
+}
+
+/**
+ * INT-031 (harness only): like akubicaCustomerToken() but with the literal route capabilities of
+ * akubicaRegisteredToken(). akubicaCustomerToken() keeps its narrow default set for the Rc2/Batch2 tests.
+ *
+ * @return array{0: \App\Models\User, 1: string}
+ */
+function akubicaRouteCustomerToken(?\App\Models\User $user = null, ?array $routeNames = null): array
+{
+    $user ??= \App\Models\User::factory()->withRegularCustomer()->create();
+
+    return [$user, akubicaRegisteredToken($user, $routeNames)->plainTextToken];
+}
+
+/**
+ * INT-031 (harness only): machine credential of an authenticated OTP backend client for the public OTP routes that
+ * sit behind AuthenticateOtpBackend (config akubica_connectors.otp_enrollment enabled+certified). Enrolls a fresh
+ * registered consumer per call through OtpEnrollmentFixture::existing(); pass the user that will verify so the
+ * enrollment operator matches. Returns the header only; the OTP contract itself is unchanged.
+ *
+ * @return array<string, string>
+ */
+function akubicaOtpBackendHeaders(?\App\Models\User $user = null, string $kind = 'leo'): array
+{
+    if (getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') !== '1') {
+        return [];
+    }
+    $user ??= \App\Models\User::factory()->withRegularCustomer()->create();
+    \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::existing($user, $kind);
+
+    return \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::headers();
+}
+
+/** INT-031 (harness only): opt-in default OTP backend for a legacy test file; see TestCase::enableDefaultOtpBackend(). */
+function akubicaDefaultOtpBackend(string $kind = 'native'): void
+{
+    test()->enableDefaultOtpBackend($kind);
+}
+
+/**
+ * INT-031 (harness only): PersonalAccessToken count without the harness OTP backend actor's own two PATs, so the
+ * legacy "no token was issued" / "exactly one token was issued" expectations keep their exact values.
+ */
+function akubicaNonHarnessTokenCount(): int
+{
+    return \Laravel\Sanctum\PersonalAccessToken::query()
+        ->whereNotIn('id', \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::harnessTokenIds())->count();
+}
+
+/**
+ * INT-031 (harness only): invoke IssueAkubicaTokenAction the way the API does, i.e. inside a request that carries
+ * the authenticated OTP backend machine credential (RegisteredOtpConsumerEnrollment reads it from request()).
+ */
+function akubicaIssueTokenViaBackend(\App\Models\User $user): array
+{
+    $machine = \Tests\Support\Api\V1\Identity\OtpEnrollmentFixture::machine();
+    if ($machine !== null) {
+        request()->headers->set('X-Synthetic-Machine-Credential', $machine);
+    }
+
+    return app(\App\Actions\Api\V1\Auth\IssueAkubicaTokenAction::class)($user);
+}
+
 function authHeaders(string $token): array
 {
     return ['Authorization' => 'Bearer '.$token] + (getenv('FAMEDIC_REGISTERED_NATIVE_FIXTURES') === '1'

@@ -22,6 +22,7 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\Support\Otp\FakeOtpCodeGenerator;
 
+
 function p0a57bEnableSecureRegister(): void
 {
     enableRegisterOtpWithoutDelivery();
@@ -97,6 +98,9 @@ beforeEach(function () {
     disableAllAkubicaOtpFeatures();
     app(FakeOtpDeliveryProvider::class)->alwaysAccept();
 });
+
+// INT-031 (harness): legacy file written before the OTP enrollment contract; register one backend actor per test.
+beforeEach(fn () => akubicaDefaultOtpBackend());
 
 test('p0a57b flags off secure register sends no delivery', function () {
     p0a57bEnableSecureRegister();
@@ -277,7 +281,7 @@ test('p0a57b patient ready false and sanctum expiration 1440', function () {
     p0a57bRequestRegister('sanctum.p0a57b@ejemplo.test', '+52 55 1234 5711', '101010')['response']
         ->assertStatus(202);
 
-    expect(PersonalAccessToken::query()->count())->toBe(0);
+    expect(akubicaNonHarnessTokenCount())->toBe(0);
 });
 
 test('p0a57b delivery off asserts no notifications on secure register', function () {
