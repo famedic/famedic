@@ -30,6 +30,10 @@ final class FunctionalWindow2CustodyCommand extends Command
             'native_membership_regular' => 'scenario:native_membership_regular',
             'native_membership_none' => 'scenario:native_membership_none',
             'leo_membership_none' => 'scenario:leo_membership_none',
+            // INT-005 fixture owners (UAT primary/foreign). Already stored in
+            // encrypted_secrets[leo_primary|leo_foreign] by apply; not scenario material.
+            'leo_primary' => 'leo_primary',
+            'leo_foreign' => 'leo_foreign',
         ],
         self::MEMBERSHIP_SCENARIO => [
             'machine_native' => 'machine_native',

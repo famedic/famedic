@@ -43,7 +43,7 @@ test('real custody helper reads and revokes all window aliases in isolated mysql
     $tokenIds = array_merge(array_values($state['token_ids']), array_values($state['scenario_token_ids']));
     expect(count($tokenIds))->toBe(9);
 
-    $aliases = ['machine_native', 'machine_leo', 'native_membership_regular', 'leo_membership_none'];
+    $aliases = ['machine_native', 'machine_leo', 'native_membership_regular', 'leo_membership_none', 'leo_primary', 'leo_foreign'];
     $childEnv = array_filter([
         'APP_ENV' => getenv('APP_ENV') ?: 'testing',
         'APP_KEY' => getenv('APP_KEY') ?: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
@@ -66,6 +66,15 @@ test('real custody helper reads and revokes all window aliases in isolated mysql
     $secrets = json_decode(trim($read->getOutput()), true, 512, JSON_THROW_ON_ERROR);
     expect(array_keys($secrets))->toBe($aliases);
     foreach ($secrets as $secret) expect($secret)->toBeString()->not->toBe('');
+
+    $ownersOnly = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--private', '--no-ansi'], base_path(), $childEnv);
+    $ownersOnly->setInput(json_encode(['action' => 'read', 'aliases' => ['leo_primary', 'leo_foreign']], JSON_THROW_ON_ERROR));
+    $ownersOnly->run();
+    expect($ownersOnly->getExitCode(), 'owners-only helper exit')->toBe(0);
+    $ownerSecrets = json_decode(trim($ownersOnly->getOutput()), true, 512, JSON_THROW_ON_ERROR);
+    expect(array_keys($ownerSecrets))->toBe(['leo_primary', 'leo_foreign']);
+    expect($ownerSecrets['leo_primary'])->toBe($secrets['leo_primary']);
+    expect($ownerSecrets['leo_foreign'])->toBe($secrets['leo_foreign']);
 
     $invalid = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--no-ansi'], base_path(), $childEnv);
     $invalid->setInput(json_encode(['action' => 'read', 'aliases' => ['legacy_alias']], JSON_THROW_ON_ERROR));
@@ -180,6 +189,12 @@ test('real custody helper supports the dedicated membership scenario and rejects
         $foreignAlias->setInput(json_encode(['action' => 'read', 'scenario' => $scenario, 'aliases' => ['leo_membership_none']], JSON_THROW_ON_ERROR));
         $foreignAlias->run();
         expect($foreignAlias->getExitCode())->not->toBe(0);
+
+        $ownersOnMemberships = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--private', '--no-ansi'], base_path(), $childEnv);
+        $ownersOnMemberships->setInput(json_encode(['action' => 'read', 'scenario' => $scenario, 'aliases' => ['leo_primary', 'leo_foreign']], JSON_THROW_ON_ERROR));
+        $ownersOnMemberships->run();
+        expect($ownersOnMemberships->getExitCode())->not->toBe(0);
+        expect($ownersOnMemberships->getOutput())->toContain('ALIAS_NOT_ALLOWED');
 
         $revoke = new Process([PHP_BINARY, base_path('artisan'), 'functional-window2:custody', '--no-ansi'], base_path(), $childEnv);
         $revoke->setInput(json_encode(['action' => 'revoke', 'scenario' => $scenario, 'aliases' => $aliases], JSON_THROW_ON_ERROR));
